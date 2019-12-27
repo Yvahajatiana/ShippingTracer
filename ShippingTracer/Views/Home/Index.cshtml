@@ -1,0 +1,33 @@
+﻿@model ShippingTracer.Models.ShippingFinderViewModel
+
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-4">Welcome</h1>
+    <p>Find your shipping here, get more information about it.</p>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <form asp-action="FindShipping">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="form-group">
+                <input asp-for="UniqueId" class="form-control" placeholder="@Html.DisplayNameFor(model => model.UniqueId)" />
+                <span asp-validation-for="UniqueId" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="Find" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+@if (ViewData["NoResult"] != null)
+{
+    <div>
+        <p>No Result for <span>@ViewData["NoResult"]</span></p>
+    </div>
+}
