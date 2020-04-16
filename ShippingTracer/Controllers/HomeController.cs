@@ -50,7 +50,7 @@ namespace ShippingTracer.Controllers
             return View();
         }
 
-        [HttpPost]
+        [HttpPost("ny-entana-nafarako")]
         public IActionResult FindShipping([Bind("UniqueId")] ShippingFinderViewModel model)
         {
             if (!ModelState.IsValid)
