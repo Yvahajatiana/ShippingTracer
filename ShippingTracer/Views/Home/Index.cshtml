@@ -1,33 +1,34 @@
 ﻿@model ShippingTracer.Models.ShippingFinderViewModel
 
 @{
-    ViewData["Title"] = "Home Page";
+    ViewData["Title"] = "Hitady entana nalefa";
 }
 
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Find your shipping here, and get more information about it.</p>
+    <img alt="box" src="~/images/box.jpg" style="width: 20%;"/>
+    <h1 class="display-4">Tonga soa, akory aby!</h1>
+    <p>Fantaro eto ny vaovao momba ny entana izay nafaranao.</p>
 </div>
 
-<div class="row">
-    <div class="col-md-6">
+<div class="row justify-content-center">
+    <div class="col-md-10">
         <form asp-action="FindShipping">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
             <div class="form-group">
-                <input asp-for="UniqueId" class="form-control" placeholder="@Html.DisplayNameFor(model => model.UniqueId)" />
+                <input asp-for="UniqueId" class="form-control" placeholder="Ampidiro eto ny fanaraka na @Html.DisplayNameFor(model => model.UniqueId)" required/>
                 <span asp-validation-for="UniqueId" class="text-danger"></span>
             </div>
 
             <div class="form-group">
-                <input type="submit" value="Find" class="btn btn-primary" />
+                <input type="submit" value="Tadiavo" class="btn btn-primary" />
             </div>
+            @if (ViewData["NoResult"] != null)
+            {
+                <div class="alert alert-danger">
+                    <p>Azafady fa tsy nahitana valiny ny ataka: <span>@ViewData["NoResult"]</span></p>
+                </div>
+            }
         </form>
     </div>
 </div>
-@if (ViewData["NoResult"] != null)
-{
-    <div>
-        <p>No Result for <span>@ViewData["NoResult"]</span></p>
-    </div>
-}
