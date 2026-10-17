@@ -25,3 +25,7 @@ Dans chaque API, enregistrer MediatR avec l'assembly Application du service et a
 Appeler `builder.Services.AddParcelFlowProblemDetails()` avant la construction de l'application, puis `app.UseParcelFlowProblemDetails()` avant les middlewares et endpoints du service. Les API recevront leurs règles métier et mappings 404/409 lors de leur implémentation.
 
 L'Outbox EF Core et l'inbox MassTransit appartiendront à chaque base de service ; elles partageront la transaction métier. La saga sera persistée dans le service responsable du flux d'envoi. Ces mécanismes ne sont pas remplacés par une implémentation mémoire dans les BuildingBlocks. Les paramètres métier et contrats nécessaires seront précisés à l'étape du service concerné.
+
+## Corrections de review
+
+Le writer ParcelFlow est enregistré avant ceux de MVC et préserve le type HttpValidationProblemDetails. Les erreurs sont toujours sérialisées en application/problem+json, même si Accept ne contient pas JSON ; elles ne dépendent donc pas de la négociation du writer par défaut. Huit tests HTTP réels couvrent les réponses 400/500, les en-têtes Accept JSON/XML et les deux ordres d'enregistrement MVC/ParcelFlow.

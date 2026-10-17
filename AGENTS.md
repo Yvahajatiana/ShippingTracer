@@ -7,6 +7,7 @@
 - Toujours committer le travail effectué avec un message clair et un périmètre cohérent. Vérifier les changements et exécuter les contrôles adaptés avant le commit.
 - Toute fusion doit passer par une pull request. Ne jamais fusionner directement en local ni pousser directement sur une branche partagée.
 - Préparer la PR avec un résumé du changement et les résultats des vérifications. La création d'une PR ne vaut pas autorisation de fusion.
+- Toujours examiner les reviews du bot Codex sur les PR : corriger les remarques pertinentes, tester, committer et pousser les correctifs, puis répondre aux threads et résoudre ceux qui sont traités avant toute fusion.
 
 ## Étapes et validation
 
