@@ -12,6 +12,7 @@
 ## Étapes et validation
 
 - Respecter l'ordre demandé : BuildingBlocks, puis chaque service séparément, gateway, frontends, Docker, Kubernetes, CI/CD et README.
+- À l’étape finale, avec le README, rédiger dans docs un tutoriel Markdown (un ou plusieurs fichiers) expliquant la construction du projet ; ne pas rédiger ce tutoriel pendant les étapes intermédiaires.
 - À la fin de chaque étape, committer le travail, résumer les changements et les vérifications, puis attendre la validation de l'utilisateur avant de continuer.
 - Ne pas modifier un fichier déjà validé sans demande explicite.
 - Agir en architecte senior et product owner : trancher les choix courants et documenter les décisions. Ne demander un arbitrage que pour un choix structurant impossible à déduire du périmètre ou engageant le produit de façon importante.
