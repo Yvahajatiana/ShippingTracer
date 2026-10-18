@@ -1,11 +1,12 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Polly;
 
 namespace ParcelFlow.Notification.Infrastructure.Recipients;
 
-public sealed class ShipmentAccessToken(IHttpClientFactory clients, IConfiguration configuration) : IDisposable
+public sealed class ShipmentAccessToken(IHttpClientFactory clients, IConfiguration configuration, IHostEnvironment environment) : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly ResiliencePipeline _pipeline = ShipmentHttpResilience.Create();
@@ -20,7 +21,7 @@ public sealed class ShipmentAccessToken(IHttpClientFactory clients, IConfigurati
             var clientId = configuration["ServiceAuthentication:ClientId"];
             var secret = configuration["ServiceAuthentication:ClientSecret"];
             if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(secret)) throw new InvalidOperationException("Service authentication credentials are required.");
-            var authority = ShipmentHttpResilience.BaseUrl(configuration["Keycloak:Authority"], "Keycloak:Authority");
+            var authority = ShipmentHttpResilience.BaseUrl(configuration["Keycloak:Authority"], "Keycloak:Authority", environment.IsDevelopment());
             var payload = await _pipeline.ExecuteAsync(async ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(authority, "protocol/openid-connect/token"));

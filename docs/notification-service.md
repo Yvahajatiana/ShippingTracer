@@ -19,7 +19,7 @@ Les contrats existants n’exposent pas les coordonnées. Notification lit le sn
 
 La résolution ne dépend pas de l’ordre d’arrivée des faits : Shipment a déjà persisté son envoi avant sa publication Outbox. Un paiement peut donc être notifié avant que Notification ne reçoive ShipmentCreated. Le snapshot est mis en cache Redis pendant cinq minutes. Une indisponibilité, une entrée invalide ou une lecture dépassant 250 ms entraîne une résolution HTTP. Aucun résultat négatif ni token OAuth n’est stocké dans Redis.
 
-Le token OAuth est conservé en mémoire jusqu’à son expiration moins trente secondes, avec renouvellement synchronisé. Un 401 de Shipment l’invalide et déclenche un seul renouvellement immédiat. Chaque appel réseau possède un délai de cinq secondes. Polly borne les reprises des erreurs réseau, timeouts, 429 et 5xx et ouvre un circuit breaker partagé entre événements. Les autres 4xx ne sont pas repris par ce pipeline. Les corps des réponses et les secrets ne sont pas journalisés.
+Le token OAuth est conservé en mémoire jusqu’à son expiration moins trente secondes, avec renouvellement synchronisé. Un 401 de Shipment l’invalide et déclenche un seul renouvellement immédiat. Les deux dépendances exigent HTTPS hors Development ; HTTP est réservé au développement local. Chaque appel réseau possède un délai de cinq secondes. Polly borne les reprises des erreurs réseau, timeouts, 429 et 5xx et ouvre un circuit breaker partagé entre événements. Les autres 4xx ne sont pas repris par ce pipeline. Les corps des réponses et les secrets ne sont pas journalisés.
 
 ## Persistance et idempotence
 
@@ -51,7 +51,7 @@ Les secrets sont fournis par l’environnement ; ils ne figurent pas dans appset
 | RabbitMq__Host / Port / VirtualHost / Username / Password | Connexion RabbitMQ |
 | Keycloak__Authority | URL du realm, HTTP local et HTTPS en production |
 | Keycloak__Audience | notification-api |
-| ShipmentService__BaseUrl | URL de Shipment, localement http://localhost:5082/ |
+| ShipmentService__BaseUrl | URL HTTPS de Shipment ; en Development, http://localhost:5082/ est accepté |
 | ServiceAuthentication__ClientId | notification-service |
 | ServiceAuthentication__ClientSecret | Secret du client confidentiel Keycloak |
 | Database__Initialize | Initialisation au démarrage en Development seulement |

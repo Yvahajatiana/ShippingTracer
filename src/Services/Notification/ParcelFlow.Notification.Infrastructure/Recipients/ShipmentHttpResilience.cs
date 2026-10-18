@@ -27,10 +27,10 @@ internal static class ShipmentHttpResilience
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { throw new TimeoutException("The shipment dependency timed out."); }
         catch (HttpRequestException error) { throw new HttpRequestException("The shipment dependency is unavailable.", null, error.StatusCode); }
     }
-    public static Uri BaseUrl(string? value, string setting)
+    public static Uri BaseUrl(string? value, string setting, bool allowHttp)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http") || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
-            throw new InvalidOperationException($"{setting} must be an absolute HTTP URL without credentials, query or fragment.");
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && !(allowHttp && uri.Scheme == "http")) || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            throw new InvalidOperationException($"{setting} must be an absolute HTTPS URL without credentials, query or fragment; HTTP is allowed only in Development.");
         return new Uri(uri.AbsoluteUri.TrimEnd('/') + "/");
     }
 }
