@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using ParcelFlow.Notification.Application;
 using ParcelFlow.Notification.Domain;
 using Polly;
@@ -11,7 +12,7 @@ using Polly;
 namespace ParcelFlow.Notification.Infrastructure.Recipients;
 
 public sealed class ShipmentRecipientResolver(IHttpClientFactory clients, IConfiguration configuration,
-    IDistributedCache cache, ShipmentAccessToken accessToken) : IShipmentRecipientResolver
+    IDistributedCache cache, ShipmentAccessToken accessToken, IHostEnvironment environment) : IShipmentRecipientResolver
 {
     private readonly ResiliencePipeline _pipeline = ShipmentHttpResilience.Create();
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -21,10 +22,10 @@ public sealed class ShipmentRecipientResolver(IHttpClientFactory clients, IConfi
         if (shipmentId == Guid.Empty) throw new ArgumentException("A shipment identifier is required.", nameof(shipmentId));
         var cached = await ReadCacheAsync(shipmentId, cancellationToken);
         if (cached is not null) return cached;
+        var url = ShipmentHttpResilience.BaseUrl(configuration["ShipmentService:BaseUrl"], "ShipmentService:BaseUrl", environment.IsDevelopment());
         for (var authenticationAttempt = 0; authenticationAttempt < 2; authenticationAttempt++)
         {
             var token = await accessToken.GetAsync(cancellationToken);
-            var url = ShipmentHttpResilience.BaseUrl(configuration["ShipmentService:BaseUrl"], "ShipmentService:BaseUrl");
             using var response = await _pipeline.ExecuteAsync(async ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(url, $"api/v1/shipments/{shipmentId:D}"));

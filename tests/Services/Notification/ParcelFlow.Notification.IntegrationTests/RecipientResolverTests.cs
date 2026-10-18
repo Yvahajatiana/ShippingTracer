@@ -7,6 +7,8 @@ using FluentAssertions;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.FileProviders;
 using ParcelFlow.Notification.Infrastructure.Recipients;
 using Polly.CircuitBreaker;
 using StackExchange.Redis;
@@ -21,17 +23,19 @@ public sealed class RecipientResolverTests(InfrastructureFixture infrastructure)
     private static readonly string Snapshot = JsonSerializer.Serialize(new { ownerSubject = "owner", trackingNumber = Tracking, sender = new { email = "sender@example.test", phone = "+33600000001" } });
     private static HttpResponseMessage Json(string value, HttpStatusCode status = HttpStatusCode.OK) => new(status) { Content = new StringContent(value, Encoding.UTF8, "application/json") };
     private static HttpResponseMessage Token(int index = 1) => Json($"{{\"access_token\":\"service-token-{index}\",\"token_type\":\"Bearer\",\"expires_in\":300}}");
-    private Harness Create(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handle, IDistributedCache? cache = null, bool secret = true)
+    private Harness Create(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handle, IDistributedCache? cache = null, bool secret = true,
+        string environmentName = "Development", string shipmentUrl = "http://shipment.test:5102/", string authorityUrl = "http://keycloak.test/realms/parcelflow")
     {
         var settings = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ShipmentService:BaseUrl"] = "http://shipment.test:5102/", ["Keycloak:Authority"] = "http://keycloak.test/realms/parcelflow",
+            ["ShipmentService:BaseUrl"] = shipmentUrl, ["Keycloak:Authority"] = authorityUrl,
             ["ServiceAuthentication:ClientId"] = "notification-service", ["ServiceAuthentication:ClientSecret"] = secret ? "test-secret-never-log" : null
         }).Build();
         var services = new ServiceCollection(); services.AddStackExchangeRedisCache(options => { options.Configuration = infrastructure.Redis.GetConnectionString(); options.InstanceName = "parcelflow:"; });
         var provider = services.BuildServiceProvider(); var handler = new Handler(handle); var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        var clients = new Factory(client); var access = new ShipmentAccessToken(clients, settings);
-        return new Harness(new ShipmentRecipientResolver(clients, settings, cache ?? provider.GetRequiredService<IDistributedCache>(), access), access, provider, client, provider.GetRequiredService<IDistributedCache>());
+        var clients = new Factory(client); var environment = new TestEnvironment(environmentName);
+        var access = new ShipmentAccessToken(clients, settings, environment);
+        return new Harness(new ShipmentRecipientResolver(clients, settings, cache ?? provider.GetRequiredService<IDistributedCache>(), access, environment), access, provider, client, provider.GetRequiredService<IDistributedCache>());
     }
     [Fact]
     public async Task Client_credentials_token_is_memory_cached_and_only_immutable_recipient_is_cached_in_real_Redis()
@@ -162,6 +166,36 @@ public sealed class RecipientResolverTests(InfrastructureFixture infrastructure)
         using var harness = Create((_, _) => { requests++; return Task.FromResult(Json("private auth error", HttpStatusCode.ServiceUnavailable)); });
         var failure = await FluentActions.Awaiting(() => harness.Resolver.ResolveAsync(Guid.NewGuid(), default)).Should().ThrowAsync<HttpRequestException>();
         requests.Should().Be(3); failure.Which.ToString().Should().NotContain("private auth error");
+    }
+    [Theory]
+    [InlineData("Production", "https://shipment.test/", "http://keycloak.test/realms/parcelflow", "Keycloak:Authority")]
+    [InlineData("Production", "http://shipment.test/", "https://keycloak.test/realms/parcelflow", "ShipmentService:BaseUrl")]
+    [InlineData("Staging", "https://shipment.test/", "http://keycloak.test/realms/parcelflow", "Keycloak:Authority")]
+    [InlineData("Staging", "http://shipment.test/", "https://keycloak.test/realms/parcelflow", "ShipmentService:BaseUrl")]
+    public async Task Non_development_rejects_plaintext_dependencies_before_sending_credentials_or_contacts(string environment, string shipmentUrl, string authorityUrl, string setting)
+    {
+        var requests = 0;
+        using var harness = Create((_, _) => { requests++; return Task.FromResult(Token()); }, environmentName: environment, shipmentUrl: shipmentUrl, authorityUrl: authorityUrl);
+        var failure = await FluentActions.Awaiting(() => harness.Resolver.ResolveAsync(Guid.NewGuid(), default)).Should().ThrowAsync<InvalidOperationException>();
+        failure.Which.Message.Should().Contain(setting).And.Contain("HTTPS"); requests.Should().Be(0);
+    }
+    [Fact]
+    public async Task Production_allows_https_for_authentication_and_shipment_resolution()
+    {
+        var requests = new List<Uri>();
+        using var harness = Create((request, _) =>
+        {
+            requests.Add(request.RequestUri!); return Task.FromResult(request.Method == HttpMethod.Post ? Token() : Json(Snapshot));
+        }, environmentName: Environments.Production, shipmentUrl: "https://shipment.test/", authorityUrl: "https://keycloak.test/realms/parcelflow");
+        (await harness.Resolver.ResolveAsync(Guid.NewGuid(), default)).Email.Should().Be("sender@example.test");
+        requests.Should().HaveCount(2).And.OnlyContain(uri => uri.Scheme == "https");
+    }
+    private sealed class TestEnvironment(string name) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = name;
+        public string ApplicationName { get; set; } = "Notification.Tests";
+        public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
     private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
     {

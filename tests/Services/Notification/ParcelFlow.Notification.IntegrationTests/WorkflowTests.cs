@@ -57,11 +57,12 @@ public sealed class WorkflowTests(InfrastructureFixture dependencies)
         using var unauthenticated = source.CreateClient();
         (await unauthenticated.GetAsync($"/api/v1/shipments/{parcel.Id}")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         var routing = new WorkflowHttpClients(source);
-        using var target = Host.CreateDefaultBuilder()
+        using var target = Host.CreateDefaultBuilder().UseEnvironment(Environments.Development)
             .ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(Settings("NotificationDatabase", Connection("notification_target_" + suffix))))
             .ConfigureServices((context, services) =>
             {
                 services.AddNotificationApplication().AddNotificationInfrastructure(context.Configuration);
+                services.AddScoped<INotificationActor, WorkflowActor>();
                 services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(routing));
             }).Build();
         await target.Services.InitializeNotificationDatabaseAsync();
@@ -113,6 +114,11 @@ public sealed class WorkflowTests(InfrastructureFixture dependencies)
             if (await scope.ServiceProvider.GetRequiredService<NotificationDbContext>().Messages.CountAsync(x => x.ShipmentId == shipmentId, deadline.Token) == count) return;
             await Task.Delay(100, deadline.Token);
         }
+    }
+    private sealed class WorkflowActor : INotificationActor
+    {
+        public string Subject => "notification-workflow-customer";
+        public bool IsAdmin => false;
     }
     private sealed class ShipmentFactory(InfrastructureFixture fixture, string connection) : WebApplicationFactory<ShipmentApi::Program>
     {
