@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      microsoft:
+        patterns: ["Microsoft.*", "System.*"]
+      masstransit:
+        patterns: ["MassTransit*"]
+      testing:
+        patterns: ["xunit*", "FluentAssertions", "Testcontainers*", "Microsoft.NET.Test.Sdk", "coverlet*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
