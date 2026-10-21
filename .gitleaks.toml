@@ -11,6 +11,21 @@ regex = '''(?i)\b(?:password|pwd)\s*=\s*([^;"'\s]{4,})'''
 secretGroup = 1
 keywords = ["password", "pwd"]
 
+# Quoted values are valid in ADO.NET / Npgsql connection strings (needed for ';' or spaces).
+[[rules]]
+id = "connection-string-password-double-quoted"
+description = "Connection string with a double-quoted inline password"
+regex = '''(?i)\b(?:password|pwd)\s*=\s*"([^"\r\n]{4,})"'''
+secretGroup = 1
+keywords = ["password", "pwd"]
+
+[[rules]]
+id = "connection-string-password-single-quoted"
+description = "Connection string with a single-quoted inline password"
+regex = '''(?i)\b(?:password|pwd)\s*=\s*\x27([^\x27\r\n]{4,})\x27'''
+secretGroup = 1
+keywords = ["password", "pwd"]
+
 [allowlist]
 description = "Documented local-only placeholders and redacted history"
 regexes = [
