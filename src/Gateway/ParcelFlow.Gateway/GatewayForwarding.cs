@@ -28,17 +28,16 @@ internal static class GatewayForwarding
         }, Transformer);
         if (error == ForwarderError.None || context.Response.HasStarted || context.RequestAborted.IsCancellationRequested) return;
         var status = context.Response.StatusCode;
-        // Kestrel reports a streamed/chunked body exceeding its limit while YARP is reading it.
+        // Preserve Kestrel's client-error status when a streamed request body fails.
         for (var exception = context.Features.Get<IForwarderErrorFeature>()?.Exception;
              exception is not null; exception = exception.InnerException)
         {
-            if (exception is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
-                status = StatusCodes.Status413PayloadTooLarge;
+            if (exception is BadHttpRequestException { StatusCode: >= 400 and < 500 } badRequest)
+                status = badRequest.StatusCode;
         }
         context.Response.Clear();
-        context.Response.StatusCode = status == StatusCodes.Status504GatewayTimeout
-            ? StatusCodes.Status504GatewayTimeout
-            : status == StatusCodes.Status413PayloadTooLarge ? StatusCodes.Status413PayloadTooLarge : StatusCodes.Status502BadGateway;
+        context.Response.StatusCode = status is >= 400 and < 500 or StatusCodes.Status504GatewayTimeout
+            ? status : StatusCodes.Status502BadGateway;
         await context.RequestServices.GetRequiredService<IProblemDetailsService>().WriteAsync(new ProblemDetailsContext { HttpContext = context });
     }
 

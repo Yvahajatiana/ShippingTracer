@@ -64,6 +64,6 @@ La configuration est validée au démarrage. Les destinations sont des paramètr
 
 Les tests utilisent la gateway et de vrais serveurs HTTP amont factices, avec JWT signés et validation cryptographique. Ils couvrent les frontières de routage et d’audience, le suivi public, le transfert des requêtes/réponses, CORS, quotas et pannes. Aucun Docker ni serveur Keycloak n’est nécessaire pour ces tests.
 
-Une vérification complémentaire sous Kestrel réel contrôle le rejet JSON 413 d’un corps chunked dépassant la limite, l’intégrité d’un flux binaire et la propagation de l’annulation du client vers l’amont.
+Le script `tests/Gateway/kestrel-smoke.mjs` complète ces tests sous Kestrel réel : erreurs JSON 400 pour un corps chunked mal formé, 408 pour un corps trop lent et 413 au-delà de la limite ; intégrité d’un flux binaire et propagation de l’annulation du client vers l’amont. Il se lance depuis la racine avec `node tests/Gateway/kestrel-smoke.mjs` après compilation Debug de la gateway. `PARCELFLOW_DOTNET` permet d’indiquer un exécutable .NET local. Les ports sont éphémères ; le processus et les connexions créés sont arrêtés en fin de vérification.
 
 Références techniques : [YARP et authentification](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/authn-authz), [transfert direct avec YARP](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/direct-forwarding). Le tutoriel de construction global reste réservé à l’étape finale avec le README.
