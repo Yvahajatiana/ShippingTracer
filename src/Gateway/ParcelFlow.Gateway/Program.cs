@@ -156,4 +156,3 @@ void Map(string service, string pattern) => app.Map(pattern,
     .RequireAuthorization($"audience:{GatewayRoutes.Services[service]}").RequireRateLimiting("private");
 
 public partial class Program;
-
