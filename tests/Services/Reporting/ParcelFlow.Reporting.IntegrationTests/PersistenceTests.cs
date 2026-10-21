@@ -1,6 +1,8 @@
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -39,6 +41,60 @@ internal static class ConsumerTestHost
 [Collection(InfrastructureCollection.Name)]
 public sealed class PersistenceTests(InfrastructureFixture infrastructure)
 {
+    [Fact]
+    public async Task Envelope_migration_backfills_existing_facts()
+    {
+        await using var provider = ConsumerTestHost.Create(infrastructure, "reporting_upgrade_" + Guid.NewGuid().ToString("N"));
+        using var scope = provider.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<ReportingDbContext>();
+        var migrator = database.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261018112545_InitialReporting");
+        var command = ConsumerTestHost.Command(Guid.NewGuid(), ParcelStatus.Created, DateTimeOffset.UtcNow);
+        var shipment = new ShipmentMetrics(command.ShipmentId, command.TrackingNumber);
+        shipment.AddFact(new StatusFact(command.EventId, command.SourceEventId, command.ShipmentId, command.Status, command.OccurredAtUtc, null));
+        database.Shipments.Add(shipment);
+        await database.SaveChangesAsync();
+        await migrator.MigrateAsync();
+        var envelope = await database.Envelopes.SingleAsync(x => x.EventId == command.EventId);
+        envelope.SourceEventId.Should().Be(command.SourceEventId);
+    }
+
+    [Fact]
+    public async Task Compatible_replay_remembers_its_envelope_and_rejects_later_reuse()
+    {
+        await using var provider = ConsumerTestHost.Create(infrastructure);
+        await provider.InitializeReportingDatabaseAsync();
+        var original = ConsumerTestHost.Command(Guid.NewGuid(), ParcelStatus.Created, DateTimeOffset.UtcNow);
+        var replay = original with { EventId = Guid.NewGuid() };
+        using (var scope = provider.CreateScope())
+            (await scope.ServiceProvider.GetRequiredService<ISender>().Send(original)).Should().BeTrue();
+        using (var scope = provider.CreateScope())
+            (await scope.ServiceProvider.GetRequiredService<ISender>().Send(replay)).Should().BeFalse();
+        using (var scope = provider.CreateScope())
+            (await scope.ServiceProvider.GetRequiredService<ISender>().Send(replay)).Should().BeFalse();
+        foreach (var conflict in new[]
+                 {
+                     replay with { SourceEventId = Guid.NewGuid() },
+                     replay with { Status = ParcelStatus.Delivered },
+                     ConsumerTestHost.Command(Guid.NewGuid(), ParcelStatus.Created, original.OccurredAtUtc) with { EventId = replay.EventId }
+                 })
+        {
+            using var scope = provider.CreateScope();
+            await FluentActions.Awaiting(() => scope.ServiceProvider.GetRequiredService<ISender>().Send(conflict))
+                .Should().ThrowAsync<ReportingConflictException>();
+        }
+        using var read = provider.CreateScope();
+        var database = read.ServiceProvider.GetRequiredService<ReportingDbContext>();
+        var root = await database.Shipments.Include(x => x.Facts).SingleAsync(x => x.ShipmentId == original.ShipmentId);
+        root.Revision.Should().Be(1);
+        root.Facts.Should().ContainSingle();
+        var alias = await read.ServiceProvider.GetRequiredService<IReportingStore>().FindFactByEventIdAsync(replay.EventId, default);
+        alias.Should().NotBeNull();
+        alias!.SourceEventId.Should().Be(original.SourceEventId);
+        (await database.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>()
+            .CountAsync(x => x.CorrelationId == original.ShipmentId)).Should().Be(1);
+    }
+
     [Theory]
     [InlineData("source")] [InlineData("event")] [InlineData("tracking")]
     public async Task Database_enforces_unique_source_event_and_tracking_identities(string constraint)
@@ -90,6 +146,7 @@ public sealed class PersistenceTests(InfrastructureFixture infrastructure)
         using var read = provider.CreateScope(); var db = read.ServiceProvider.GetRequiredService<ReportingDbContext>();
         (await db.Shipments.AnyAsync(x => x.ShipmentId == command.ShipmentId)).Should().BeFalse();
         (await db.Facts.AnyAsync(x => x.SourceEventId == command.SourceEventId)).Should().BeFalse();
+        (await db.Envelopes.AnyAsync(x => x.EventId == command.EventId)).Should().BeFalse();
         (await db.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().AnyAsync(x => x.CorrelationId == command.ShipmentId)).Should().BeFalse();
     }
     [Theory]

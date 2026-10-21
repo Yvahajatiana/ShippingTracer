@@ -190,6 +190,21 @@ namespace ParcelFlow.Reporting.Infrastructure.Persistence.Migrations
                     b.ToTable("OutboxState");
                 });
 
+            modelBuilder.Entity("ParcelFlow.Reporting.Domain.EventEnvelope", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SourceEventId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("EventId");
+
+                    b.HasIndex("SourceEventId");
+
+                    b.ToTable("event_envelopes", (string)null);
+                });
+
             modelBuilder.Entity("ParcelFlow.Reporting.Domain.ShipmentMetrics", b =>
                 {
                     b.Property<Guid>("ShipmentId")
@@ -284,6 +299,15 @@ namespace ParcelFlow.Reporting.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("InboxMessageId", "InboxConsumerId")
                         .HasPrincipalKey("MessageId", "ConsumerId");
+                });
+
+            modelBuilder.Entity("ParcelFlow.Reporting.Domain.EventEnvelope", b =>
+                {
+                    b.HasOne("ParcelFlow.Reporting.Domain.StatusFact", null)
+                        .WithMany()
+                        .HasForeignKey("SourceEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("ParcelFlow.Reporting.Domain.StatusFact", b =>

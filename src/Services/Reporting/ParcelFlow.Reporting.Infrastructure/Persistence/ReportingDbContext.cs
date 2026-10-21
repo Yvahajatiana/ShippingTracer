@@ -6,6 +6,7 @@ public sealed class ReportingDbContext(DbContextOptions<ReportingDbContext> opti
 {
     public DbSet<ShipmentMetrics> Shipments => Set<ShipmentMetrics>();
     public DbSet<StatusFact> Facts => Set<StatusFact>();
+    public DbSet<EventEnvelope> Envelopes => Set<EventEnvelope>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.Entity<ShipmentMetrics>(entity =>
@@ -30,6 +31,13 @@ public sealed class ReportingDbContext(DbContextOptions<ReportingDbContext> opti
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(30);
             entity.Property(x => x.FacilityCode).HasMaxLength(50);
             entity.HasIndex(x => new { x.ShipmentId, x.OccurredAtUtc, x.SourceEventId });
+        });
+        builder.Entity<EventEnvelope>(entity =>
+        {
+            entity.ToTable("event_envelopes"); entity.HasKey(x => x.EventId);
+            entity.Property(x => x.EventId).ValueGeneratedNever();
+            entity.HasOne<StatusFact>().WithMany().HasForeignKey(x => x.SourceEventId)
+                .IsRequired().OnDelete(DeleteBehavior.Restrict);
         });
         builder.AddInboxStateEntity(); builder.AddOutboxMessageEntity(); builder.AddOutboxStateEntity();
     }

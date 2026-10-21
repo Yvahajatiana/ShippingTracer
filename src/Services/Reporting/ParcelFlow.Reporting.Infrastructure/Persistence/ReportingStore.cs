@@ -16,10 +16,18 @@ public sealed class ReportingStore(ReportingDbContext database, ResiliencePipeli
         foreach (var key in new[] { "reporting:event:" + eventId, "reporting:source:" + sourceEventId, "reporting:shipment:" + shipmentId })
             await database.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", token);
     }
-    public Task<StatusFact?> FindFactByEventIdAsync(Guid id, CancellationToken token) => database.Facts.SingleOrDefaultAsync(x => x.EventId == id, token);
+    public async Task<StatusFact?> FindFactByEventIdAsync(Guid id, CancellationToken token)
+    {
+        var sourceId = await database.Envelopes.Where(x => x.EventId == id)
+            .Select(x => (Guid?)x.SourceEventId).SingleOrDefaultAsync(token);
+        return sourceId is { } source
+            ? await database.Facts.SingleOrDefaultAsync(x => x.SourceEventId == source, token)
+            : await database.Facts.SingleOrDefaultAsync(x => x.EventId == id, token);
+    }
     public Task<StatusFact?> FindFactBySourceIdAsync(Guid id, CancellationToken token) => database.Facts.SingleOrDefaultAsync(x => x.SourceEventId == id, token);
     public Task<ShipmentMetrics?> FindShipmentAsync(Guid id, CancellationToken token) => database.Shipments.Include(x => x.Facts).SingleOrDefaultAsync(x => x.ShipmentId == id, token);
     public void AddShipment(ShipmentMetrics shipment) => database.Shipments.Add(shipment);
+    public void RememberEnvelope(Guid eventId, Guid sourceEventId) => database.Envelopes.Add(new EventEnvelope(eventId, sourceEventId));
     public async Task SaveChangesAsync(CancellationToken token) => await database.SaveChangesAsync(token);
     public string GetCacheKey(DateOnly from, DateOnly to)
     {

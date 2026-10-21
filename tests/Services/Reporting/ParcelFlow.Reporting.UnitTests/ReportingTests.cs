@@ -108,12 +108,29 @@ public sealed class ReportingTests
     }
 
     [Fact]
-    public async Task Both_envelope_and_source_replay_have_no_additional_side_effects()
+    public async Task Replays_preserve_facts_and_publications_and_remember_fresh_envelopes()
     {
         var f = Fixture(); var request = Command(); await f.Handler.Handle(request, default);
         (await f.Handler.Handle(request, default)).Should().BeFalse();
         (await f.Handler.Handle(request with { EventId = Guid.NewGuid(), OccurredAtUtc = request.OccurredAtUtc.AddTicks(9) }, default)).Should().BeFalse();
-        f.Store.Saves.Should().Be(1); f.Publisher.Events.Should().ContainSingle();
+        f.Store.Saves.Should().Be(2); f.Publisher.Events.Should().ContainSingle();
+        f.Store.Shipments.Single().Revision.Should().Be(1);
+        f.Store.Shipments.Single().Facts.Should().ContainSingle();
+        f.Store.Envelopes.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Accepted_replay_envelope_cannot_be_reused_for_another_source()
+    {
+        var f = Fixture(); var first = Command(); await f.Handler.Handle(first, default);
+        var replay = first with { EventId = Guid.NewGuid() };
+        (await f.Handler.Handle(replay, default)).Should().BeFalse();
+        (await f.Handler.Handle(replay, default)).Should().BeFalse();
+        await FluentActions.Awaiting(() => f.Handler.Handle(replay with { SourceEventId = Guid.NewGuid() }, default))
+            .Should().ThrowAsync<ReportingConflictException>();
+        f.Store.Saves.Should().Be(2); f.Publisher.Events.Should().ContainSingle();
+        f.Store.Shipments.Single().Facts.Should().ContainSingle();
+        f.Store.Shipments.Single().Revision.Should().Be(1);
     }
 
     [Theory]
@@ -210,13 +227,15 @@ public sealed class ReportingTests
     private sealed class Store : IReportingStore
     {
         public List<ShipmentMetrics> Shipments { get; } = [];
+        public Dictionary<Guid, Guid> Envelopes { get; } = [];
         public (Guid, Guid, Guid)? Locked { get; private set; }
         public int Saves { get; private set; } public int Queries { get; private set; }
         public Task LockAsync(Guid eventId, Guid sourceEventId, Guid shipmentId, CancellationToken ct) { Locked = (eventId, sourceEventId, shipmentId); return Task.CompletedTask; }
-        public Task<StatusFact?> FindFactByEventIdAsync(Guid eventId, CancellationToken ct) => Task.FromResult(Shipments.SelectMany(x => x.Facts).SingleOrDefault(x => x.EventId == eventId));
+        public Task<StatusFact?> FindFactByEventIdAsync(Guid eventId, CancellationToken ct) => Task.FromResult(Shipments.SelectMany(x => x.Facts).SingleOrDefault(x => x.EventId == eventId || Envelopes.GetValueOrDefault(eventId) == x.SourceEventId));
         public Task<StatusFact?> FindFactBySourceIdAsync(Guid sourceEventId, CancellationToken ct) => Task.FromResult(Shipments.SelectMany(x => x.Facts).SingleOrDefault(x => x.SourceEventId == sourceEventId));
         public Task<ShipmentMetrics?> FindShipmentAsync(Guid shipmentId, CancellationToken ct) => Task.FromResult(Shipments.SingleOrDefault(x => x.ShipmentId == shipmentId));
         public void AddShipment(ShipmentMetrics shipment) => Shipments.Add(shipment);
+        public void RememberEnvelope(Guid eventId, Guid sourceEventId) => Envelopes.Add(eventId, sourceEventId);
         public Task SaveChangesAsync(CancellationToken ct) { Saves++; return Task.CompletedTask; }
         public Task<KpiReportDto> GetKpisAsync(DateOnly from, DateOnly to, DateTimeOffset generatedAtUtc, CancellationToken ct)
         {
