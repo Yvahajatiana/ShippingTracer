@@ -1,0 +1,19 @@
+title = "ParcelFlow secret scanning"
+
+[extend]
+useDefault = true
+
+# Default rules miss ADO.NET / Npgsql connection strings with an inline password.
+[[rules]]
+id = "connection-string-password"
+description = "Connection string or configuration value with an inline password"
+regex = '''(?i)\b(?:password|pwd)\s*=\s*([^;"'\s]{4,})'''
+secretGroup = 1
+keywords = ["password", "pwd"]
+
+[allowlist]
+description = "Documented local-only placeholders and redacted history"
+regexes = [
+  '''^local-password$''',
+  '''^\*\*\*REMOVED\*\*\*$''',
+]
