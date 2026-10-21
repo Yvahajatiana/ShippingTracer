@@ -33,11 +33,15 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             var transportIds = Enumerable.Range(0, 21).Select(_ => Guid.NewGuid()).ToArray();
             await Task.WhenAll(transportIds.Take(20).Select(id => bus.Publish(message, context => context.MessageId = id)));
             await ConsumerTestHost.Until(() => Task.FromResult(outputs.Count(x => x.SourceEventId == command.SourceEventId) == 1));
-            await bus.Publish(message with { EventId = Guid.NewGuid() }, context => context.MessageId = transportIds[20]);
+            var replayEventId = Guid.NewGuid();
+            await bus.Publish(message with { EventId = replayEventId }, context => context.MessageId = transportIds[20]);
             await ConsumerTestHost.Until(async () => { using var scope = provider.CreateScope(); return await scope.ServiceProvider.GetRequiredService<ReportingDbContext>().Set<InboxState>().CountAsync(x => transportIds.Contains(x.MessageId) && x.Consumed != null) == 21; });
             using var read = provider.CreateScope(); var db = read.ServiceProvider.GetRequiredService<ReportingDbContext>();
             (await db.Facts.CountAsync(x => x.ShipmentId == shipment)).Should().Be(1);
             (await db.Shipments.SingleAsync(x => x.ShipmentId == shipment)).Revision.Should().Be(1);
+            var replayFact = await read.ServiceProvider.GetRequiredService<IReportingStore>().FindFactByEventIdAsync(replayEventId, default);
+            replayFact.Should().NotBeNull();
+            replayFact!.SourceEventId.Should().Be(command.SourceEventId);
             outputs.Count(x => x.SourceEventId == command.SourceEventId).Should().Be(1);
         }
         finally { await bus.StopAsync(); await observer.StopAsync(); }

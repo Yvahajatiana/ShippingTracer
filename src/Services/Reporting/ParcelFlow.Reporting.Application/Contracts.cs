@@ -14,6 +14,7 @@ public interface IReportingStore
     Task<StatusFact?> FindFactBySourceIdAsync(Guid sourceEventId, CancellationToken cancellationToken);
     Task<ShipmentMetrics?> FindShipmentAsync(Guid shipmentId, CancellationToken cancellationToken);
     void AddShipment(ShipmentMetrics shipment);
+    void RememberEnvelope(Guid eventId, Guid sourceEventId);
     Task SaveChangesAsync(CancellationToken cancellationToken);
     Task<KpiReportDto> GetKpisAsync(DateOnly from, DateOnly to, DateTimeOffset generatedAtUtc, CancellationToken cancellationToken);
 }

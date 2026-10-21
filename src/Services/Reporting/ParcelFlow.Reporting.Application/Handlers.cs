@@ -22,7 +22,15 @@ public sealed class RecordStatusFactHandler(IReportingStore store, IPublishEndpo
         var shipment = await store.FindShipmentAsync(request.ShipmentId, ct);
         if (shipment is not null && shipment.TrackingNumber != request.TrackingNumber)
             throw new ReportingConflictException("A shipment tracking number cannot change.");
-        if (envelope is not null || source is not null) return false;
+        if (envelope is not null || source is not null)
+        {
+            if (envelope is null)
+            {
+                store.RememberEnvelope(request.EventId, request.SourceEventId);
+                await store.SaveChangesAsync(ct);
+            }
+            return false;
+        }
         if (shipment is null)
         {
             shipment = new ShipmentMetrics(request.ShipmentId, request.TrackingNumber);
@@ -30,6 +38,7 @@ public sealed class RecordStatusFactHandler(IReportingStore store, IPublishEndpo
         }
         shipment.AddFact(new StatusFact(request.EventId, request.SourceEventId, request.ShipmentId,
             request.Status, request.OccurredAtUtc, request.FacilityCode));
+        store.RememberEnvelope(request.EventId, request.SourceEventId);
         await publisher.Publish(new ShipmentMetricsUpdated(Guid.NewGuid(), request.ShipmentId,
             ReportingRules.NormalizeTimestamp(clock.GetUtcNow()), request.ShipmentId, request.SourceEventId), ct);
         await store.SaveChangesAsync(ct);
