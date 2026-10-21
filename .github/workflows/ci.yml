@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+  # Must stay in the band pinned by global.json (8.0.400, rollForward latestPatch).
+  DOTNET_SDK: 8.0.4xx
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.21.2
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Scan full git history with gitleaks
+        run: >
+          docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE"
+          git /repo --config /repo/.gitleaks.toml --redact --no-banner --exit-code 1
+
+  build:
+    name: Build, unit and contract tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK }}
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Restore
+        run: dotnet restore ParcelFlow.sln
+      - name: Build (warnings as errors)
+        run: dotnet build ParcelFlow.sln --configuration Release --no-restore
+      - name: Unit, contract, BuildingBlocks and Gateway tests
+        run: |
+          set -euo pipefail
+          find tests -name '*.csproj' ! -name '*.IntegrationTests.csproj' | sort | while read -r project; do
+            echo "::group::$project"
+            dotnet test "$project" --configuration Release --no-build \
+              --logger "trx;LogFilePrefix=$(basename "$project" .csproj)" --results-directory TestResults
+            echo "::endgroup::"
+          done
+      - name: EF Core model drift
+        run: |
+          set -euo pipefail
+          dotnet tool restore
+          for infra in src/Services/*/ParcelFlow.*.Infrastructure; do
+            echo "::group::$infra"
+            dotnet ef migrations has-pending-model-changes --project "$infra" --configuration Release --no-build
+            echo "::endgroup::"
+          done
+      - name: Vulnerable NuGet packages
+        run: |
+          set -euo pipefail
+          dotnet list ParcelFlow.sln package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable NuGet packages detected"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results-unit
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  integration:
+    name: Integration tests (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [Customer, Shipment, Tracking, Warehouse, Delivery, Billing, Notification, Reporting]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK }}
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Run Testcontainers integration tests
+        run: >
+          dotnet test tests/Services/${{ matrix.service }}/ParcelFlow.${{ matrix.service }}.IntegrationTests
+          --configuration Release
+          --logger "trx;LogFilePrefix=${{ matrix.service }}"
+          --results-directory TestResults
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results-integration-${{ matrix.service }}
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  gateway-smoke:
+    name: Gateway Kestrel smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+      # The smoke script runs the Debug build output of the gateway.
+      - name: Build gateway (Debug)
+        run: dotnet build src/Gateway/ParcelFlow.Gateway --configuration Debug
+      - name: Run Kestrel smoke test
+        run: node tests/Gateway/kestrel-smoke.mjs
