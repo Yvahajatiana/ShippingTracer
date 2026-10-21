@@ -9,7 +9,7 @@ Le workflow `.github/workflows/ci.yml` s'exécute sur chaque pull request et cha
 | Secret scan | gitleaks sur tout l'historique git avec `.gitleaks.toml` : règles par défaut plus une règle `connection-string-password` qui détecte les mots de passe dans les chaînes de connexion, ce que les règles par défaut ne font pas. Seuls le placeholder documenté `local-password` et les valeurs `***REMOVED***` de l'historique nettoyé sont autorisés. |
 | Build, unit and contract tests | Restauration, compilation Release de la solution (warnings traités comme erreurs), puis tous les projets de test hors intégration : unitaires, contrats, BuildingBlocks et Gateway. Contrôle de dérive des modèles EF Core pour les 8 services (`has-pending-model-changes`) et échec si NuGet signale un package vulnérable, dépendances transitives incluses. |
 | Integration tests (matrice) | Un job par service. Les tests Testcontainers démarrent PostgreSQL, RabbitMQ et Redis réels sur le runner. Les services s'exécutent en parallèle, sans arrêt au premier échec. |
-| Gateway Kestrel smoke test | Compile la gateway en Debug et exécute `tests/Gateway/kestrel-smoke.mjs` sous Node 20 : corps chunked malformé, corps lent, limite de taille, flux binaire et annulation. |
+| Gateway Kestrel smoke test | Compile la gateway en Debug et exécute `tests/Gateway/kestrel-smoke.mjs` sous Node 22 : corps chunked malformé, corps lent, limite de taille, flux binaire et annulation. |
 
 Les résultats TRX sont publiés en artefacts, y compris en cas d'échec. Le SDK installé est le dernier 8.0.4xx, la bande imposée par `global.json`.
 
