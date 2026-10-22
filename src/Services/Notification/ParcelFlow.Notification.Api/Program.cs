@@ -125,6 +125,7 @@ builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddSe
 
 var app = builder.Build();
 app.UseParcelFlowProblemDetails();
+app.UseParcelFlowNoStore();
 app.Use(async (context, next) =>
 {
     if (context.Request.ContentLength > maximumRequestBytes)
@@ -135,19 +136,6 @@ app.Use(async (context, next) =>
     await next(context);
 });
 app.UseSerilogRequestLogging();
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/api"))
-    {
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.OnStarting(() =>
-        {
-            context.Response.Headers.CacheControl = "no-store";
-            return Task.CompletedTask;
-        });
-    }
-    await next(context);
-});
 app.UseAuthentication();
 app.UseAuthorization();
 if (app.Environment.IsDevelopment())

@@ -278,6 +278,7 @@ public sealed class DeliveryApiTests(InfrastructureFixture infrastructure)
     {
         response.StatusCode.Should().Be(expected);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+        response.Headers.CacheControl!.NoStore.Should().BeTrue();
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         json.RootElement.GetProperty("status").GetInt32().Should().Be((int)expected);
         json.RootElement.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();

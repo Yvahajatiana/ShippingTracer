@@ -124,6 +124,7 @@ builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddSe
 
 var app = builder.Build();
 app.UseParcelFlowProblemDetails();
+app.UseParcelFlowNoStore();
 app.Use(async (context, next) =>
 {
     if (context.Request.ContentLength > maximumRequestBytes)

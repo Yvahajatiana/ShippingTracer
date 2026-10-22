@@ -18,6 +18,8 @@ internal sealed class ParcelFlowProblemDetailsWriter(IOptions<ProblemDetailsOpti
         problem.Type ??= $"https://httpstatuses.io/{problem.Status.Value}";
         problem.Instance ??= context.HttpContext.Request.Path;
         response.StatusCode = problem.Status.Value;
+        // Error bodies may describe private resources; no cache or proxy may store them.
+        response.Headers.CacheControl = "no-store";
         options.Value.CustomizeProblemDetails?.Invoke(context);
 
         // Preserve the validation subtype even when MVC was registered first.

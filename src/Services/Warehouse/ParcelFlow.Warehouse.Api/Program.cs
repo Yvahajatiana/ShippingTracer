@@ -120,6 +120,7 @@ builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddSe
 
 var app = builder.Build();
 app.UseParcelFlowProblemDetails();
+app.UseParcelFlowNoStore();
 app.UseSerilogRequestLogging();
 app.UseAuthentication();
 app.UseAuthorization();
