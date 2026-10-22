@@ -65,16 +65,19 @@ stateDiagram-v2
     [*] --> AwaitingPayment: ShipmentCreated / PaymentRequested
     AwaitingPayment --> AwaitingPickup: PaymentCompleted valide / ShipmentReadyForPickup
     AwaitingPayment --> PaymentRejected: PaymentFailed
+    AwaitingPayment --> PaymentTimedOut: délai de paiement expiré / ShipmentPaymentTimedOut
     AwaitingPickup --> Completed: ParcelPickedUp
 ```
 
-La saga réside dans la base Shipment et corrèle les messages par ShipmentId. PaymentRequested est une commande envoyée à la file durable `billing-payments` : elle attend Billing même si son consommateur est arrêté ou pas encore démarré. Billing devra utiliser ce nom de file. Les faits ShipmentCreated et ShipmentReadyForPickup restent publiés comme événements. Elle compare montant et devise attendus avant d'accepter le paiement. Les activités modifient l'agrégat dans le même contexte/transaction EF que l'état de saga et l'Outbox. L'Inbox MassTransit déduplique les livraisons ; les états terminaux restent conservés pour qu'une création rejouée ne redemande pas de paiement. Les événements répétés et incompatibles avec l'état courant ne refont pas les transitions.
+La saga réside dans la base Shipment et corrèle les messages par ShipmentId. PaymentRequested est une commande envoyée à la file durable `billing-payments` : elle attend Billing même si son consommateur est arrêté ou pas encore démarré. Billing devra utiliser ce nom de file. Les faits ShipmentCreated et ShipmentReadyForPickup restent publiés comme événements. Elle compare montant et devise attendus avant d'accepter le paiement : un PaymentCompleted incohérent est ignoré, journalisé en avertissement (ShipmentId, EventId, devises attendue/reçue, indicateur de concordance du montant, sans montant ni donnée client) et la saga reste en AwaitingPayment. Les activités modifient l'agrégat dans le même contexte/transaction EF que l'état de saga et l'Outbox. L'Inbox MassTransit déduplique les livraisons ; les états terminaux restent conservés pour qu'une création rejouée ne redemande pas de paiement. Les événements répétés et incompatibles avec l'état courant ne refont pas les transitions.
+
+Délai de paiement : à la création, la saga planifie un message interne `ShipmentPaymentTimeoutExpired` après `ShipmentBooking:PaymentTimeout` (30 minutes par défaut, format TimeSpan, strictement positif, validé au démarrage). Sans paiement valide à l'échéance, la saga passe dans l'état terminal PaymentTimedOut, l'envoi passe en PaymentFailed et l'événement ShipmentPaymentTimedOut est publié via l'Outbox. Un paiement valide ou un PaymentFailed annule la planification : le jeton est effacé de la saga, ce qui neutralise le message différé encore livré par le broker. Un PaymentCompleted reçu après l'expiration ne rouvre pas l'envoi ; il est journalisé en avertissement pour revue manuelle ou remboursement. La planification utilise la livraison différée RabbitMQ : le broker doit activer le plugin `rabbitmq_delayed_message_exchange` (les tests d'intégration l'installent dans le conteneur après contrôle SHA-256). Les sagas déjà en AwaitingPayment avant la migration `AddPaymentTimeoutToken` n'ont pas de délai planifié.
 
 États de l'agrégat : AwaitingPayment, ReadyForPickup, PaymentFailed, PickedUp. Ce ne sont pas l'historique public de suivi, qui appartient à Tracking à l'étape suivante. Les événements sortants ne contiennent pas d'adresse ou de téléphone.
 
 Contrats partagés :
 
-- Shipment.V1 : ShipmentCreated, ShipmentReadyForPickup, ParcelPickedUp.
+- Shipment.V1 : ShipmentCreated, ShipmentReadyForPickup, ShipmentPaymentTimedOut, ParcelPickedUp.
 - Billing.V1 : PaymentRequested, PaymentCompleted, PaymentFailed.
 
 Billing produira les résultats de paiement et Warehouse produira la prise en charge à leurs étapes. Les tests de cette étape utilisent RabbitMQ réel pour exercer ces échanges sans ajouter de faux service à l'application.
