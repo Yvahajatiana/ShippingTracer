@@ -8,6 +8,8 @@
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
     <PackageReference Include="FluentAssertions" Version="6.12.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <ProjectReference Include="../../../../src/Services/Shipment/ParcelFlow.Shipment.Application/ParcelFlow.Shipment.Application.csproj" />
+    <ProjectReference Include="../../../../src/Services/Shipment/ParcelFlow.Shipment.Infrastructure/ParcelFlow.Shipment.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

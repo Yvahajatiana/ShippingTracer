@@ -37,8 +37,20 @@ public sealed class LabelAndEventContractTests
         JsonSerializer.Deserialize<PaymentCompleted>(JsonSerializer.Serialize(message)).Should().Be(message);
     }
 
+    [Fact]
+    public void Payment_timeout_wire_contract_exposes_no_customer_or_financial_data()
+    {
+        var id = Guid.NewGuid();
+        var message = new ShipmentPaymentTimedOut(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, id,
+            "PF0123456789ABCDEF01234567");
+        JsonSerializer.Deserialize<ShipmentPaymentTimedOut>(JsonSerializer.Serialize(message)).Should().Be(message);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(message));
+        document.RootElement.EnumerateObject().Select(property => property.Name).Should().BeEquivalentTo(
+            "EventId", "CorrelationId", "OccurredAtUtc", "ShipmentId", "TrackingNumber");
+    }
+
     [Theory]
-    [InlineData("A", new[] { 104, 33, 34, 106 })]
+    [InlineData("A",new[] { 104, 33, 34, 106 })]
     [InlineData("123456", new[] { 104, 17, 18, 19, 20, 21, 22, 16, 106 })]
     public void Code128_b_uses_standard_start_checksum_and_stop(string value, int[] expected) =>
         Code128Barcode.Encode(value).Should().Equal(expected);
