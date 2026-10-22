@@ -1,5 +1,6 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Shipment.V1;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Warehouse.Domain;
@@ -74,7 +75,7 @@ public sealed class ScanParcelHandler(IWarehouseStore store, IPublishEndpoint pu
         store.AddScan(scan);
         var isSortingEntry = request.Direction == ScanDirection.Entry && warehouse.Kind == WarehouseKind.SortingCenter;
         if (firstPickup)
-            await publisher.Publish(new ParcelPickedUp(isSortingEntry ? Guid.NewGuid() : scan.ScanId, inventory.ShipmentId, now, inventory.ShipmentId), cancellationToken);
+            await publisher.Publish(new ParcelPickedUp(isSortingEntry ? DeterministicGuid.Create("warehouse:parcel-picked-up:", scan.ScanId) : scan.ScanId, inventory.ShipmentId, now, inventory.ShipmentId), cancellationToken);
         if (isSortingEntry || !firstPickup)
             await publisher.Publish(new ParcelStatusRecorded(scan.ScanId, inventory.ShipmentId, now, inventory.ShipmentId, number,
                 isSortingEntry ? TrackingStatus.AtSortingCenter : TrackingStatus.InTransit, warehouse.Code), cancellationToken);

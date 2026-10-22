@@ -48,7 +48,7 @@ Les contrats versionnés résident dans `ParcelFlow.BuildingBlocks.Contracts` :
 - `ShipmentCreated` enregistre le numéro et le fait Created.
 - `ParcelPickedUp` enregistre PickedUp, y compris s’il arrive avant ShipmentCreated. Le dossier reste alors interne jusqu’à son association à un numéro.
 - `ParcelStatusRecorded` reçoit les faits des futurs services Warehouse et Delivery. Le code de centre optionnel est limité à 40 caractères ASCII majuscules, chiffres et tirets ; aucun texte libre ne transporte de données personnelles.
-- `TrackingStatusChanged` publie chaque nouveau fait enregistré et son `SourceEventId`, avec la date de survenue initiale. À la première association d’un numéro, les faits précédemment en attente sont publiés une fois. Les consommateurs doivent dédupliquer les faits par SourceEventId et utiliser OccurredAtUtc pour leur chronologie.
+- `TrackingStatusChanged` publie chaque nouveau fait enregistré et son `SourceEventId`, avec la date de survenue initiale. À la première association d’un numéro, les faits précédemment en attente sont publiés une fois. L’EventId est dérivé de l’EventId du fait source et la CorrelationId est celle du message consommé qui déclenche la publication. Les consommateurs doivent dédupliquer les faits par SourceEventId et utiliser OccurredAtUtc pour leur chronologie.
 
 Aucun endpoint HTTP de modification n’est ajouté. Le paiement et ShipmentReadyForPickup ne constituent pas une prise en charge physique et ne changent pas le suivi.
 

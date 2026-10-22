@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
 using ParcelFlow.BuildingBlocks.Contracts.Shipment.V1;
 using ParcelFlow.Shipment.Domain;
@@ -185,11 +186,11 @@ public sealed class PersistenceSagaTests(InfrastructureFixture infrastructure)
             var shipment = PersistenceTests.CreateShipment();
             await SeedShipment(shipment);
             var bus = host.Services.GetRequiredService<IBus>();
-            var timedOut = new ConcurrentBag<ShipmentPaymentTimedOut>();
+            var timedOut = new ConcurrentBag<ConsumeContext<ShipmentPaymentTimedOut>>();
             var observer = bus.ConnectReceiveEndpoint($"shipment-test-{Guid.NewGuid():N}", endpoint =>
                 endpoint.Handler<ShipmentPaymentTimedOut>(context =>
                 {
-                    if (context.Message.ShipmentId == shipment.Id) timedOut.Add(context.Message);
+                    if (context.Message.ShipmentId == shipment.Id) timedOut.Add(context);
                     return Task.CompletedTask;
                 }));
             await observer.Ready;
@@ -203,7 +204,12 @@ public sealed class PersistenceSagaTests(InfrastructureFixture infrastructure)
             using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
                 while (timedOut.IsEmpty)
                     await Task.Delay(100, deadline.Token);
-            var timeoutEvent = timedOut.Should().ContainSingle().Subject;
+            var timeoutContext = timedOut.Should().ContainSingle().Subject;
+            var timeoutEvent = timeoutContext.Message;
+            // Saga events carry a deterministic EventId, used as transport MessageId, and the flow correlation.
+            timeoutEvent.EventId.Should().Be(DeterministicGuid.Create("shipment:payment-timed-out:", shipment.Id));
+            timeoutContext.MessageId.Should().Be(timeoutEvent.EventId);
+            timeoutContext.CorrelationId.Should().Be(created.CorrelationId);
             timeoutEvent.CorrelationId.Should().Be(created.CorrelationId);
             timeoutEvent.TrackingNumber.Should().Be(shipment.TrackingNumber);
             logs.Entries.Should().Contain(entry => entry.EventId == 3101);

@@ -1,5 +1,7 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Customer.V1;
 using ParcelFlow.Customer.Domain;
 
@@ -29,7 +31,8 @@ internal sealed class CustomerAccess(ICustomerStore store, ICurrentUser user)
         await store.FindCompanyAsync(id, ct) ?? throw new CustomerNotFoundException("Company not found.");
 }
 
-internal sealed class ProfileHandlers(ICustomerStore store, ICurrentUser user, IPublishEndpoint publisher, CustomerAccess access) :
+internal sealed class ProfileHandlers(ICustomerStore store, ICurrentUser user, IPublishEndpoint publisher, CustomerAccess access,
+    ICorrelationContext correlation) :
     IRequestHandler<CreateProfile, ProfileDto>, IRequestHandler<UpdateProfile, ProfileDto>, IRequestHandler<GetProfile, ProfileDto>,
     IRequestHandler<GetMyProfile, ProfileDto>, IRequestHandler<ListProfiles, IReadOnlyList<ProfileDto>>, IRequestHandler<AssignCompany, ProfileDto>
 {
@@ -40,7 +43,7 @@ internal sealed class ProfileHandlers(ICustomerStore store, ICurrentUser user, I
             throw new CustomerConflictException("A profile already exists for this identity.");
         var profile = new CustomerProfile(user.Subject, request.FirstName, request.LastName, request.Email, request.Phone);
         store.AddCustomer(profile);
-        await publisher.Publish(new CustomerProfileCreated(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, profile.Id, profile.KeycloakSubject), ct);
+        await publisher.Publish(new CustomerProfileCreated(DeterministicGuid.Create("customer:profile-created:", profile.Id), correlation.CorrelationId, DateTimeOffset.UtcNow, profile.Id, profile.KeycloakSubject), ct);
         await store.SaveChangesAsync(ct);
         return profile.ToDto();
     }
@@ -75,12 +78,12 @@ internal sealed class ProfileHandlers(ICustomerStore store, ICurrentUser user, I
 
     private async Task Changed(CustomerProfile profile, CancellationToken ct)
     {
-        await publisher.Publish(new CustomerProfileUpdated(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, profile.Id), ct);
+        await publisher.Publish(new CustomerProfileUpdated(Guid.NewGuid(), correlation.CorrelationId, DateTimeOffset.UtcNow, profile.Id), ct);
         await store.SaveChangesAsync(ct);
     }
 }
 
-internal sealed class AddressHandlers(ICustomerStore store, IPublishEndpoint publisher, CustomerAccess access) :
+internal sealed class AddressHandlers(ICustomerStore store, IPublishEndpoint publisher, CustomerAccess access, ICorrelationContext correlation) :
     IRequestHandler<AddAddress, AddressDto>, IRequestHandler<UpdateAddress, AddressDto>, IRequestHandler<DeleteAddress>
 {
     public async Task<AddressDto> Handle(AddAddress request, CancellationToken ct)
@@ -114,12 +117,12 @@ internal sealed class AddressHandlers(ICustomerStore store, IPublishEndpoint pub
 
     private async Task Changed(CustomerProfile profile, CancellationToken ct)
     {
-        await publisher.Publish(new CustomerProfileUpdated(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, profile.Id), ct);
+        await publisher.Publish(new CustomerProfileUpdated(Guid.NewGuid(), correlation.CorrelationId, DateTimeOffset.UtcNow, profile.Id), ct);
         await store.SaveChangesAsync(ct);
     }
 }
 
-internal sealed class CompanyHandlers(ICustomerStore store, IPublishEndpoint publisher, CustomerAccess access) :
+internal sealed class CompanyHandlers(ICustomerStore store, IPublishEndpoint publisher, CustomerAccess access, ICorrelationContext correlation) :
     IRequestHandler<CreateCompany, CompanyDto>, IRequestHandler<UpdateCompany, CompanyDto>, IRequestHandler<GetCompany, CompanyDto>,
     IRequestHandler<ListCompanies, IReadOnlyList<CompanyDto>>
 {
@@ -128,7 +131,7 @@ internal sealed class CompanyHandlers(ICustomerStore store, IPublishEndpoint pub
         access.RequireAdmin();
         var company = new Company(request.Name, request.RegistrationNumber, request.Email);
         store.AddCompany(company);
-        await publisher.Publish(new CompanyCreated(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, company.Id), ct);
+        await publisher.Publish(new CompanyCreated(DeterministicGuid.Create("customer:company-created:", company.Id), correlation.CorrelationId, DateTimeOffset.UtcNow, company.Id), ct);
         await store.SaveChangesAsync(ct);
         return company.ToDto();
     }
@@ -138,7 +141,7 @@ internal sealed class CompanyHandlers(ICustomerStore store, IPublishEndpoint pub
         access.RequireAdmin();
         var company = await access.Company(request.CompanyId, ct);
         company.Update(request.Name, request.RegistrationNumber, request.Email);
-        await publisher.Publish(new CompanyUpdated(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, company.Id), ct);
+        await publisher.Publish(new CompanyUpdated(Guid.NewGuid(), correlation.CorrelationId, DateTimeOffset.UtcNow, company.Id), ct);
         await store.SaveChangesAsync(ct);
         return company.ToDto();
     }

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using FluentAssertions;
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -167,7 +168,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             parcel.IsDelivered.Should().BeFalse(); parcel.ActiveRouteId.Should().Be(route.Id);
             (await verification.Stops.SingleAsync(x => x.RouteId == route.Id && x.ShipmentId == shipment)).Status.Should().Be(DeliveryStopStatus.Pending);
             (await verification.Attempts.AnyAsync(x => x.OperationId == operation)).Should().BeFalse();
-            (await verification.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().AnyAsync(x => x.Body.Contains(operation.ToString()))).Should().BeFalse();
+            (await verification.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().AnyAsync(x => x.MessageId == DeterministicGuid.Create("delivery:delivered:", shipment, operation))).Should().BeFalse();
         }
         finally { await database.Database.ExecuteSqlRawAsync("ALTER TABLE delivery_attempts DROP CONSTRAINT test_delivery_rollback"); }
     }
@@ -180,7 +181,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
         var first = await Send(host, command); var replay = await Send(host, command); replay.Should().Be(first);
         await FluentActions.Awaiting(() => Send(host, command with { RecipientName = "Autre destinataire" })).Should().ThrowAsync<DeliveryConflictException>();
         await using var database = CreateContext(); (await database.Attempts.CountAsync(x => x.OperationId == command.OperationId)).Should().Be(1);
-        (await database.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().CountAsync(x => x.Body.Contains(command.OperationId.ToString()))).Should().Be(1);
+        (await database.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().CountAsync(x => x.MessageId == DeterministicGuid.Create("delivery:delivered:", shipment, command.OperationId))).Should().Be(1);
     }
 
     [Fact]

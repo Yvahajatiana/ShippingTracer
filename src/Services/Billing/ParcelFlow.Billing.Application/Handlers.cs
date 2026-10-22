@@ -1,5 +1,7 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.Billing.Domain;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
 
@@ -19,7 +21,7 @@ internal static class HandlerRules
     public static async Task<Invoice> Invoice(IBillingStore store, Guid id, CancellationToken ct) => await store.FindInvoiceAsync(id, ct) ?? throw new BillingNotFoundException("Invoice not found.");
     public static void Apply(Action action) { try { action(); } catch (InvalidOperationException ex) { throw new BillingConflictException(ex.Message); } }
 }
-public sealed class RegisterInvoiceHandler(IBillingStore store, IPublishEndpoint publisher) : IRequestHandler<RegisterInvoice, bool>
+public sealed class RegisterInvoiceHandler(IBillingStore store, IPublishEndpoint publisher, ICorrelationContext correlation) : IRequestHandler<RegisterInvoice, bool>
 {
     public async Task<bool> Handle(RegisterInvoice request, CancellationToken ct)
     {
@@ -32,7 +34,7 @@ public sealed class RegisterInvoiceHandler(IBillingStore store, IPublishEndpoint
         }
         invoice = new Invoice(request.ShipmentId, request.CustomerSubject, request.Amount, request.Currency, request.OccurredAtUtc);
         store.AddInvoice(invoice);
-        await publisher.Publish(new InvoiceIssued(Guid.NewGuid(), invoice.ShipmentId, invoice.IssuedAtUtc, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, invoice.Amount, invoice.Currency), ct);
+        await publisher.Publish(new InvoiceIssued(DeterministicGuid.Create("billing:invoice-issued:", invoice.Id), correlation.CorrelationId, invoice.IssuedAtUtc, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, invoice.Amount, invoice.Currency), ct);
         await store.SaveChangesAsync(ct);
         return true;
     }
@@ -54,11 +56,15 @@ public sealed class PayInvoiceHandler(IBillingStore store, IBillingActor actor, 
         var payment = new PaymentAttempt(request.OperationId, invoice.Id, request.Outcome, invoice.Amount, invoice.Currency, now, actor.Subject);
         HandlerRules.Apply(() => invoice.RecordPayment(request.Outcome)); store.AddPayment(payment);
         if (request.Outcome == MockPaymentOutcome.Approved)
-            await publisher.Publish(new PaymentCompleted(payment.OperationId, invoice.ShipmentId, now, invoice.ShipmentId, invoice.Amount, invoice.Currency), ct);
+            await publisher.Publish(new PaymentCompleted(PaymentEventId("billing:payment-completed:", invoice, payment), invoice.ShipmentId, now, invoice.ShipmentId, invoice.Amount, invoice.Currency), ct);
         else
-            await publisher.Publish(new PaymentFailed(payment.OperationId, invoice.ShipmentId, now, invoice.ShipmentId, "Mock payment declined."), ct);
+            await publisher.Publish(new PaymentFailed(PaymentEventId("billing:payment-failed:", invoice, payment), invoice.ShipmentId, now, invoice.ShipmentId, "Mock payment declined."), ct);
         await store.SaveChangesAsync(ct); return payment.ToDto();
     }
+    // The client-supplied OperationId is scoped by event type and invoice: a retry on the same invoice keeps its EventId,
+    // while the same key reused on another invoice (or another service) can never collide in consumers or the Inbox.
+    private static Guid PaymentEventId(string scope, Invoice invoice, PaymentAttempt payment) =>
+        DeterministicGuid.Create(scope, invoice.Id, payment.OperationId);
 }
 public sealed class IssueCreditNoteHandler(IBillingStore store, IBillingActor actor, IPublishEndpoint publisher, TimeProvider clock) : IRequestHandler<IssueCreditNote, CreditNoteDto>
 {
@@ -76,7 +82,7 @@ public sealed class IssueCreditNoteHandler(IBillingStore store, IBillingActor ac
         var now = invoice.RecordAction(clock.GetUtcNow());
         var credit = new CreditNote(request.OperationId, invoice.Id, request.Amount, invoice.Currency, request.Reason, now, actor.Subject);
         HandlerRules.Apply(() => invoice.IssueCredit(request.Amount)); store.AddCreditNote(credit);
-        await publisher.Publish(new CreditNoteIssued(Guid.NewGuid(), invoice.ShipmentId, now, credit.Id, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, credit.Amount, credit.Currency), ct);
+        await publisher.Publish(new CreditNoteIssued(DeterministicGuid.Create("billing:credit-note-issued:", credit.Id), invoice.ShipmentId, now, credit.Id, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, credit.Amount, credit.Currency), ct);
         await store.SaveChangesAsync(ct); return credit.ToDto();
     }
 }

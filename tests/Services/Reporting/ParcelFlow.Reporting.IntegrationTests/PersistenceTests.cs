@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.Reporting.Application;
 using ParcelFlow.Reporting.Domain;
 using ParcelFlow.Reporting.Infrastructure;
@@ -92,7 +93,7 @@ public sealed class PersistenceTests(InfrastructureFixture infrastructure)
         alias.Should().NotBeNull();
         alias!.SourceEventId.Should().Be(original.SourceEventId);
         (await database.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>()
-            .CountAsync(x => x.CorrelationId == original.ShipmentId)).Should().Be(1);
+            .CountAsync(x => x.MessageId == DeterministicGuid.Create("reporting:metrics-updated:", original.SourceEventId))).Should().Be(1);
     }
 
     [Theory]
@@ -147,7 +148,7 @@ public sealed class PersistenceTests(InfrastructureFixture infrastructure)
         (await db.Shipments.AnyAsync(x => x.ShipmentId == command.ShipmentId)).Should().BeFalse();
         (await db.Facts.AnyAsync(x => x.SourceEventId == command.SourceEventId)).Should().BeFalse();
         (await db.Envelopes.AnyAsync(x => x.EventId == command.EventId)).Should().BeFalse();
-        (await db.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().AnyAsync(x => x.CorrelationId == command.ShipmentId)).Should().BeFalse();
+        (await db.Set<MassTransit.EntityFrameworkCoreIntegration.OutboxMessage>().AnyAsync(x => x.MessageId == DeterministicGuid.Create("reporting:metrics-updated:", command.SourceEventId))).Should().BeFalse();
     }
     [Theory]
     [InlineData(true)] [InlineData(false)]
