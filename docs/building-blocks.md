@@ -45,3 +45,26 @@ Le writer ParcelFlow est enregistré avant ceux de MVC et préserve le type Http
 | Autre | 500 | message générique, exception journalisée en Error |
 
 Le writer ParcelFlow pose `Cache-Control: no-store` sur toute réponse ProblemDetails, quelle que soit son origine (handler d'exception, status code pages, `Results.Problem`). `app.UseParcelFlowNoStore()` (préfixe `/api` par défaut), placé juste après `UseParcelFlowProblemDetails()`, applique `no-store` à toutes les réponses métier via `Response.OnStarting`, ce qui survit à la remise à zéro des en-têtes par le gestionnaire d'exceptions. Billing, Delivery, Warehouse, Notification et Reporting l'utilisent à la place de leurs filtres ou middlewares dédiés.
+
+## Identité des messages et corrélation (#14)
+
+L'enveloppe d'un événement est le record abstrait `IntegrationEvent` (EventId, CorrelationId, OccurredAtUtc), dont dérivent tous les contrats `*.V1` ; un test BuildingBlocks le vérifie par réflexion. Aucun contrat ni format JSON n'a changé.
+
+- Messaging (`ParcelFlow.BuildingBlocks.Messaging`, MassTransit) : `rabbit.UseParcelFlowMessageConventions(context)`, appelé avant `ConfigureEndpoints` par chaque service, enregistre des filtres de publication et d'envoi qui fixent `MessageId = EventId` et `CorrelationId = CorrelationId` pour tout `IntegrationEvent`, y compris les événements de la saga et ceux écrits dans l'Outbox EF Core. L'Inbox MassTransit (clé MessageId) et la déduplication métier (clé EventId) reposent donc sur le même identifiant. Un `MessageId` fixé explicitement par l'appelant reste prioritaire (simulation de redélivrance dans les tests). Les messages sans enveloppe, comme le message de délai interne de la saga, ne sont pas modifiés.
+- Corrélation ambiante : `ICorrelationContext` (Application, enregistré par `AddParcelFlowCorrelation()`) est scoped. Dans un consommateur, un filtre de consommation y place la CorrelationId du message reçu (corps, sinon en-tête de transport). Dans une requête HTTP, `app.UseParcelFlowCorrelation()`, placé en premier, accepte un en-tête `X-Correlation-Id` contenant un GUID non vide, sinon en génère un, le renvoie dans la réponse (y compris les erreurs) et l'ajoute au scope de journalisation. Sans source, une valeur est générée une fois pour toute l'opération.
+- Règle de corrélation : un événement publié en réaction à un message reprend la corrélation de ce message ; les handlers ne génèrent plus de CorrelationId. Le flux d'envoi garde ShipmentId comme corrélation racine (ShipmentCreated, opérations HTTP sur un envoi : paiement, avoir, scan, tournée, livraison) ; elle est ensuite propagée par la saga, Billing, Tracking, Notification et Reporting. Customer, sans flux métier, utilise la corrélation de la requête HTTP.
+- EventId déterministes : `DeterministicGuid.Create(scope, source...)` dérive un UUID version 8 de SHA-256(scope, identifiants), avec le même algorithme que le ScanId de sortie automatique de Warehouse. Une opération rejouée publie ainsi le même EventId. Les EventId restent aléatoires uniquement pour les mises à jour Customer, sans identité d'opération.
+
+| Événement | EventId |
+|---|---|
+| ShipmentCreated | `shipment:created:` + ShipmentId |
+| PaymentRequested, ShipmentReadyForPickup, ShipmentPaymentTimedOut (saga) | `shipment:payment-requested:`, `shipment:ready-for-pickup:`, `shipment:payment-timed-out:` + ShipmentId |
+| InvoiceIssued, CreditNoteIssued | `billing:invoice-issued:` + InvoiceId, `billing:credit-note-issued:` + CreditNoteId |
+| ParcelPickedUp d'une première entrée en centre de tri | `warehouse:parcel-picked-up:` + ScanId |
+| ParcelStatusRecorded OutForDelivery | `delivery:out-for-delivery:` + RouteId + ShipmentId |
+| TrackingStatusChanged | `tracking:status-changed:` + EventId du fait source |
+| NotificationRecorded | `notification:recorded:` + NotificationId |
+| ShipmentMetricsUpdated | `reporting:metrics-updated:` + SourceEventId |
+| CustomerProfileCreated, CompanyCreated | `customer:profile-created:` + CustomerId, `customer:company-created:` + CompanyId |
+
+Les EventId déjà dérivés d'une opération (PaymentCompleted/PaymentFailed et Delivered/Failed : OperationId ; scans Warehouse : ScanId) sont inchangés. Le Gateway transmet l'en-tête `X-Correlation-Id` du client sans le générer.

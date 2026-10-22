@@ -175,6 +175,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Gateway", "Gateway", "{1972
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParcelFlow.Gateway.Tests", "tests\Gateway\ParcelFlow.Gateway.Tests\ParcelFlow.Gateway.Tests.csproj", "{FABB45C6-4D6A-486A-8DC5-BC5C0FCF4576}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParcelFlow.BuildingBlocks.Messaging", "src\BuildingBlocks\ParcelFlow.BuildingBlocks.Messaging\ParcelFlow.BuildingBlocks.Messaging.csproj", "{9D862615-4AD7-499B-9193-5B76B50843F0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -929,6 +931,18 @@ Global
 		{FABB45C6-4D6A-486A-8DC5-BC5C0FCF4576}.Release|x64.Build.0 = Release|Any CPU
 		{FABB45C6-4D6A-486A-8DC5-BC5C0FCF4576}.Release|x86.ActiveCfg = Release|Any CPU
 		{FABB45C6-4D6A-486A-8DC5-BC5C0FCF4576}.Release|x86.Build.0 = Release|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Debug|x64.Build.0 = Debug|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Debug|x86.Build.0 = Debug|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Release|x64.ActiveCfg = Release|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Release|x64.Build.0 = Release|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Release|x86.ActiveCfg = Release|Any CPU
+		{9D862615-4AD7-499B-9193-5B76B50843F0}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -1018,5 +1032,6 @@ Global
 		{370EA6CA-4BEA-497D-B93E-9A77A7B945F0} = {84270293-F138-49F8-93A6-057C86F9DE0D}
 		{1972ED49-83FC-421F-9B78-F49651D7064C} = {429F607F-D677-440E-B444-C0206C5BD653}
 		{FABB45C6-4D6A-486A-8DC5-BC5C0FCF4576} = {1972ED49-83FC-421F-9B78-F49651D7064C}
+		{9D862615-4AD7-499B-9193-5B76B50843F0} = {90298CBA-BD6F-3A0A-69D5-97CAD7B05E7E}
 	EndGlobalSection
 EndGlobal
