@@ -122,6 +122,18 @@ public sealed class HandlerTests
         parcel.CurrentWarehouseId.Should().NotBeNull(); fixture.Store.Scans.Should().ContainSingle(); fixture.Store.Saves.Should().Be(1);
     }
     [Fact]
+    public async Task Redelivered_completion_event_does_not_undo_a_later_return_to_the_depot()
+    {
+        var fixture = Create(); await fixture.Handler.Handle(fixture.Request, default);
+        var parcel = fixture.Store.Inventories.Single(); var handler = new RecordDeliveryExitHandler(fixture.Store);
+        var failed = new RecordDeliveryExit(Guid.NewGuid(), parcel.ShipmentId, Number, Start.AddMinutes(30));
+        (await handler.Handle(failed, default)).Should().Be(DeliveryExitOutcome.Recorded);
+        await fixture.Handler.Handle(fixture.Request with { ScanId = Guid.NewGuid() }, default);
+        (await handler.Handle(failed, default)).Should().Be(DeliveryExitOutcome.AlreadyRecorded);
+        (await handler.Handle(failed with { SourceEventId = Guid.NewGuid() }, default)).Should().Be(DeliveryExitOutcome.Superseded);
+        parcel.CurrentWarehouseId.Should().NotBeNull(); fixture.Store.Scans.Should().HaveCount(3);
+    }
+    [Fact]
     public void Delivery_exit_validation_and_scan_identity_are_deterministic()
     {
         new RecordDeliveryExitValidator().Validate(new RecordDeliveryExit(Guid.Empty, Guid.Empty, "bad", default)).Errors.Should().HaveCount(4);

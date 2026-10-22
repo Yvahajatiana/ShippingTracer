@@ -86,6 +86,61 @@ public sealed class DeliveryExitConsumerTests(InfrastructureFixture infrastructu
         finally { await host.StopAsync(); }
     }
 
+    [Fact]
+    public async Task Failed_stop_without_prior_departure_exits_parcel_and_later_return_is_not_undone_by_redelivery()
+    {
+        using var host = CreateHost();
+        await host.Services.InitializeWarehouseDatabaseAsync();
+        await host.StartAsync();
+        try
+        {
+            var (shipment, number, site) = await StockParcel(host);
+            var bus = host.Services.GetRequiredService<IBus>();
+            // The OutForDelivery event was missed (e.g. consumer deployed mid-route): only the failed attempt arrives.
+            var failed = Status(shipment, number, TrackingStatus.Failed);
+            var firstId = Guid.NewGuid();
+            await bus.Publish(failed, context => context.MessageId = firstId);
+            await WaitForInbox(firstId);
+            await using (var database = CreateContext())
+            {
+                (await database.Inventory.SingleAsync(x => x.ShipmentId == shipment)).CurrentWarehouseId.Should().BeNull();
+                (await database.Scans.SingleAsync(x => x.ShipmentId == shipment && x.Direction == ScanDirection.Exit))
+                    .ScanId.Should().Be(WarehouseRules.DeliveryExitScanId(failed.EventId));
+            }
+            // The driver brings the parcel back to the depot, then the Failed event is redelivered.
+            await Send(host, new ScanParcel(Guid.NewGuid(), site.Id, number, ScanDirection.Entry, "operator"));
+            var redeliveryId = Guid.NewGuid();
+            await bus.Publish(failed, context => context.MessageId = redeliveryId);
+            await WaitForInbox(redeliveryId);
+            await using var verification = CreateContext();
+            (await verification.Inventory.SingleAsync(x => x.ShipmentId == shipment)).CurrentWarehouseId.Should().Be(site.Id);
+            (await verification.Scans.CountAsync(x => x.ShipmentId == shipment)).Should().Be(3);
+        }
+        finally { await host.StopAsync(); }
+    }
+
+    [Fact]
+    public async Task Failed_event_older_than_return_scan_does_not_remove_parcel_from_stock()
+    {
+        using var host = CreateHost();
+        await host.Services.InitializeWarehouseDatabaseAsync();
+        await host.StartAsync();
+        try
+        {
+            var (shipment, number, site) = await StockParcel(host);
+            var messageId = Guid.NewGuid();
+            // The failure happened before the latest warehouse movement, so the depot scan wins.
+            await host.Services.GetRequiredService<IBus>().Publish(
+                Status(shipment, number, TrackingStatus.Failed) with { OccurredAtUtc = DateTimeOffset.UtcNow.AddHours(-1) },
+                context => context.MessageId = messageId);
+            await WaitForInbox(messageId);
+            await using var database = CreateContext();
+            (await database.Inventory.SingleAsync(x => x.ShipmentId == shipment)).CurrentWarehouseId.Should().Be(site.Id);
+            (await database.Scans.CountAsync(x => x.ShipmentId == shipment)).Should().Be(1);
+        }
+        finally { await host.StopAsync(); }
+    }
+
     private static ParcelStatusRecorded Status(Guid shipment, string number, TrackingStatus status) =>
         new(Guid.NewGuid(), shipment, DateTimeOffset.UtcNow.AddMinutes(1), shipment, number, status, null);
 
