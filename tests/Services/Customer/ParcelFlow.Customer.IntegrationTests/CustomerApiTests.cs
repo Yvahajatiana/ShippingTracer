@@ -71,6 +71,40 @@ public sealed class CustomerApiTests(InfrastructureFixture infrastructure)
     }
 
     [Fact]
+    public async Task Oversized_subject_rejected_by_the_domain_returns_a_validation_problem()
+    {
+        await using var factory = await CreateFactory();
+        using var client = factory.CreateClient();
+        var subject = new string('s', 201);
+        Authenticate(client, subject, "customer");
+        var response = await client.PostAsJsonAsync("/api/v1/customers", new CreateProfile("Marie", "Martin", "marie@example.test", null));
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
+        response.Headers.CacheControl!.NoStore.Should().BeTrue();
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Contain("\"keycloakSubject\"").And.NotContain("between 1 and 200");
+        await using var scope = factory.Services.CreateAsyncScope();
+        (await scope.ServiceProvider.GetRequiredService<CustomerDbContext>().Customers
+            .AnyAsync(customer => customer.KeycloakSubject == subject)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Email_surrounded_by_whitespace_is_trimmed_before_persistence()
+    {
+        await using var factory = await CreateFactory();
+        using var client = factory.CreateClient();
+        Authenticate(client, Guid.NewGuid().ToString(), "customer");
+        var created = await client.PostAsJsonAsync("/api/v1/customers", new CreateProfile("Marie", "Martin", "  marie@example.test ", null));
+        created.StatusCode.Should().Be(HttpStatusCode.Created);
+        var profile = await created.Content.ReadFromJsonAsync<ProfileDto>();
+        profile!.Email.Should().Be("marie@example.test");
+        var updated = await client.PutAsJsonAsync($"/api/v1/customers/{profile.Id}",
+            new { FirstName = "Marie", LastName = "Martin", Email = " marie.martin@example.test\t", Phone = (string?)null });
+        updated.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await updated.Content.ReadFromJsonAsync<ProfileDto>())!.Email.Should().Be("marie.martin@example.test");
+    }
+
+    [Fact]
     public async Task Customer_identity_cannot_register_a_second_profile()
     {
         await using var factory = await CreateFactory();
