@@ -67,10 +67,10 @@ Le consommateur PaymentRequested est lié à `billing-payments`, sans modificati
 Contrats versionnés dans BuildingBlocks :
 
 - PaymentRequested, PaymentCompleted et PaymentFailed restent compatibles avec Shipment.
-- InvoiceIssued publie la création d’une nouvelle facture, une seule fois par identité métier.
-- CreditNoteIssued publie chaque nouvel avoir : CreditNoteId est OperationId, tandis qu’EventId est généré indépendamment pour distinguer ce fait d’un paiement qui utiliserait la même clé dans son propre périmètre.
+- InvoiceIssued publie la création d’une nouvelle facture, une seule fois par identité métier, avec un EventId dérivé de InvoiceId et la CorrelationId du PaymentRequested consommé.
+- CreditNoteIssued publie chaque nouvel avoir : CreditNoteId est OperationId, tandis qu’EventId en est dérivé de façon déterministe (`billing:credit-note-issued:`) pour distinguer ce fait d’un paiement qui utiliserait la même clé dans son propre périmètre.
 
-Tous les faits ont CorrelationId=ShipmentId. Aucun événement ne contient l’acteur ou un motif libre provenant du client. Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis reste configuré pour le socle et la readiness, sans cache de soldes.
+Tous les faits ont CorrelationId=ShipmentId, corrélation racine du flux d’envoi (propagée depuis le message consommé pour InvoiceIssued) ; MessageId est égal à EventId (voir [BuildingBlocks](building-blocks.md#identité-des-messages-et-corrélation-14)). Aucun événement ne contient l’acteur ou un motif libre provenant du client. Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis reste configuré pour le socle et la readiness, sans cache de soldes.
 
 ## Lancement à cette étape
 

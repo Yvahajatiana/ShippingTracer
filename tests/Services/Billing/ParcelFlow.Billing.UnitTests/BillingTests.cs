@@ -3,6 +3,8 @@ using FluentAssertions;
 using MassTransit;
 using ParcelFlow.Billing.Application;
 using ParcelFlow.Billing.Domain;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
 using Xunit;
 
@@ -62,11 +64,13 @@ public sealed class BillingTests
     [Fact]
     public async Task Registration_is_immutable_and_replay_does_not_reset_paid_or_credited_state()
     {
-        var f = Fixture(false); var handler = new RegisterInvoiceHandler(f.Store, f.Endpoint);
+        var f = Fixture(false); var flow = Guid.NewGuid(); var handler = new RegisterInvoiceHandler(f.Store, f.Endpoint, CorrelationContext.From(flow));
         var request = new RegisterInvoice(Guid.NewGuid(), "alice", 10m, "EUR", Issued.AddTicks(7));
         (await handler.Handle(request, default)).Should().BeTrue(); var invoice = f.Store.Invoices.Single(); invoice.RecordPayment(MockPaymentOutcome.Approved); invoice.IssueCredit(2m);
         (await handler.Handle(request with { OccurredAtUtc = Issued }, default)).Should().BeFalse(); invoice.Status.Should().Be(InvoiceStatus.PartiallyCredited);
-        f.Store.Saves.Should().Be(1); f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<InvoiceIssued>();
+        f.Store.Saves.Should().Be(1); var issued = f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<InvoiceIssued>().Subject;
+        // The invoice joins the flow of the consumed PaymentRequested and its EventId derives from the invoice.
+        issued.CorrelationId.Should().Be(flow); issued.EventId.Should().Be(DeterministicGuid.Create("billing:invoice-issued:", invoice.Id));
         await FluentActions.Awaiting(() => handler.Handle(request with { Amount = 11 }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => handler.Handle(request with { CustomerSubject = "mallory" }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => handler.Handle(request with { OccurredAtUtc = Issued.AddSeconds(1) }, default)).Should().ThrowAsync<BillingConflictException>();
@@ -165,7 +169,7 @@ public sealed class BillingTests
         var f = Fixture(); f.Publisher.Failure = new InvalidOperationException("Outbox unavailable");
         Func<Task> action = command switch
         {
-            "register" => () => new RegisterInvoiceHandler(f.Store, f.Endpoint).Handle(new(Guid.NewGuid(), "alice", 10, "EUR", Issued), default),
+            "register" => () => new RegisterInvoiceHandler(f.Store, f.Endpoint, new CorrelationContext()).Handle(new(Guid.NewGuid(), "alice", 10, "EUR", Issued), default),
             "pay" => () => new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Guid.NewGuid(), MockPaymentOutcome.Approved), default),
             _ => () => new IssueCreditNoteHandler(f.Store, new Actor("admin", true), f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Guid.NewGuid(), 1, CreditReason.BillingCorrection), default)
         };
