@@ -39,7 +39,7 @@ public sealed class TrackingStore(TrackingDbContext database, ResiliencePipeline
         await database.SaveChangesAsync(cancellationToken);
         // Inside the outbox transaction the removal waits for the commit; removing it now would let a concurrent
         // read put the pre-commit projection back in Redis for the whole cache lifetime.
-        await cacheInvalidator.InvalidateAfterCommitAsync(database, numbers, cancellationToken);
+        await cacheInvalidator.InvalidateAfterCommitAsync(database, numbers);
     }
 
     private Task<TrackingRecord?> LoadByShipmentAsync(Guid shipmentId, CancellationToken cancellationToken) =>

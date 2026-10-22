@@ -23,12 +23,12 @@ public sealed class TrackingCacheInvalidator(IDistributedCache cache, ILogger<Tr
     /// <summary>
     /// Invalidates the public projections of <paramref name="trackingNumbers"/> once their write is durable:
     /// immediately when no transaction is open (the write is already committed), otherwise after the commit.
+    /// The caller's cancellation is deliberately ignored: once the write is durable, the removal only obeys its own budget.
     /// </summary>
-    public Task InvalidateAfterCommitAsync(DbContext context, IReadOnlyCollection<string> trackingNumbers,
-        CancellationToken cancellationToken)
+    public Task InvalidateAfterCommitAsync(DbContext context, IReadOnlyCollection<string> trackingNumbers)
     {
         if (trackingNumbers.Count == 0) return Task.CompletedTask;
-        if (context.Database.CurrentTransaction is null) return InvalidateAsync(trackingNumbers, cancellationToken);
+        if (context.Database.CurrentTransaction is null) return InvalidateAsync(trackingNumbers, CancellationToken.None);
         var keys = _pending.GetOrCreateValue(context);
         lock (keys) keys.UnionWith(trackingNumbers);
         return Task.CompletedTask;

@@ -114,6 +114,25 @@ public sealed class CacheInvalidationTests(InfrastructureFixture infrastructure)
     }
 
     [Fact]
+    public async Task Caller_cancellation_after_a_committed_save_does_not_skip_invalidation()
+    {
+        using var host = CreateHost();
+        await host.Services.InitializeTrackingDatabaseAsync();
+        var number = NewNumber();
+        await SeedStaleCacheAsync(host, number);
+        await using var scope = host.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<TrackingDbContext>();
+        var store = scope.ServiceProvider.GetRequiredService<ITrackingStore>();
+        using var caller = new CancellationTokenSource();
+        // The caller is canceled right after the durable save, before the cache removal runs.
+        database.SavedChanges += (_, _) => caller.Cancel();
+        store.Add(NewRecord(number));
+        await store.SaveChangesAsync(caller.Token);
+        caller.IsCancellationRequested.Should().BeTrue();
+        (await ReadCacheAsync(host, number)).Should().BeNull();
+    }
+
+    [Fact]
     public async Task Cache_outage_during_post_commit_invalidation_keeps_the_committed_write()
     {
         using var host = CreateHost(new UnavailableCache());
