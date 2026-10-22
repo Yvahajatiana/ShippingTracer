@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ParcelFlow.BuildingBlocks.Contracts.Shipment.V1;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 
 namespace ParcelFlow.Shipment.Infrastructure.Booking;
 
@@ -41,7 +42,8 @@ public sealed partial class ShipmentBookingStateMachine : MassTransitStateMachin
                 context.Saga.Amount = context.Message.Amount;
                 context.Saga.Currency = context.Message.Currency;
             })
-            .Send(new Uri("queue:billing-payments"), context => new PaymentRequested(Guid.NewGuid(), context.Message.CorrelationId,
+            .Send(new Uri("queue:billing-payments"), context => new PaymentRequested(
+                DeterministicGuid.Create("shipment:payment-requested:", context.Message.ShipmentId), context.Message.CorrelationId,
                 DateTimeOffset.UtcNow, context.Message.ShipmentId, context.Message.CustomerSubject,
                 context.Message.Amount, context.Message.Currency))
             .Schedule(PaymentTimeout, context => new ShipmentPaymentTimeoutExpired(context.Message.ShipmentId,
@@ -54,7 +56,8 @@ public sealed partial class ShipmentBookingStateMachine : MassTransitStateMachin
                     context.Message.Currency == context.Saga.Currency)
                 .Unschedule(PaymentTimeout)
                 .Activity(value => value.OfType<PaymentCompletedActivity>())
-                .Publish(context => new ShipmentReadyForPickup(Guid.NewGuid(), context.Message.CorrelationId,
+                .Publish(context => new ShipmentReadyForPickup(
+                    DeterministicGuid.Create("shipment:ready-for-pickup:", context.Message.ShipmentId), context.Message.CorrelationId,
                     DateTimeOffset.UtcNow, context.Message.ShipmentId, context.Saga.TrackingNumber))
                 .TransitionTo(AwaitingPickup),
             // A mismatched payment never authorizes pickup; the booking keeps waiting until the timeout.
@@ -67,7 +70,8 @@ public sealed partial class ShipmentBookingStateMachine : MassTransitStateMachin
             When(PaymentTimeout.Received)
                 .Then(context => LogPaymentTimeout(logger, context.Saga.CorrelationId, paymentTimeout))
                 .Activity(value => value.OfType<PaymentTimeoutActivity>())
-                .Publish(context => new ShipmentPaymentTimedOut(Guid.NewGuid(), context.Message.CorrelationId,
+                .Publish(context => new ShipmentPaymentTimedOut(
+                    DeterministicGuid.Create("shipment:payment-timed-out:", context.Message.ShipmentId), context.Message.CorrelationId,
                     DateTimeOffset.UtcNow, context.Message.ShipmentId, context.Saga.TrackingNumber))
                 .TransitionTo(PaymentTimedOut));
         During(AwaitingPickup,
