@@ -2,6 +2,8 @@ using System.Reflection;
 using FluentAssertions;
 using FluentValidation;
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Notification.V1;
 using ParcelFlow.Notification.Application;
 using ParcelFlow.Notification.Domain;
@@ -32,8 +34,9 @@ public sealed class NotificationTests
         root.Messages.Single(x => x.Channel == NotificationChannel.Sms).Destination.Should().Be("+33 (0)6 12 34 56 78");
         f.Publisher.Events.Should().HaveCount(2).And.OnlyContain(x => x is NotificationRecorded);
         var receipts = f.Publisher.Events.Cast<NotificationRecorded>().ToArray();
-        receipts.Should().OnlyContain(x => x.SourceEventId == command.EventId && x.ShipmentId == command.ShipmentId && x.CorrelationId == command.ShipmentId && x.CustomerSubject == "alice");
+        receipts.Should().OnlyContain(x => x.SourceEventId == command.EventId && x.ShipmentId == command.ShipmentId && x.CorrelationId == f.Flow && x.CustomerSubject == "alice");
         receipts.Select(x => x.NotificationId).Should().BeEquivalentTo(root.Messages.Select(x => x.Id));
+        receipts.Select(x => x.EventId).Should().BeEquivalentTo(root.Messages.Select(x => DeterministicGuid.Create("notification:recorded:", x.Id)));
         f.Store.Saves.Should().Be(1); f.Resolver.Calls.Should().Be(1); f.Store.Locked.Should().ContainSingle().Which.Should().Be(command.EventId);
     }
     [Theory]
@@ -190,9 +193,11 @@ public sealed class NotificationTests
     private static F Fixture()
     {
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>(); var store = new Store(); var resolver = new Resolver();
-        return new F(store, resolver, (Publisher)endpoint, new RecordNotificationHandler(store, resolver, endpoint, new Clock()));
+        // The consumed event's correlation, made ambient by the consume filter in production.
+        var flow = Guid.NewGuid();
+        return new F(store, resolver, (Publisher)endpoint, new RecordNotificationHandler(store, resolver, endpoint, new Clock(), CorrelationContext.From(flow)), flow);
     }
-    private sealed record F(Store Store, Resolver Resolver, Publisher Publisher, RecordNotificationHandler Handler);
+    private sealed record F(Store Store, Resolver Resolver, Publisher Publisher, RecordNotificationHandler Handler, Guid Flow);
     private sealed record Actor(string Subject, bool IsAdmin = false) : INotificationActor;
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Observed.AddHours(1).AddTicks(7); }
     private sealed class Resolver : IShipmentRecipientResolver
