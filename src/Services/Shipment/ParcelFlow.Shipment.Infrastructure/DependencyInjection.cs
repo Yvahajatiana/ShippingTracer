@@ -1,4 +1,6 @@
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,6 +68,7 @@ public static class DependencyInjection
                 BreakDuration = TimeSpan.FromSeconds(15)
             }).Build());
 
+        services.AddParcelFlowCorrelation();
         services.AddMassTransit(bus =>
         {
             // Payment timeouts use RabbitMQ delayed delivery (rabbitmq_delayed_message_exchange plugin).
@@ -101,6 +104,7 @@ public static class DependencyInjection
                             ?? throw new InvalidOperationException("RabbitMq:Password is required."));
                     });
                 rabbit.UseDelayedMessageScheduler();
+                rabbit.UseParcelFlowMessageConventions(context);
                 rabbit.ConfigureEndpoints(context);
             });
         });

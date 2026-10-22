@@ -1,4 +1,6 @@
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -50,6 +52,7 @@ public static class DependencyInjection
             }).Build());
 
         services.Configure<MassTransitHostOptions>(options => { options.WaitUntilStarted = true; options.StartTimeout = TimeSpan.FromSeconds(30); });
+        services.AddParcelFlowCorrelation();
         services.AddMassTransit(bus =>
         {
             bus.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("warehouse", false));
@@ -81,6 +84,7 @@ public static class DependencyInjection
                         host.Password(settings["RabbitMq:Password"]
                             ?? throw new InvalidOperationException("RabbitMq:Password is required."));
                     });
+                rabbit.UseParcelFlowMessageConventions(context);
                 rabbit.ConfigureEndpoints(context);
             });
         });
