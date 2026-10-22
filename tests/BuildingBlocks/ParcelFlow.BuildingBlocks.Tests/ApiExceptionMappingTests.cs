@@ -79,6 +79,35 @@ public sealed class ApiExceptionMappingTests
         context.Response.Headers.RetryAfter.ToString().Should().Be("1");
     }
 
+    public static TheoryData<Exception> CircuitWrappers
+    {
+        get
+        {
+            static BrokenCircuitException Open() => new("open", TimeSpan.FromSeconds(4));
+            // FluentValidation's ValidationException exposes no inner-exception constructor, so it cannot wrap a circuit.
+            return new TheoryData<Exception>
+            {
+                new ArgumentException("bad value", "subject", Open()),
+                new ArgumentException("outer", new InvalidOperationException("middle", Open())),
+                new JsonException("json", Open()),
+                new BadHttpRequestException("bad request", Open()),
+                new BadHttpRequestException("too large", StatusCodes.Status413PayloadTooLarge, Open())
+            };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(CircuitWrappers))]
+    public async Task Open_circuits_wrapped_in_client_error_exceptions_still_return_503(Exception exception)
+    {
+        var (context, problem) = await HandleAsync(exception);
+
+        context.Response.StatusCode.Should().Be(StatusCodes.Status503ServiceUnavailable);
+        context.Response.Headers.RetryAfter.ToString().Should().Be("4");
+        problem.Should().NotBeOfType<HttpValidationProblemDetails>();
+        problem.Title.Should().Be("Service temporarily unavailable");
+    }
+
     [Fact]
     public async Task Malformed_json_returns_400()
     {

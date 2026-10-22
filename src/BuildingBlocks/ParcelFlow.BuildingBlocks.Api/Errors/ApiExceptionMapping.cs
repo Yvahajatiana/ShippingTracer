@@ -25,6 +25,19 @@ public static partial class ApiExceptionMapping
     /// </summary>
     public static ProblemDetails? TryMap(HttpContext context, Exception exception)
     {
+        // An open circuit anywhere in the chain wins over the client-error mappings of its wrappers.
+        if (FindBrokenCircuit(exception) is { } brokenCircuit)
+        {
+            context.Response.Headers.RetryAfter = RetryAfterSeconds(brokenCircuit.RetryAfter)
+                .ToString(CultureInfo.InvariantCulture);
+            return new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "Service temporarily unavailable",
+                Type = "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4"
+            };
+        }
+
         switch (exception)
         {
             case ValidationException validation:
@@ -45,18 +58,6 @@ public static partial class ApiExceptionMapping
                 return Simple(StatusCodes.Status413PayloadTooLarge, "Request too large");
             case JsonException or BadHttpRequestException:
                 return Simple(StatusCodes.Status400BadRequest, "Invalid request");
-        }
-
-        if (FindBrokenCircuit(exception) is { } brokenCircuit)
-        {
-            context.Response.Headers.RetryAfter = RetryAfterSeconds(brokenCircuit.RetryAfter)
-                .ToString(CultureInfo.InvariantCulture);
-            return new ProblemDetails
-            {
-                Status = StatusCodes.Status503ServiceUnavailable,
-                Title = "Service temporarily unavailable",
-                Type = "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4"
-            };
         }
 
         return null;

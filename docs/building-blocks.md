@@ -40,7 +40,7 @@ Le writer ParcelFlow est enregistré avant ceux de MVC et préserve le type Http
 | `ArgumentException` et dérivées (gardes du domaine) | 400 | HttpValidationProblemDetails, détail générique ; seule la clé `ParamName` est exposée si c'est un identifiant simple, avec le message `The value is invalid.` Le message de l'exception reste dans les logs (Warning). |
 | `BadHttpRequestException` 413 | 413 | `Request too large` |
 | `JsonException`, autre `BadHttpRequestException` | 400 | `Invalid request` |
-| `BrokenCircuitException` Polly (y compris en InnerException, et `IsolatedCircuitException`) | 503 | `Service temporarily unavailable`, en-tête `Retry-After` en secondes arrondies au supérieur (durée restante du circuit, 30 s par défaut) |
+| `BrokenCircuitException` Polly (y compris `IsolatedCircuitException` et en InnerException, prioritaire sur les mappings 400/413 de l'exception englobante) | 503 | `Service temporarily unavailable`, en-tête `Retry-After` en secondes arrondies au supérieur (durée restante du circuit, 30 s par défaut) |
 | Annulation par le client | — | non traitée, aucune réponse écrite |
 | Autre | 500 | message générique, exception journalisée en Error |
 
