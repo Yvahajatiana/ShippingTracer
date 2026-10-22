@@ -35,6 +35,9 @@ public static class DependencyInjection
                     options.PaymentTimeout = TimeSpan.Parse(timeout, System.Globalization.CultureInfo.InvariantCulture);
             })
             .Validate(options => options.PaymentTimeout > TimeSpan.Zero, "ShipmentBooking:PaymentTimeout must be positive.")
+            .Validate(options => options.PaymentTimeout <= ShipmentBookingOptions.MaximumPaymentTimeout,
+                $"ShipmentBooking:PaymentTimeout must not exceed {ShipmentBookingOptions.MaximumPaymentTimeout} " +
+                "(RabbitMQ delayed message exchange limit of 2^32-1 ms).")
             .ValidateOnStart();
         services.AddStackExchangeRedisCache(options => options.InstanceName = "parcelflow:");
         services.AddOptions<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions>()
