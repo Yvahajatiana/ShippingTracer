@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Delivery.Application;
 using ParcelFlow.Delivery.Domain;
@@ -59,6 +60,9 @@ public sealed class DeliveryTests
         dto.Status.Should().Be(DeliveryRouteStatus.InProgress); f.Publisher.Events.Should().ContainSingle();
         var fact = f.Publisher.Events.Single().Should().BeOfType<ParcelStatusRecorded>().Which;
         fact.Status.Should().Be(TrackingStatus.OutForDelivery); fact.FacilityCode.Should().BeNull(); fact.TrackingNumber.Should().Be(Number); f.Store.Saves.Should().Be(1);
+        // One departure per stop: the EventId derives from the route and the shipment, never from a random value.
+        fact.EventId.Should().Be(DeterministicGuid.Create("delivery:out-for-delivery:", f.Route.Id, fact.ShipmentId));
+        fact.CorrelationId.Should().Be(fact.ShipmentId);
     }
     [Fact]
     public async Task Another_operator_cannot_start_complete_or_read_proof()

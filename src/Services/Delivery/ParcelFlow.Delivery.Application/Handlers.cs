@@ -1,5 +1,6 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Delivery.Domain;
 
@@ -99,7 +100,7 @@ public sealed class StartRouteHandler(IDeliveryStore store, IDeliveryActor actor
         foreach (var parcel in parcels)
         {
             var at = parcel.RecordEvent(now);
-            await publisher.Publish(new ParcelStatusRecorded(Guid.NewGuid(), parcel.ShipmentId, at, parcel.ShipmentId, parcel.TrackingNumber!, TrackingStatus.OutForDelivery, null), ct);
+            await publisher.Publish(new ParcelStatusRecorded(DeterministicGuid.Create("delivery:out-for-delivery:", route.Id, parcel.ShipmentId), parcel.ShipmentId, at, parcel.ShipmentId, parcel.TrackingNumber!, TrackingStatus.OutForDelivery, null), ct);
         }
         await store.SaveChangesAsync(ct); return route.ToDto();
     }
