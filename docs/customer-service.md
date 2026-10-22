@@ -12,7 +12,7 @@ Un profil correspond à un sujet Keycloak `sub` unique et immuable. Il peut avoi
 | Adresse | Libellé (80), ligne 1 (200), code postal (20), ville (100), pays ISO 3166-1 alpha-2 en majuscules | Ligne 2 (200) |
 | Entreprise | Nom (200), immatriculation (80), email (254) | Aucun |
 
-Les nombres indiquent les longueurs maximales. Les chaînes obligatoires ne peuvent pas être blanches. Les chaînes facultatives absentes sont `null`. Les coordonnées sont normalisées par suppression des espaces en début et fin. L'immatriculation est normalisée en majuscules et unique ; elle reste un identifiant international générique, sans contrainte nationale de type SIRET. Les identifiants des ressources sont des GUID générés par le serveur. Les dates sont UTC.
+Les nombres indiquent les longueurs maximales. Les chaînes obligatoires ne peuvent pas être blanches. Les chaînes facultatives absentes sont `null`. Les coordonnées sont normalisées par suppression des espaces en début et fin ; l'email est validé après cette normalisation, donc `" marie@example.test "` est accepté et stocké sans espaces. L'immatriculation est normalisée en majuscules et unique ; elle reste un identifiant international générique, sans contrainte nationale de type SIRET. Les identifiants des ressources sont des GUID générés par le serveur. Les dates sont UTC.
 
 | Opération | customer | operator | admin |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Les contrôles existent dans les handlers et dans les politiques HTTP. Les token
 | GET | `/health/live`, `/health/ready` | Vie du processus et disponibilité des dépendances |
 | GET | `/metrics` | Métriques OpenTelemetry au format Prometheus |
 
-Les erreurs utilisent ProblemDetails avec `traceId` : 400 validation/requête incorrecte, 401 token absent/invalide, 403 accès interdit, 404 ressource absente, 409 doublon ou concurrence. Les détails techniques inattendus restent dans les logs, avec une réponse 500 générique. Swagger est disponible à `/swagger` en Development.
+Les erreurs utilisent ProblemDetails avec `traceId` : 400 validation/requête incorrecte (y compris une règle du domaine, par exemple un sujet `sub` de plus de 200 caractères), 401 token absent/invalide, 403 accès interdit, 404 ressource absente, 409 doublon ou concurrence, 503 avec `Retry-After` si le circuit PostgreSQL est ouvert. Toutes les erreurs portent `Cache-Control: no-store`. Les détails techniques inattendus restent dans les logs, avec une réponse 500 générique. Swagger est disponible à `/swagger` en Development.
 
 ## Persistance et événements
 

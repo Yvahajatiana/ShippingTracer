@@ -20,11 +20,6 @@ public static class BillingEndpoints
         var billing = app.MapGroup("/api/v{version:apiVersion}/billing")
             .WithApiVersionSet(versions).MapToApiVersion(1, 0).WithTags("Billing")
             .RequireAuthorization("billing-users");
-        billing.AddEndpointFilter(async (context, next) =>
-        {
-            context.HttpContext.Response.Headers.CacheControl = "no-store";
-            return await next(context);
-        });
         billing.MapGet("/invoices", async (ISender sender, CancellationToken ct, int page = 1, int pageSize = 50) =>
             TypedResults.Ok(await sender.Send(new ListInvoices(page, pageSize), ct)));
         billing.MapGet("/invoices/{invoiceId:guid}", async (Guid invoiceId, ISender sender, CancellationToken ct) =>

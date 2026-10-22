@@ -29,3 +29,19 @@ L'Outbox EF Core et l'inbox MassTransit appartiendront à chaque base de service
 ## Corrections de review
 
 Le writer ParcelFlow est enregistré avant ceux de MVC et préserve le type HttpValidationProblemDetails. Les erreurs sont toujours sérialisées en application/problem+json, même si Accept ne contient pas JSON ; elles ne dépendent donc pas de la négociation du writer par défaut. Huit tests HTTP réels couvrent les réponses 400/500, les en-têtes Accept JSON/XML et les deux ordres d'enregistrement MVC/ParcelFlow.
+
+## Mapping commun des erreurs (#21, #22)
+
+`ApiExceptionMapping` centralise les erreurs communes à toutes les API. Chaque service enregistre d'abord son propre `IExceptionHandler`, limité à ses exceptions métier (404, 403, 409), qui écrit via `IProblemDetailsService.WriteProblemAsync`. Toute autre exception est traitée par `ApiExceptionHandler` :
+
+| Exception | Statut | Réponse |
+|---|---|---|
+| `ValidationException` (FluentValidation) | 400 | HttpValidationProblemDetails, erreurs groupées par propriété |
+| `ArgumentException` et dérivées (gardes du domaine) | 400 | HttpValidationProblemDetails, détail générique ; seule la clé `ParamName` est exposée si c'est un identifiant simple, avec le message `The value is invalid.` Le message de l'exception reste dans les logs (Warning). |
+| `BadHttpRequestException` 413 | 413 | `Request too large` |
+| `JsonException`, autre `BadHttpRequestException` | 400 | `Invalid request` |
+| `BrokenCircuitException` Polly (y compris `IsolatedCircuitException` et en InnerException, prioritaire sur les mappings 400/413 de l'exception englobante) | 503 | `Service temporarily unavailable`, en-tête `Retry-After` en secondes arrondies au supérieur (durée restante du circuit, 30 s par défaut) |
+| Annulation par le client | — | non traitée, aucune réponse écrite |
+| Autre | 500 | message générique, exception journalisée en Error |
+
+Le writer ParcelFlow pose `Cache-Control: no-store` sur toute réponse ProblemDetails, quelle que soit son origine (handler d'exception, status code pages, `Results.Problem`). `app.UseParcelFlowNoStore()` (préfixe `/api` par défaut), placé juste après `UseParcelFlowProblemDetails()`, applique `no-store` à toutes les réponses métier via `Response.OnStarting`, ce qui survit à la remise à zéro des en-têtes par le gestionnaire d'exceptions. Billing, Delivery, Warehouse, Notification et Reporting l'utilisent à la place de leurs filtres ou middlewares dédiés.
