@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Shipment.V1;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Warehouse.Application;
@@ -47,6 +48,7 @@ public sealed class HandlerTests
         var pickup = fixture.Publisher.Events.OfType<ParcelPickedUp>().Single();
         var sorted = fixture.Publisher.Events.OfType<ParcelStatusRecorded>().Single();
         pickup.EventId.Should().NotBe(sorted.EventId); sorted.EventId.Should().Be(fixture.Request.ScanId);
+        pickup.EventId.Should().Be(DeterministicGuid.Create("warehouse:parcel-picked-up:", fixture.Request.ScanId));
         sorted.Status.Should().Be(TrackingStatus.AtSortingCenter); sorted.FacilityCode.Should().Be("PAR-01");
         pickup.OccurredAtUtc.Should().Be(sorted.OccurredAtUtc);
         pickup.CorrelationId.Should().Be(sorted.ShipmentId);
@@ -141,6 +143,8 @@ public sealed class HandlerTests
         var id = WarehouseRules.DeliveryExitScanId(source);
         id.Should().Be(WarehouseRules.DeliveryExitScanId(source)).And.NotBe(source).And.NotBe(WarehouseRules.DeliveryExitScanId(Guid.NewGuid()));
         id.ToString()[14].Should().Be('8');
+        // The shared BuildingBlocks helper implements the same derivation.
+        id.Should().Be(DeterministicGuid.Create("warehouse:delivery-exit:", source));
         FluentActions.Invoking(() => WarehouseRules.DeliveryExitScanId(Guid.Empty)).Should().Throw<ArgumentException>();
     }
     [Fact]
