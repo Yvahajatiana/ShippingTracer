@@ -61,6 +61,7 @@ public static class DependencyInjection
                 outbox.IsolationLevel = System.Data.IsolationLevel.ReadCommitted;
             });
             bus.AddConsumer<ShipmentReadyForPickupConsumer>();
+            bus.AddConsumer<ParcelDeliveryStartedConsumer>();
 
 
             bus.AddConfigureEndpointsCallback((context, _, endpoint) =>

@@ -85,6 +85,65 @@ public sealed class HandlerTests
         fixture.Store.Saves.Should().Be(0);
     }
     [Fact]
+    public async Task Delivery_start_exits_parcel_in_stock_with_system_audit_and_no_tracking_event()
+    {
+        var fixture = Create(); await fixture.Handler.Handle(fixture.Request, default);
+        var parcel = fixture.Store.Inventories.Single(); var site = fixture.Store.Warehouses.Single();
+        var source = Guid.NewGuid(); var at = Start.AddMinutes(30);
+        var handler = new RecordDeliveryExitHandler(fixture.Store);
+        (await handler.Handle(new(source, parcel.ShipmentId, Number.ToLowerInvariant(), at), default)).Should().Be(DeliveryExitOutcome.Recorded);
+        parcel.CurrentWarehouseId.Should().BeNull(); parcel.LastScanAtUtc.Should().Be(at);
+        var exit = fixture.Store.Scans.Should().HaveCount(2).And.Subject.Last();
+        exit.ScanId.Should().Be(WarehouseRules.DeliveryExitScanId(source)); exit.Direction.Should().Be(ScanDirection.Exit);
+        exit.WarehouseId.Should().Be(site.Id); exit.OperatorSubject.Should().Be(WarehouseRules.DeliveryStartOperator);
+        fixture.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<ParcelPickedUp>();
+        fixture.Store.Saves.Should().Be(2);
+    }
+    [Fact]
+    public async Task Delivery_start_redelivery_and_follow_up_statuses_never_move_parcel_twice()
+    {
+        var fixture = Create(); await fixture.Handler.Handle(fixture.Request, default);
+        var parcel = fixture.Store.Inventories.Single(); var handler = new RecordDeliveryExitHandler(fixture.Store);
+        var request = new RecordDeliveryExit(Guid.NewGuid(), parcel.ShipmentId, Number, Start.AddMinutes(30));
+        (await handler.Handle(request, default)).Should().Be(DeliveryExitOutcome.Recorded);
+        (await handler.Handle(request, default)).Should().Be(DeliveryExitOutcome.AlreadyRecorded);
+        (await handler.Handle(request with { SourceEventId = Guid.NewGuid(), OccurredAtUtc = Start.AddHours(2) }, default)).Should().Be(DeliveryExitOutcome.NotInStock);
+        fixture.Store.Scans.Should().HaveCount(2); fixture.Store.Saves.Should().Be(2);
+    }
+    [Fact]
+    public async Task Delivery_start_ignores_parcels_never_in_stock_unknown_or_moved_after_the_event()
+    {
+        var fixture = Create(); var parcel = fixture.Store.Inventories.Single(); var handler = new RecordDeliveryExitHandler(fixture.Store);
+        (await handler.Handle(new(Guid.NewGuid(), parcel.ShipmentId, Number, Start), default)).Should().Be(DeliveryExitOutcome.NotInStock);
+        (await handler.Handle(new(Guid.NewGuid(), Guid.NewGuid(), Number, Start), default)).Should().Be(DeliveryExitOutcome.UnknownParcel);
+        (await handler.Handle(new(Guid.NewGuid(), parcel.ShipmentId, "PF111111111111111111111111", Start), default)).Should().Be(DeliveryExitOutcome.UnknownParcel);
+        await fixture.Handler.Handle(fixture.Request, default);
+        (await handler.Handle(new(Guid.NewGuid(), parcel.ShipmentId, Number, Start.AddMinutes(-5)), default)).Should().Be(DeliveryExitOutcome.Superseded);
+        parcel.CurrentWarehouseId.Should().NotBeNull(); fixture.Store.Scans.Should().ContainSingle(); fixture.Store.Saves.Should().Be(1);
+    }
+    [Fact]
+    public async Task Redelivered_completion_event_does_not_undo_a_later_return_to_the_depot()
+    {
+        var fixture = Create(); await fixture.Handler.Handle(fixture.Request, default);
+        var parcel = fixture.Store.Inventories.Single(); var handler = new RecordDeliveryExitHandler(fixture.Store);
+        var failed = new RecordDeliveryExit(Guid.NewGuid(), parcel.ShipmentId, Number, Start.AddMinutes(30));
+        (await handler.Handle(failed, default)).Should().Be(DeliveryExitOutcome.Recorded);
+        await fixture.Handler.Handle(fixture.Request with { ScanId = Guid.NewGuid() }, default);
+        (await handler.Handle(failed, default)).Should().Be(DeliveryExitOutcome.AlreadyRecorded);
+        (await handler.Handle(failed with { SourceEventId = Guid.NewGuid() }, default)).Should().Be(DeliveryExitOutcome.Superseded);
+        parcel.CurrentWarehouseId.Should().NotBeNull(); fixture.Store.Scans.Should().HaveCount(3);
+    }
+    [Fact]
+    public void Delivery_exit_validation_and_scan_identity_are_deterministic()
+    {
+        new RecordDeliveryExitValidator().Validate(new RecordDeliveryExit(Guid.Empty, Guid.Empty, "bad", default)).Errors.Should().HaveCount(4);
+        var source = Guid.NewGuid();
+        var id = WarehouseRules.DeliveryExitScanId(source);
+        id.Should().Be(WarehouseRules.DeliveryExitScanId(source)).And.NotBe(source).And.NotBe(WarehouseRules.DeliveryExitScanId(Guid.NewGuid()));
+        id.ToString()[14].Should().Be('8');
+        FluentActions.Invoking(() => WarehouseRules.DeliveryExitScanId(Guid.Empty)).Should().Throw<ArgumentException>();
+    }
+    [Fact]
     public async Task Occupied_site_cannot_be_deactivated_and_keeps_details()
     {
         var fixture = Create(); await fixture.Handler.Handle(fixture.Request, default);
