@@ -10,7 +10,7 @@ Une tournée contient un nom, une date de service, un livreur affecté et des ar
 
 Les événements ShipmentReadyForPickup et ParcelPickedUp rendent ensemble le colis disponible pour l’affectation. Leur ordre d’arrivée est libre : une prise en charge reçue avant le numéro de suivi reste enregistrée en attente. Les relectures identiques ne réinitialisent ni l’affectation ni l’état livré ; une réaffectation de numéro est refusée. Un colis n’a qu’une tournée active à la fois. Un succès est terminal ; un échec libère le colis pour une nouvelle tournée tout en conservant l’issue de l’ancienne.
 
-Le départ physique du dépôt reste un scan Exit Warehouse, à effectuer avant la mise en livraison. Delivery ne modifie pas le stock Warehouse et ne déduit pas une sortie de son événement InTransit, également utilisé pour certains scans d’entrée. Ces deux services disposent de bases et de transactions indépendantes ; le workflow testé effectue explicitement la sortie avant le démarrage de la tournée.
+Le départ physique du dépôt reste de préférence un scan Exit Warehouse, effectué avant la mise en livraison. Delivery ne consulte pas le stock Warehouse et ne bloque pas le démarrage d’une tournée : si un colis est encore en stock, Warehouse consomme le `ParcelStatusRecorded` OutForDelivery publié au démarrage (ou Delivered, en filet de sécurité) et enregistre une sortie automatique idempotente, auditée sous le sujet `system:delivery-start` ([ADR 0001](adr/0001-warehouse-exit-on-delivery-start.md)). Le stock Warehouse est donc cohérent à terme. Delivery ne déduit pas de sortie de son événement InTransit, également utilisé pour certains scans d’entrée. Ces deux services disposent de bases et de transactions indépendantes.
 
 ## Preuves et confidentialité
 
