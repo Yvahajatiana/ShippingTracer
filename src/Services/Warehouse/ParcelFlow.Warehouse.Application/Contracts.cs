@@ -23,6 +23,9 @@ public sealed record CreateWarehouse(Guid Id, string Code, string Name, Warehous
 public sealed record UpdateWarehouse(Guid Id, string Name, string Street, string City, string PostalCode, string CountryCode, bool IsActive) : IRequest<WarehouseDto>, IWarehouseCommand;
 public sealed record ScanParcel(Guid ScanId, Guid WarehouseId, string TrackingNumber, ScanDirection Direction, string OperatorSubject) : IRequest<ScanDto>, IWarehouseCommand;
 public sealed record RegisterReadyShipment(Guid ShipmentId, string TrackingNumber) : IRequest<bool>, IWarehouseCommand;
+/// <summary>Records the automatic stock exit of a parcel whose delivery has started, if it is still in stock.</summary>
+public sealed record RecordDeliveryExit(Guid SourceEventId, Guid ShipmentId, string TrackingNumber, DateTimeOffset OccurredAtUtc) : IRequest<DeliveryExitOutcome>, IWarehouseCommand;
+public enum DeliveryExitOutcome { Recorded = 0, AlreadyRecorded = 1, NotInStock = 2, UnknownParcel = 3, Superseded = 4 }
 public sealed record GetWarehouse(Guid Id) : IRequest<WarehouseDto>;
 public sealed record ListWarehouses(int Page = 1, int PageSize = 50) : IRequest<WarehousePageDto>;
 public sealed record GetWarehouseStock(Guid WarehouseId, int Page = 1, int PageSize = 50) : IRequest<WarehouseStockDto>;

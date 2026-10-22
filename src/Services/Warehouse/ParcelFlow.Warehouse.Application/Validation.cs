@@ -48,7 +48,17 @@ public sealed class RegisterReadyShipmentValidator : AbstractValidator<RegisterR
         RuleFor(x => x.TrackingNumber).Must(WarehouseRules.IsTrackingNumber).WithMessage("Invalid tracking number.");
     }
 }
-public sealed class GetWarehouseValidator : AbstractValidator<GetWarehouse>
+public sealed class RecordDeliveryExitValidator : AbstractValidator<RecordDeliveryExit>
+{
+    public RecordDeliveryExitValidator()
+    {
+        RuleFor(x => x.SourceEventId).NotEmpty();
+        RuleFor(x => x.ShipmentId).NotEmpty();
+        RuleFor(x => x.TrackingNumber).Must(WarehouseRules.IsTrackingNumber).WithMessage("Invalid tracking number.");
+        RuleFor(x => x.OccurredAtUtc).NotEqual(default(DateTimeOffset));
+    }
+}
+public sealed class GetWarehouseValidator: AbstractValidator<GetWarehouse>
 {
     public GetWarehouseValidator() => RuleFor(x => x.Id).NotEmpty();
 }

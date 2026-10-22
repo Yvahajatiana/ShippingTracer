@@ -82,6 +82,31 @@ public sealed class ScanParcelHandler(IWarehouseStore store, IPublishEndpoint pu
         return scan.ToDto();
     }
 }
+public sealed class RecordDeliveryExitHandler(IWarehouseStore store) : IRequestHandler<RecordDeliveryExit, DeliveryExitOutcome>
+{
+    public async Task<DeliveryExitOutcome> Handle(RecordDeliveryExit request, CancellationToken cancellationToken)
+    {
+        var number = WarehouseRules.NormalizeTrackingNumber(request.TrackingNumber);
+        await store.LockParcelAsync(number, cancellationToken);
+        // The scan ID is derived from the source event so a redelivered event can never move the parcel twice.
+        var scanId = WarehouseRules.DeliveryExitScanId(request.SourceEventId);
+        if (await store.FindScanAsync(scanId, cancellationToken) is not null) return DeliveryExitOutcome.AlreadyRecorded;
+        var inventory = await store.FindInventoryAsync(number, cancellationToken);
+        if (inventory is null || inventory.ShipmentId != request.ShipmentId) return DeliveryExitOutcome.UnknownParcel;
+        if (inventory.CurrentWarehouseId is not { } warehouseId) return DeliveryExitOutcome.NotInStock;
+        var at = WarehouseRules.NormalizeTimestamp(request.OccurredAtUtc);
+        // A movement scanned after the delivery started (e.g. a return to the depot) wins over the late event.
+        if (inventory.LastScanAtUtc is { } previous && at <= previous) return DeliveryExitOutcome.Superseded;
+        var warehouse = await store.FindWarehouseAsync(warehouseId, cancellationToken)
+            ?? throw new InvalidOperationException("Current warehouse of the parcel was not found.");
+        inventory.ApplyScan(warehouse, ScanDirection.Exit, at);
+        store.AddScan(new WarehouseScan(scanId, inventory.ShipmentId, warehouse.Id, number, ScanDirection.Exit, at, WarehouseRules.DeliveryStartOperator));
+        // No tracking fact is published: Delivery already reported OutForDelivery or Delivered, and a
+        // late InTransit status would regress the public tracking timeline.
+        await store.SaveChangesAsync(cancellationToken);
+        return DeliveryExitOutcome.Recorded;
+    }
+}
 public sealed class GetWarehouseHandler(IWarehouseStore store) : IRequestHandler<GetWarehouse, WarehouseDto>
 {
     public async Task<WarehouseDto> Handle(GetWarehouse request, CancellationToken cancellationToken) =>
