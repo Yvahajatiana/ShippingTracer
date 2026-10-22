@@ -17,9 +17,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddTrackingInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // The interceptor flushes public cache invalidations only once the consumer outbox transaction commits.
+        services.AddSingleton<TrackingCacheInvalidator>();
         services.AddDbContext<TrackingDbContext>((provider, options) => options.UseNpgsql(
             provider.GetRequiredService<IConfiguration>().GetConnectionString("TrackingDatabase")
-                ?? throw new InvalidOperationException("ConnectionStrings:TrackingDatabase is required.")));
+                ?? throw new InvalidOperationException("ConnectionStrings:TrackingDatabase is required."))
+            .AddInterceptors(provider.GetRequiredService<TrackingCacheInvalidator>()));
         services.AddScoped<ITrackingStore, TrackingStore>();
         services.AddStackExchangeRedisCache(options => options.InstanceName = "parcelflow:");
         services.AddOptions<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions>()
