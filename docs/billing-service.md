@@ -8,7 +8,7 @@ Shipment calcule le montant de l’envoi. Sa saga envoie PaymentRequested à la 
 
 Le propriétaire, le montant et la devise EUR sont immuables. Un rejeu compatible de PaymentRequested ne change ni la facture, ni son paiement, ni ses avoirs ; une réutilisation contradictoire est rejetée. Les montants sont positifs, bornés à 1 000 000 EUR et ne comportent pas de fraction de centime. Les valeurs sont persistées en decimal PostgreSQL, précision18/échelle2.
 
-Le client choisit explicitement un résultat de simulation Approved ou Declined. Le paiement utilise toujours le montant intégral et la devise de la facture : aucun montant ni numéro de carte n’est attendu dans la requête. Approved publie PaymentCompleted ; Declined publie PaymentFailed avec un motif fixe sans donnée personnelle.
+Le client choisit explicitement un résultat de simulation Approved ou Declined. Le paiement utilise toujours le montant intégral et la devise de la facture : aucun montant ni numéro de carte n’est attendu dans la requête. Approved publie PaymentCompleted ; Declined publie PaymentFailed avec un motif fixe sans donnée personnelle. Leur EventId est dérivé du type d’événement, de la facture et d’OperationId (`billing:payment-completed:` ou `billing:payment-failed:`).
 
 Un seul paiement terminal est accepté par facture. Un rejeu exact restitue le reçu initial, même après émission d’avoirs ; une nouvelle opération ou un résultat différent retourne 409. Le refus est terminal pour rester cohérent avec la saga Shipment existante, dont l’état PaymentRejected ignore les succès ultérieurs. Un nouveau paiement après refus exige donc un nouvel envoi. Un reçu de paiement simulé refusé retourne HTTP200 avec Outcome=Declined : ce résultat métier n’est pas une panne HTTP.
 

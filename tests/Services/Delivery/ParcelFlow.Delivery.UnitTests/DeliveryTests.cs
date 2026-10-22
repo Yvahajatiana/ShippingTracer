@@ -148,11 +148,33 @@ public sealed class DeliveryTests
     {
         new ListRoutesValidator().Validate(new ListRoutes(page, size)).IsValid.Should().BeFalse(); new ListDriversValidator().Validate(new ListDrivers(page, size)).IsValid.Should().BeFalse(); new ListAvailableParcelsValidator().Validate(new ListAvailableParcels(page, size)).IsValid.Should().BeFalse();
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Retried_outcome_operation_keeps_its_event_id_while_another_shipment_gets_a_different_one(bool delivered)
+    {
+        var operation = Guid.NewGuid(); var shipmentId = Guid.NewGuid();
+        // Each run starts from the committed state, as a retry does after the first transaction rolled back.
+        async Task<Guid> Complete(Guid shipment)
+        {
+            var f = Fixture(shipment); await Start(f); f.Publisher.Events.Clear();
+            var actor = new Actor("driver");
+            if (delivered) await new ConfirmDeliveryHandler(f.Store, actor, f.Endpoint, new Clock()).Handle(new(operation, f.Route.Id, shipment, "Alice", Signature, null), default);
+            else await new FailDeliveryHandler(f.Store, actor, f.Endpoint, new Clock()).Handle(new(operation, f.Route.Id, shipment, DeliveryFailureReason.RecipientAbsent), default);
+            return f.Publisher.Events.OfType<ParcelStatusRecorded>().Single().EventId;
+        }
+        var first = await Complete(shipmentId);
+        first.Should().Be(DeterministicGuid.Create(delivered ? "delivery:delivered:" : "delivery:failed:", shipmentId, operation)).And.NotBe(operation);
+        (await Complete(shipmentId)).Should().Be(first);
+        // The same client key on another shipment never yields the same EventId (Inbox and consumer deduplication).
+        (await Complete(Guid.NewGuid())).Should().NotBe(first);
+    }
     private static DeliveryParcel Parcel() { var parcel = new DeliveryParcel(Guid.NewGuid()); parcel.Register(Number); parcel.MarkPickedUp(); return parcel; }
     private static DeliveryRoute Route() => new(Guid.NewGuid(), "Paris matin", new DateOnly(2026, 10, 18));
-    private static F Fixture()
+    private static F Fixture() => Fixture(Guid.NewGuid());
+    private static F Fixture(Guid shipmentId)
     {
-        var store = new Store(); var route = Route(); var parcel = Parcel(); var driver = new DeliveryDriver("driver", "Alice"); route.AssignDriver(driver); route.AddParcel(parcel);
+        var store = new Store(); var route = Route(); var parcel = new DeliveryParcel(shipmentId); parcel.Register(Number); parcel.MarkPickedUp(); var driver = new DeliveryDriver("driver", "Alice"); route.AssignDriver(driver); route.AddParcel(parcel);
         store.Routes.Add(route); store.Parcels.Add(parcel); store.Drivers.Add(driver); var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>(); return new(store, route, parcel, endpoint, (Publisher)endpoint);
     }
     private static Task<RouteDto> Start(F f) => new StartRouteHandler(f.Store, new Actor("driver"), f.Endpoint, new Clock()).Handle(new(f.Route.Id), default);

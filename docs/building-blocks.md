@@ -60,6 +60,8 @@ L'enveloppe d'un événement est le record abstrait `IntegrationEvent` (EventId,
 | ShipmentCreated | `shipment:created:` + ShipmentId |
 | PaymentRequested, ShipmentReadyForPickup, ShipmentPaymentTimedOut (saga) | `shipment:payment-requested:`, `shipment:ready-for-pickup:`, `shipment:payment-timed-out:` + ShipmentId |
 | InvoiceIssued, CreditNoteIssued | `billing:invoice-issued:` + InvoiceId, `billing:credit-note-issued:` + CreditNoteId |
+| PaymentCompleted, PaymentFailed | `billing:payment-completed:`, `billing:payment-failed:` + InvoiceId + OperationId |
+| ParcelStatusRecorded Delivered, Failed | `delivery:delivered:`, `delivery:failed:` + ShipmentId + OperationId |
 | ParcelPickedUp d'une première entrée en centre de tri | `warehouse:parcel-picked-up:` + ScanId |
 | ParcelStatusRecorded OutForDelivery | `delivery:out-for-delivery:` + RouteId + ShipmentId |
 | TrackingStatusChanged | `tracking:status-changed:` + EventId du fait source |
@@ -67,4 +69,4 @@ L'enveloppe d'un événement est le record abstrait `IntegrationEvent` (EventId,
 | ShipmentMetricsUpdated | `reporting:metrics-updated:` + SourceEventId |
 | CustomerProfileCreated, CompanyCreated | `customer:profile-created:` + CustomerId, `customer:company-created:` + CompanyId |
 
-Les EventId déjà dérivés d'une opération (PaymentCompleted/PaymentFailed et Delivered/Failed : OperationId ; scans Warehouse : ScanId) sont inchangés. Le Gateway transmet l'en-tête `X-Correlation-Id` du client sans le générer.
+L'OperationId fourni par le client n'est jamais repris tel quel comme EventId : il est combiné au type d'événement et à l'agrégat. Un rejeu de la même opération sur le même agrégat garde son EventId, tandis que la même clé réutilisée sur un autre agrégat ou dans un autre service ne peut pas entrer en collision dans l'Inbox ni dans la déduplication des consommateurs. Les enregistrements d'idempotence par OperationId (paiements, avoirs, tentatives de livraison) sont inchangés. Les scans Warehouse gardent ScanId comme EventId. Le Gateway transmet l'en-tête `X-Correlation-Id` du client sans le générer.

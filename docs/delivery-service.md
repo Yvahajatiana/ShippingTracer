@@ -77,7 +77,7 @@ MassTransit utilise des files durables préfixées delivery-*, Inbox/Outbox EF C
 - ShipmentReadyForPickup associe le numéro de suivi au colis.
 - ParcelPickedUp enregistre la prise en charge physique.
 - Le démarrage publie ParcelStatusRecorded avec OutForDelivery pour chaque arrêt, avec un EventId dérivé de la tournée et de l’envoi (`delivery:out-for-delivery:`) et CorrelationId égal à ShipmentId.
-- L’issue publie Delivered ou Failed, avec EventId égal à OperationId, CorrelationId égal à ShipmentId et FacilityCode null.
+- L’issue publie Delivered ou Failed, avec un EventId dérivé de l’issue, de ShipmentId et d’OperationId (`delivery:delivered:` ou `delivery:failed:`) : un rejeu garde le même EventId, la même clé client sur un autre envoi en produit un autre ; CorrelationId égal à ShipmentId et FacilityCode null.
 
 Les dates sont générées côté serveur en UTC, à la microseconde, et progressent pour les événements Delivery d’un même colis même si l’horloge recule. Une erreur annule ensemble l’affectation, l’issue, les octets de preuve et l’Outbox. Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis reste configuré pour le socle et la readiness, sans cache de documents ou de tournées.
 

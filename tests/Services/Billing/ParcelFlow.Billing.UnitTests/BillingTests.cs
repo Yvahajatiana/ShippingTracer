@@ -82,7 +82,7 @@ public sealed class BillingTests
         var handler = new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock());
         var paid = await handler.Handle(request, default); f.Invoice.IssueCredit(1m);
         (await handler.Handle(request, default)).Should().Be(paid); f.Store.Saves.Should().Be(1); f.Publisher.Events.Should().ContainSingle();
-        var fact = f.Publisher.Events.OfType<PaymentCompleted>().Single(); fact.EventId.Should().Be(operation); fact.ShipmentId.Should().Be(f.Invoice.Id); fact.Amount.Should().Be(10); fact.Currency.Should().Be("EUR");
+        var fact = f.Publisher.Events.OfType<PaymentCompleted>().Single(); fact.EventId.Should().Be(DeterministicGuid.Create("billing:payment-completed:", f.Invoice.Id, operation)); fact.ShipmentId.Should().Be(f.Invoice.Id); fact.Amount.Should().Be(10); fact.Currency.Should().Be("EUR");
         await FluentActions.Awaiting(() => handler.Handle(request with { OperationId = Guid.NewGuid() }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => handler.Handle(request with { Outcome = MockPaymentOutcome.Declined }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => new PayInvoiceHandler(f.Store, new Actor("admin", true), f.Endpoint, new Clock()).Handle(request, default)).Should().ThrowAsync<BillingConflictException>();
@@ -205,15 +205,36 @@ public sealed class BillingTests
         (await handler.Handle(request, default)).Should().Be(credit);
         var paymentEvent = f.Publisher.Events.OfType<PaymentCompleted>().Single();
         var creditEvent = f.Publisher.Events.OfType<CreditNoteIssued>().Single();
-        paymentEvent.EventId.Should().Be(operation);
+        paymentEvent.EventId.Should().Be(DeterministicGuid.Create("billing:payment-completed:", f.Invoice.Id, operation)).And.NotBe(operation);
         creditEvent.EventId.Should().NotBe(paymentEvent.EventId).And.NotBeEmpty();
         creditEvent.CreditNoteId.Should().Be(operation); credit.Id.Should().Be(operation);
         f.Store.Saves.Should().Be(2); f.Publisher.Events.Should().HaveCount(2);
     }
-    private static Invoice Invoice(decimal amount = 10m) => new(Guid.NewGuid(), "alice", amount, "EUR", Issued);
-    private static F Fixture(bool add = true)
+    [Theory]
+    [InlineData(MockPaymentOutcome.Approved)]
+    [InlineData(MockPaymentOutcome.Declined)]
+    public async Task Retried_payment_operation_keeps_its_event_id_while_another_invoice_gets_a_different_one(MockPaymentOutcome outcome)
     {
-        var store = new Store(); var invoice = Invoice(); if (add) store.Invoices.Add(invoice);
+        var operation = Guid.NewGuid(); var invoiceId = Guid.NewGuid();
+        // Each run starts from the committed state, as a retry does after the first transaction rolled back.
+        async Task<Guid> Pay(Guid invoice)
+        {
+            var f = Fixture(invoice);
+            await new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock()).Handle(new(invoice, operation, outcome), default);
+            return f.Publisher.Events.Cast<ParcelFlow.BuildingBlocks.Contracts.IntegrationEvent>().Single().EventId;
+        }
+        var first = await Pay(invoiceId);
+        var scope = outcome == MockPaymentOutcome.Approved ? "billing:payment-completed:" : "billing:payment-failed:";
+        first.Should().Be(DeterministicGuid.Create(scope, invoiceId, operation)).And.NotBe(operation);
+        (await Pay(invoiceId)).Should().Be(first);
+        // The same client key on another invoice never yields the same EventId (Inbox and consumer deduplication).
+        (await Pay(Guid.NewGuid())).Should().NotBe(first);
+    }
+    private static Invoice Invoice(decimal amount = 10m) => new(Guid.NewGuid(), "alice", amount, "EUR", Issued);
+    private static F Fixture(bool add = true) => Fixture(Guid.NewGuid(), add);
+    private static F Fixture(Guid invoiceId, bool add = true)
+    {
+        var store = new Store(); var invoice = new Invoice(invoiceId, "alice", 10m, "EUR", Issued); if (add) store.Invoices.Add(invoice);
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>(); return new(store, invoice, endpoint, (Publisher)endpoint);
     }
     private sealed record F(Store Store, Invoice Invoice, IPublishEndpoint Endpoint, Publisher Publisher);

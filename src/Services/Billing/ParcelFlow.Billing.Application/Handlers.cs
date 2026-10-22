@@ -56,11 +56,15 @@ public sealed class PayInvoiceHandler(IBillingStore store, IBillingActor actor, 
         var payment = new PaymentAttempt(request.OperationId, invoice.Id, request.Outcome, invoice.Amount, invoice.Currency, now, actor.Subject);
         HandlerRules.Apply(() => invoice.RecordPayment(request.Outcome)); store.AddPayment(payment);
         if (request.Outcome == MockPaymentOutcome.Approved)
-            await publisher.Publish(new PaymentCompleted(payment.OperationId, invoice.ShipmentId, now, invoice.ShipmentId, invoice.Amount, invoice.Currency), ct);
+            await publisher.Publish(new PaymentCompleted(PaymentEventId("billing:payment-completed:", invoice, payment), invoice.ShipmentId, now, invoice.ShipmentId, invoice.Amount, invoice.Currency), ct);
         else
-            await publisher.Publish(new PaymentFailed(payment.OperationId, invoice.ShipmentId, now, invoice.ShipmentId, "Mock payment declined."), ct);
+            await publisher.Publish(new PaymentFailed(PaymentEventId("billing:payment-failed:", invoice, payment), invoice.ShipmentId, now, invoice.ShipmentId, "Mock payment declined."), ct);
         await store.SaveChangesAsync(ct); return payment.ToDto();
     }
+    // The client-supplied OperationId is scoped by event type and invoice: a retry on the same invoice keeps its EventId,
+    // while the same key reused on another invoice (or another service) can never collide in consumers or the Inbox.
+    private static Guid PaymentEventId(string scope, Invoice invoice, PaymentAttempt payment) =>
+        DeterministicGuid.Create(scope, invoice.Id, payment.OperationId);
 }
 public sealed class IssueCreditNoteHandler(IBillingStore store, IBillingActor actor, IPublishEndpoint publisher, TimeProvider clock) : IRequestHandler<IssueCreditNote, CreditNoteDto>
 {
