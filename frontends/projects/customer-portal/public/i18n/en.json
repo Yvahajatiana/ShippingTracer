@@ -1,5 +1,212 @@
 {
   "app": { "title": "Customer area" },
-  "nav": { "home": "Home" },
-  "home": { "title": "Customer area", "subtitle": "Welcome to ParcelFlow." }
+  "nav": {
+    "home": "Home",
+    "shipments": "My shipments",
+    "newShipment": "New shipment",
+    "invoices": "Invoices",
+    "notifications": "Notifications",
+    "profile": "My profile"
+  },
+  "form": { "optional": "(optional)" },
+  "paging": {
+    "label": "Pagination",
+    "page": "Page {{page}}",
+    "pageWithTotal": "Page {{page}} · {{total}} result(s)"
+  },
+  "home": {
+    "hero": {
+      "title": "Where is your parcel?",
+      "subtitle": "Enter your tracking number to check your delivery status, no account needed."
+    },
+    "dashboard": {
+      "title": "Hello {{name}}",
+      "recent": "Recent shipments",
+      "allShipments": "All my shipments",
+      "pendingInvoices": "Invoices to pay",
+      "pendingHint": "Shipments are picked up as soon as their invoice is paid.",
+      "viewInvoices": "View my invoices"
+    },
+    "signIn": {
+      "title": "Ship with ParcelFlow",
+      "message": "Sign in to create shipments, print labels and pay your invoices."
+    }
+  },
+  "tracking": {
+    "title": "Tracking {{number}}",
+    "subtitle": "Public history of the delivery steps.",
+    "number": "Tracking number",
+    "history": "Tracking history",
+    "updatedAt": "Last update: {{date}}",
+    "facility": "Facility: {{code}}",
+    "noEvents": "No tracking events yet.",
+    "notFound": {
+      "title": "Parcel not found",
+      "message": "No parcel matches the number {{number}}. Please check it."
+    },
+    "invalid": {
+      "title": "Invalid tracking number",
+      "message": "A tracking number has 6 to 32 letters or digits, for example PF00240000FR."
+    },
+    "search": {
+      "label": "Tracking number",
+      "placeholder": "e.g. PF00240000FR",
+      "hint": "6 to 32 letters or digits, printed on your label.",
+      "submit": "Track",
+      "another": "Track another parcel"
+    }
+  },
+  "profile": {
+    "title": "My profile",
+    "subtitle": "Your contact details and address book.",
+    "identity": "Contact details",
+    "memberSince": "Customer since {{date}}",
+    "fields": {
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "phone": "Phone"
+    },
+    "onboarding": {
+      "title": "Create your customer profile",
+      "description": "A few details are enough to start shipping.",
+      "submit": "Create my profile",
+      "created": "Your profile has been created. Welcome!"
+    }
+  },
+  "address": {
+    "title": "Address book",
+    "description": "Addresses you can reuse as sender.",
+    "add": "Add an address",
+    "addTitle": "New address",
+    "editTitle": "Edit address",
+    "dialogDescription": "The country code follows the 2-letter ISO standard (FR, DE, CA…).",
+    "editLabel": "Edit address {{label}}",
+    "deleteLabel": "Delete address {{label}}",
+    "deleteConfirm": "Delete the address “{{label}}”?",
+    "added": "Address added.",
+    "deleted": "Address deleted.",
+    "empty": "No saved address.",
+    "fields": {
+      "label": "Label",
+      "line1": "Address",
+      "line2": "Address line 2",
+      "postalCode": "Postal code",
+      "city": "City",
+      "countryCode": "Country"
+    }
+  },
+  "shipments": {
+    "title": "My shipments",
+    "subtitle": "Follow your shipments and get their labels.",
+    "new": "New shipment",
+    "backToList": "Back to shipments",
+    "columns": {
+      "trackingNumber": "Tracking no.",
+      "recipient": "Destination",
+      "zone": "Zone",
+      "price": "Price"
+    },
+    "empty": {
+      "title": "No shipments yet",
+      "message": "Create your first shipment to get a quote and a label."
+    }
+  },
+  "newShipment": {
+    "title": "New shipment",
+    "subtitle": "The price is computed live from the destination and the billable weight.",
+    "sender": "Sender",
+    "senderHint": "Prefilled from your profile; edit it if needed.",
+    "savedAddress": "Saved address",
+    "chooseAddress": "Choose an address…",
+    "recipient": "Recipient",
+    "parcel": "Parcel",
+    "parcelHint": "Maximum weight {{maxWeightKg}} kg, each dimension up to {{maxDimensionCm}} cm.",
+    "fields": {
+      "name": "Full name",
+      "email": "Email",
+      "phone": "Phone",
+      "weightKg": "Weight (kg)",
+      "lengthCm": "Length (cm)",
+      "widthCm": "Width (cm)",
+      "heightCm": "Height (cm)"
+    },
+    "quote": {
+      "title": "Your quote",
+      "hint": "Fill in the form to get the price.",
+      "loading": "Computing the price…",
+      "error": "The price could not be computed. Please check your details.",
+      "zone": "Zone",
+      "billableWeight": "Billable weight",
+      "kg": "{{value}} kg"
+    },
+    "submit": "Create shipment",
+    "paymentNotice": "An invoice is issued on creation; the parcel is picked up once it is paid.",
+    "fixErrors": "Fix the highlighted fields to continue.",
+    "created": "Shipment {{number}} created."
+  },
+  "shipment": {
+    "title": "Shipment {{number}}",
+    "createdOn": "Created on {{date}}",
+    "summary": "Summary",
+    "dimensions": "Dimensions (cm)",
+    "downloadLabel": "Download label",
+    "invoice": "Invoice",
+    "noInvoice": "No invoice linked yet.",
+    "payInvoice": "Pay the invoice",
+    "viewInvoice": "View invoice",
+    "publicTrackingLink": "Open the public tracking page"
+  },
+  "invoices": {
+    "title": "Invoices",
+    "subtitle": "Your invoices and their payment status.",
+    "backToList": "Back to invoices",
+    "empty": "No invoices yet.",
+    "columns": {
+      "number": "Invoice no.",
+      "issuedAt": "Issued on",
+      "amount": "Amount"
+    }
+  },
+  "invoice": {
+    "title": "Invoice {{number}}",
+    "issuedOn": "Issued on {{date}}",
+    "summary": "Summary",
+    "creditTotal": "Credited total",
+    "viewShipment": "View shipment"
+  },
+  "payment": {
+    "title": "Payment",
+    "none": "No payment recorded for this invoice.",
+    "date": "Date",
+    "reference": "Reference",
+    "pendingTitle": "Invoice awaiting payment",
+    "pendingMessage": "Your parcel will be picked up as soon as the payment is confirmed.",
+    "payNow": "Pay now",
+    "dialogTitle": "Simulated payment",
+    "dialogDescription": "Invoice {{number}} · {{amount}}",
+    "outcomeLabel": "Outcome to simulate",
+    "outcomes": {
+      "Approved": "Payment approved",
+      "Declined": "Payment declined"
+    },
+    "mockNotice": "Demo environment: no real payment method is charged.",
+    "confirmApproved": "Confirm payment",
+    "confirmDeclined": "Simulate a decline",
+    "approved": "Payment approved. Thank you!",
+    "declined": "The payment was declined."
+  },
+  "creditNotes": {
+    "title": "Credit notes",
+    "empty": "No credit notes on this invoice.",
+    "number": "Credit note no.",
+    "reason": "Reason"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Emails and text messages sent about your parcels.",
+    "empty": "No notifications yet.",
+    "emptyForShipment": "No notifications for this shipment.",
+    "shipmentLink": "Shipment {{number}}"
+  }
 }
