@@ -5,7 +5,8 @@ import { createHandlers } from './handlers';
 export async function startMockApi(): Promise<void> {
   const worker = setupWorker(...createHandlers());
   await worker.start({
-    serviceWorker: { url: 'mockServiceWorker.js' },
+    // Resolve against <base href> so deep links (e.g. /billing/invoices/:id) find the worker.
+    serviceWorker: { url: new URL('mockServiceWorker.js', document.baseURI).pathname },
     onUnhandledFrame: 'bypass',
     quiet: true,
   });
