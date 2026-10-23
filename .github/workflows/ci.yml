@@ -141,3 +141,30 @@ jobs:
         run: dotnet build src/Gateway/ParcelFlow.Gateway --configuration Debug
       - name: Run Kestrel smoke test
         run: node tests/Gateway/kestrel-smoke.mjs
+
+  frontends:
+    name: Frontends (lint, tests, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontends
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontends/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Vulnerable npm packages
+        run: npm audit --audit-level=high
+      - name: Formatting
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Production builds
+        run: npm run build
