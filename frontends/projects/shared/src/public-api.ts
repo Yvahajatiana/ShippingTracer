@@ -18,6 +18,7 @@ export * from './lib/ui/form-errors';
 export * from './lib/ui/status-tag.component';
 export * from './lib/ui/page-header.component';
 export * from './lib/ui/error-banner.component';
+export * from './lib/ui/chart.component';
 export * from './lib/layout/shell.component';
 export * from './lib/layout/status-pages';
 export * from './lib/util/browser';

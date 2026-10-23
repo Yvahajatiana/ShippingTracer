@@ -45,7 +45,22 @@
       "@spartan-ng/helm/switch": ["./projects/shared/helm/switch/src/index.ts"],
       "@spartan-ng/helm/table": ["./projects/shared/helm/table/src/index.ts"],
       "@spartan-ng/helm/tabs": ["./projects/shared/helm/tabs/src/index.ts"],
-      "@spartan-ng/helm/tooltip": ["./projects/shared/helm/tooltip/src/index.ts"]
+      "@spartan-ng/helm/tooltip": ["./projects/shared/helm/tooltip/src/index.ts"],
+      "@spartan-ng/helm/avatar": ["./projects/shared/helm/avatar/src/index.ts"],
+      "@spartan-ng/helm/breadcrumb": ["./projects/shared/helm/breadcrumb/src/index.ts"],
+      "@spartan-ng/helm/progress": ["./projects/shared/helm/progress/src/index.ts"],
+      "@spartan-ng/helm/radio-group": ["./projects/shared/helm/radio-group/src/index.ts"],
+      "@spartan-ng/helm/scroll-area": ["./projects/shared/helm/scroll-area/src/index.ts"],
+      "@spartan-ng/helm/toggle-group": ["./projects/shared/helm/toggle-group/src/index.ts"],
+      "@spartan-ng/helm/toggle": ["./projects/shared/helm/toggle/src/index.ts"],
+      "@spartan-ng/helm/button-group": ["./projects/shared/helm/button-group/src/index.ts"],
+      "@spartan-ng/helm/combobox": ["./projects/shared/helm/combobox/src/index.ts"],
+      "@spartan-ng/helm/autocomplete": ["./projects/shared/helm/autocomplete/src/index.ts"],
+      "@spartan-ng/helm/accordion": ["./projects/shared/helm/accordion/src/index.ts"],
+      "@spartan-ng/helm/item": ["./projects/shared/helm/item/src/index.ts"],
+      "@spartan-ng/helm/collapsible": ["./projects/shared/helm/collapsible/src/index.ts"],
+      "@spartan-ng/helm/kbd": ["./projects/shared/helm/kbd/src/index.ts"],
+      "@spartan-ng/helm/hover-card": ["./projects/shared/helm/hover-card/src/index.ts"]
     }
   },
   "angularCompilerOptions": {
