@@ -1,5 +1,206 @@
 {
   "app": { "title": "Administration" },
-  "nav": { "home": "Home" },
-  "home": { "title": "Administration", "subtitle": "Welcome to ParcelFlow." }
+  "nav": {
+    "overview": "Overview",
+    "companies": "Companies",
+    "customers": "Customers",
+    "tariffs": "Tariffs",
+    "warehouses": "Warehouses",
+    "drivers": "Drivers",
+    "invoices": "Invoices",
+    "notifications": "Notifications"
+  },
+  "pager": {
+    "label": "Pagination",
+    "summary": "Page {{page}} of {{pages}} · {{total}} item(s)",
+    "page": "Page {{page}}"
+  },
+  "overview": {
+    "title": "Overview",
+    "subtitle": "Indicators for the last {{days}} days and quick access to administration.",
+    "kpiTitle": "Key indicators",
+    "kpis": {
+      "totalShipments": "Shipments created",
+      "delivered": "Parcels delivered",
+      "rate": "Delivery rate: {{rate}}%",
+      "noData": "No shipments in this period",
+      "averageDelivery": "Average delivery time",
+      "averageTransit": "Average transit time",
+      "hours": "{{hours}} h",
+      "samples": "Across {{count}} measured parcel(s)"
+    },
+    "chart": {
+      "title": "Daily shipment volume",
+      "range": "From {{from}} to {{to}}",
+      "series": "Shipments",
+      "ariaLabel": "Bar chart of shipments per day, {{total}} in total"
+    },
+    "sectionsTitle": "Administration",
+    "sections": {
+      "companies": "Companies",
+      "warehouses": "Warehouses and sorting centres",
+      "drivers": "Drivers",
+      "pendingInvoices": "Invoices awaiting payment"
+    }
+  },
+  "companies": {
+    "title": "Companies",
+    "subtitle": "Customer companies that accounts can be attached to.",
+    "new": "New company",
+    "empty": "No companies yet.",
+    "createTitle": "New company",
+    "editTitle": "Edit company",
+    "editNamed": "Edit {{name}}",
+    "dialogDescription": "Legal name, registration number and contact email.",
+    "created": "Company created.",
+    "fields": {
+      "name": "Legal name",
+      "registrationNumber": "Registration number",
+      "email": "Contact email"
+    }
+  },
+  "customers": {
+    "title": "Customers",
+    "subtitle": "Customer profiles and company assignment.",
+    "empty": "No customers.",
+    "openNamed": "Open {{name}}'s profile",
+    "backToList": "Back to customers",
+    "profile": "Profile",
+    "addresses": "Address book",
+    "noAddresses": "No saved addresses.",
+    "fields": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "subject": "Keycloak subject"
+    },
+    "company": {
+      "title": "Company",
+      "current": "Attached to {{name}}.",
+      "noneCurrent": "This customer is not attached to any company.",
+      "select": "Company",
+      "none": "No company",
+      "assign": "Save assignment",
+      "assigned": "Company assigned to the customer.",
+      "unassigned": "Company assignment removed."
+    }
+  },
+  "tariffs": {
+    "title": "Tariffs",
+    "subtitle": "Base price and price per kg applied to each delivery zone.",
+    "empty": "No tariffs configured.",
+    "currency": "Amounts in {{currency}}",
+    "basePrice": "Base price",
+    "pricePerKg": "Price per kg",
+    "editTitle": "{{zone}} tariff",
+    "editNamed": "Edit the {{zone}} tariff",
+    "dialogDescription": "New prices apply to the next quotes. Amounts in {{currency}}, at most two decimals.",
+    "example": "Example for a 2 kg parcel: {{price}}",
+    "updated": "Tariff updated."
+  },
+  "warehouses": {
+    "title": "Warehouses",
+    "subtitle": "Warehouses and sorting centres of the network.",
+    "new": "New warehouse",
+    "empty": "No warehouses yet.",
+    "createTitle": "New warehouse",
+    "editTitle": "Edit warehouse",
+    "createDescription": "Code and kind cannot be changed after creation.",
+    "editDescription": "Code and kind are final; name, address and activity can still be changed.",
+    "editNamed": "Edit warehouse {{code}}",
+    "codeHint": "Uppercase letters, digits and dashes (e.g. PAR-02).",
+    "codeTaken": "This code is already used by another warehouse.",
+    "created": "Warehouse created.",
+    "fields": {
+      "code": "Code",
+      "name": "Name",
+      "kind": "Kind",
+      "address": "Address",
+      "street": "Street",
+      "postalCode": "Postal code",
+      "city": "City",
+      "countryCode": "Country (ISO code)"
+    }
+  },
+  "drivers": {
+    "title": "Drivers",
+    "subtitle": "Driver accounts allowed to run delivery routes.",
+    "new": "New driver",
+    "empty": "No drivers yet.",
+    "createTitle": "New driver",
+    "editTitle": "Edit driver",
+    "editNamed": "Edit {{name}}",
+    "dialogDescription": "A driver is identified by their Keycloak subject, which cannot be changed later.",
+    "subjectHint": "Subject (sub) of the driver's Keycloak account.",
+    "subjectTaken": "A driver already exists for this Keycloak subject.",
+    "created": "Driver created.",
+    "fields": {
+      "subject": "Keycloak subject",
+      "displayName": "Display name"
+    }
+  },
+  "invoices": {
+    "title": "Invoices",
+    "subtitle": "Every issued invoice with its payments and credit notes.",
+    "statusFilter": "Filter by status",
+    "allStatuses": "All statuses",
+    "filterHint": "The filter applies to the displayed page.",
+    "empty": "No invoices.",
+    "emptyFiltered": "No invoice on this page matches the filter.",
+    "openNamed": "Open invoice {{number}}",
+    "backToList": "Back to invoices",
+    "detailTitle": "Invoice {{number}}",
+    "issuedOn": "Issued on {{date}}",
+    "summary": "Summary",
+    "creditNotes": "Credit notes",
+    "noCreditNotes": "No credit notes issued.",
+    "fields": {
+      "number": "Number",
+      "customer": "Customer",
+      "amount": "Amount",
+      "creditTotal": "Total credited",
+      "remainingCredit": "Remaining creditable",
+      "issuedAt": "Issued on",
+      "shipment": "Shipment"
+    },
+    "payment": {
+      "title": "Payment",
+      "none": "No payment recorded for this invoice.",
+      "outcome": "Outcome",
+      "date": "Date",
+      "operation": "Operation"
+    },
+    "creditNote": {
+      "open": "Issue credit note",
+      "title": "Issue a credit note",
+      "description": "Invoice {{number}}: up to {{remaining}} can be credited.",
+      "amount": "Amount",
+      "reason": "Reason",
+      "date": "Date",
+      "submit": "Issue credit note",
+      "issued": "Credit note {{number}} issued.",
+      "notAllowed": "A credit note can only be issued on a paid invoice with a remaining creditable amount."
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Log of the notifications sent to customers.",
+    "shipmentFilter": "Shipment ID",
+    "shipmentPlaceholder": "e.g. 3f2b8c1e-…",
+    "clearFilter": "Clear filter",
+    "empty": "No notifications.",
+    "openNamed": "View notification \"{{subject}}\"",
+    "detailDescription": "Details of the recorded notification.",
+    "fields": {
+      "subject": "Subject",
+      "body": "Message",
+      "channel": "Channel",
+      "destination": "Recipient",
+      "trackingNumber": "Tracking number",
+      "customer": "Customer",
+      "shipment": "Shipment",
+      "occurredAt": "Event at",
+      "recordedAt": "Recorded at"
+    }
+  }
 }
