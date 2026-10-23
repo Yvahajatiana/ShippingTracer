@@ -1,0 +1,5 @@
+{
+  "app": { "title": "Administration" },
+  "nav": { "home": "Accueil" },
+  "home": { "title": "Administration", "subtitle": "Bienvenue sur ParcelFlow." }
+}

@@ -1,0 +1,493 @@
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "cli": {
+    "packageManager": "npm",
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
+  },
+  "newProjectRoot": "projects",
+  "projects": {
+    "customer-portal": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "style": "css",
+          "changeDetection": "OnPush"
+        }
+      },
+      "root": "projects/customer-portal",
+      "sourceRoot": "projects/customer-portal/src",
+      "prefix": "pf",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "projects/customer-portal/src/main.ts",
+            "tsConfig": "projects/customer-portal/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "projects/customer-portal/public"
+              },
+              {
+                "glob": "**/*",
+                "input": "projects/shared/i18n",
+                "output": "i18n/shared"
+              },
+              {
+                "glob": "mockServiceWorker.js",
+                "input": "projects/shared/public",
+                "output": "/"
+              }
+            ],
+            "styles": ["projects/customer-portal/src/styles.css"]
+          },
+          "configurations": {
+            "production": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/customer-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/customer-portal/config/production",
+                  "output": "/"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "1MB",
+                  "maximumError": "1.5MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/customer-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "mockServiceWorker.js",
+                  "input": "projects/shared/public",
+                  "output": "/"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/customer-portal/config/mock",
+                  "output": "/"
+                }
+              ],
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            },
+            "gateway": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/customer-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/customer-portal/config/gateway",
+                  "output": "/"
+                }
+              ],
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 4201
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "customer-portal:build:production"
+            },
+            "development": {
+              "buildTarget": "customer-portal:build:development"
+            },
+            "gateway": {
+              "buildTarget": "customer-portal:build:gateway",
+              "proxyConfig": "proxy.conf.json"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "projects/customer-portal/tsconfig.spec.json",
+            "runner": "vitest"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": [
+              "projects/customer-portal/**/*.ts",
+              "projects/customer-portal/**/*.html"
+            ]
+          }
+        }
+      }
+    },
+    "operations-portal": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "style": "css",
+          "changeDetection": "OnPush"
+        }
+      },
+      "root": "projects/operations-portal",
+      "sourceRoot": "projects/operations-portal/src",
+      "prefix": "pf",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "projects/operations-portal/src/main.ts",
+            "tsConfig": "projects/operations-portal/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "projects/operations-portal/public"
+              },
+              {
+                "glob": "**/*",
+                "input": "projects/shared/i18n",
+                "output": "i18n/shared"
+              },
+              {
+                "glob": "mockServiceWorker.js",
+                "input": "projects/shared/public",
+                "output": "/"
+              }
+            ],
+            "styles": ["projects/operations-portal/src/styles.css"]
+          },
+          "configurations": {
+            "production": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/operations-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/operations-portal/config/production",
+                  "output": "/"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "1MB",
+                  "maximumError": "1.5MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/operations-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "mockServiceWorker.js",
+                  "input": "projects/shared/public",
+                  "output": "/"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/operations-portal/config/mock",
+                  "output": "/"
+                }
+              ],
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            },
+            "gateway": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/operations-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/operations-portal/config/gateway",
+                  "output": "/"
+                }
+              ],
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 4202
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "operations-portal:build:production"
+            },
+            "development": {
+              "buildTarget": "operations-portal:build:development"
+            },
+            "gateway": {
+              "buildTarget": "operations-portal:build:gateway",
+              "proxyConfig": "proxy.conf.json"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "projects/operations-portal/tsconfig.spec.json",
+            "runner": "vitest"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": [
+              "projects/operations-portal/**/*.ts",
+              "projects/operations-portal/**/*.html"
+            ]
+          }
+        }
+      }
+    },
+    "admin-portal": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "style": "css",
+          "changeDetection": "OnPush"
+        }
+      },
+      "root": "projects/admin-portal",
+      "sourceRoot": "projects/admin-portal/src",
+      "prefix": "pf",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "browser": "projects/admin-portal/src/main.ts",
+            "tsConfig": "projects/admin-portal/tsconfig.app.json",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "projects/admin-portal/public"
+              },
+              {
+                "glob": "**/*",
+                "input": "projects/shared/i18n",
+                "output": "i18n/shared"
+              },
+              {
+                "glob": "mockServiceWorker.js",
+                "input": "projects/shared/public",
+                "output": "/"
+              }
+            ],
+            "styles": ["projects/admin-portal/src/styles.css"]
+          },
+          "configurations": {
+            "production": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/admin-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/admin-portal/config/production",
+                  "output": "/"
+                }
+              ],
+              "budgets": [
+                {
+                  "type": "initial",
+                  "maximumWarning": "1MB",
+                  "maximumError": "1.5MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "outputHashing": "all"
+            },
+            "development": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/admin-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "mockServiceWorker.js",
+                  "input": "projects/shared/public",
+                  "output": "/"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/admin-portal/config/mock",
+                  "output": "/"
+                }
+              ],
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            },
+            "gateway": {
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "projects/admin-portal/public"
+                },
+                {
+                  "glob": "**/*",
+                  "input": "projects/shared/i18n",
+                  "output": "i18n/shared"
+                },
+                {
+                  "glob": "config.json",
+                  "input": "projects/admin-portal/config/gateway",
+                  "output": "/"
+                }
+              ],
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "port": 4203
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "admin-portal:build:production"
+            },
+            "development": {
+              "buildTarget": "admin-portal:build:development"
+            },
+            "gateway": {
+              "buildTarget": "admin-portal:build:gateway",
+              "proxyConfig": "proxy.conf.json"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "projects/admin-portal/tsconfig.spec.json",
+            "runner": "vitest"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["projects/admin-portal/**/*.ts", "projects/admin-portal/**/*.html"]
+          }
+        }
+      }
+    },
+    "shared": {
+      "projectType": "library",
+      "root": "projects/shared",
+      "sourceRoot": "projects/shared/src",
+      "prefix": "pf",
+      "architect": {
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "customer-portal:build:development",
+            "tsConfig": "projects/shared/tsconfig.spec.json",
+            "runner": "vitest"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["projects/shared/**/*.ts", "projects/shared/**/*.html"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "apiBaseUrl": "",
+  "authMode": "keycloak",
+  "mockApi": false,
+  "keycloak": {
+    "url": "https://auth.parcelflow.example",
+    "realm": "parcelflow",
+    "clientId": "parcelflow-customer"
+  }
+}

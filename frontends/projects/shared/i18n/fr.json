@@ -1,0 +1,160 @@
+{
+  "common": {
+    "actions": "Actions",
+    "add": "Ajouter",
+    "back": "Retour",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "confirm": "Confirmer",
+    "create": "Créer",
+    "delete": "Supprimer",
+    "details": "Détails",
+    "download": "Télécharger",
+    "edit": "Modifier",
+    "empty": "Aucun élément à afficher.",
+    "loading": "Chargement…",
+    "next": "Suivant",
+    "no": "Non",
+    "previous": "Précédent",
+    "refresh": "Actualiser",
+    "retry": "Réessayer",
+    "save": "Enregistrer",
+    "search": "Rechercher",
+    "yes": "Oui",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "status": "Statut",
+    "createdAt": "Créé le",
+    "confirmTitle": "Confirmation",
+    "deleteConfirm": "Confirmez-vous la suppression ?",
+    "saved": "Modifications enregistrées.",
+    "created": "Élément créé.",
+    "deleted": "Élément supprimé."
+  },
+  "layout": {
+    "language": "Langue",
+    "languages": { "fr": "Français", "en": "English" },
+    "login": "Se connecter",
+    "logout": "Se déconnecter",
+    "signedInAs": "Connecté en tant que {{name}}",
+    "mockMode": "Mode démonstration",
+    "mockIdentity": "Identité simulée",
+    "openMenu": "Ouvrir le menu",
+    "mainNavigation": "Navigation principale",
+    "skipToContent": "Aller au contenu"
+  },
+  "pages": {
+    "forbidden": {
+      "title": "Accès refusé",
+      "message": "Vous ne disposez pas des droits nécessaires pour consulter cette page."
+    },
+    "notFound": {
+      "title": "Page introuvable",
+      "message": "La page demandée n'existe pas ou a été déplacée."
+    },
+    "home": "Retour à l'accueil"
+  },
+  "errors": {
+    "title": "Erreur",
+    "traceId": "Référence : {{traceId}}",
+    "config": "La configuration de l'application est invalide ou inaccessible.",
+    "http": {
+      "0": "Le service est injoignable. Vérifiez votre connexion.",
+      "400": "Vérifiez les informations saisies.",
+      "401": "Votre session a expiré. Reconnectez-vous.",
+      "403": "Vous ne disposez pas des droits nécessaires.",
+      "404": "Aucun résultat trouvé.",
+      "409": "Cette opération entre en conflit avec l'état actuel.",
+      "413": "Le fichier envoyé est trop volumineux.",
+      "422": "La demande ne peut pas être traitée.",
+      "429": "Trop de requêtes. Réessayez dans quelques instants.",
+      "5xx": "Le service est indisponible. Réessayez dans quelques instants.",
+      "unknown": "Une erreur inattendue s'est produite."
+    }
+  },
+  "validation": {
+    "required": "Ce champ est obligatoire.",
+    "email": "Adresse e-mail invalide.",
+    "minlength": "{{requiredLength}} caractères minimum.",
+    "maxlength": "{{requiredLength}} caractères maximum.",
+    "min": "La valeur minimale est {{min}}.",
+    "max": "La valeur maximale est {{max}}.",
+    "pattern": "Format invalide.",
+    "countryCode": "Code pays ISO à 2 lettres (ex. FR).",
+    "invalid": "Valeur invalide."
+  },
+  "enum": {
+    "ParcelStatus": {
+      "Created": "Créé",
+      "PickedUp": "Pris en charge",
+      "InTransit": "En transit",
+      "AtSortingCenter": "En centre de tri",
+      "OutForDelivery": "En cours de livraison",
+      "Delivered": "Livré",
+      "Failed": "Échec de livraison",
+      "Returned": "Retourné"
+    },
+    "ShipmentStatus": {
+      "AwaitingPayment": "En attente de paiement",
+      "ReadyForPickup": "Prêt pour enlèvement",
+      "PaymentFailed": "Paiement refusé",
+      "PickedUp": "Pris en charge"
+    },
+    "DeliveryZone": {
+      "Domestic": "National",
+      "Europe": "Europe",
+      "International": "International"
+    },
+    "WarehouseKind": {
+      "Warehouse": "Entrepôt",
+      "SortingCenter": "Centre de tri"
+    },
+    "ScanDirection": {
+      "Entry": "Entrée",
+      "Exit": "Sortie"
+    },
+    "DeliveryRouteStatus": {
+      "Planned": "Planifiée",
+      "InProgress": "En cours",
+      "Completed": "Terminée"
+    },
+    "DeliveryStopStatus": {
+      "Pending": "À livrer",
+      "Delivered": "Livré",
+      "Failed": "Échec"
+    },
+    "DeliveryOutcome": {
+      "Delivered": "Livré",
+      "Failed": "Échec"
+    },
+    "DeliveryFailureReason": {
+      "RecipientAbsent": "Destinataire absent",
+      "AddressNotFound": "Adresse introuvable",
+      "RecipientRefused": "Refusé par le destinataire"
+    },
+    "InvoiceStatus": {
+      "PendingPayment": "En attente de paiement",
+      "Paid": "Payée",
+      "PaymentFailed": "Paiement refusé",
+      "PartiallyCredited": "Partiellement remboursée",
+      "Credited": "Remboursée"
+    },
+    "MockPaymentOutcome": {
+      "Approved": "Accepté",
+      "Declined": "Refusé"
+    },
+    "CreditReason": {
+      "BillingCorrection": "Correction de facturation",
+      "ServiceIssue": "Incident de service"
+    },
+    "NotificationChannel": {
+      "Email": "E-mail",
+      "Sms": "SMS"
+    },
+    "Role": {
+      "customer": "Client",
+      "operator": "Opérateur",
+      "admin": "Administrateur"
+    }
+  }
+}

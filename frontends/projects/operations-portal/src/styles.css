@@ -1,0 +1,11 @@
+@import '../../shared/styles/parcelflow.css';
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+}

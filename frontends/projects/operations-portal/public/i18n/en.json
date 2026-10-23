@@ -1,0 +1,5 @@
+{
+  "app": { "title": "Operations" },
+  "nav": { "home": "Home" },
+  "home": { "title": "Operations", "subtitle": "Welcome to ParcelFlow." }
+}

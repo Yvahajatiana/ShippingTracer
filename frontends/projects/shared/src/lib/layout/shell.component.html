@@ -1,0 +1,132 @@
+<a
+  href="#pf-main"
+  class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:p-2"
+>
+  {{ 'layout.skipToContent' | transloco }}
+</a>
+
+<hlm-toaster position="top-right" [richColors]="true" [closeButton]="true" />
+<pf-confirm-dialog />
+
+<div class="flex min-h-screen flex-col bg-muted/40">
+  <header class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background px-4">
+    <hlm-sheet side="left" #sheet="hlmSheet">
+      <button
+        hlmSheetTrigger
+        hlmBtn
+        variant="ghost"
+        size="icon"
+        class="lg:hidden"
+        [attr.aria-label]="'layout.openMenu' | transloco"
+      >
+        <ng-icon name="lucideMenu" />
+      </button>
+      <hlm-sheet-content *hlmSheetPortal class="p-4">
+        <div hlmSheetHeader>
+          <h2 hlmSheetTitle>{{ titleKey() | transloco }}</h2>
+        </div>
+        <nav [attr.aria-label]="'layout.mainNavigation' | transloco">
+          <ng-container *ngTemplateOutlet="navList; context: { $implicit: sheet }" />
+        </nav>
+      </hlm-sheet-content>
+    </hlm-sheet>
+
+    <a routerLink="/" class="flex min-w-0 items-center gap-2 font-semibold">
+      <ng-icon name="lucidePackage" class="text-xl text-primary" />
+      <span class="hidden sm:inline">ParcelFlow ·</span>
+      <span class="truncate text-muted-foreground">{{ titleKey() | transloco }}</span>
+    </a>
+
+    <div class="ml-auto flex items-center gap-2">
+      @if (mockAuth) {
+        <span
+          class="hidden rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning md:inline"
+        >
+          {{ 'layout.mockMode' | transloco }}
+        </span>
+        <label hlmLabel class="sr-only" for="pf-mock-identity">{{
+          'layout.mockIdentity' | transloco
+        }}</label>
+        <hlm-native-select
+          class="hidden w-44 md:block"
+          size="sm"
+          selectId="pf-mock-identity"
+          [value]="auth.user()?.subject ?? ''"
+          (valueChange)="switchIdentity($event)"
+        >
+          @if (!auth.user()) {
+            <option value="" disabled>{{ 'layout.mockIdentity' | transloco }}</option>
+          }
+          @for (identity of mockIdentities; track identity.subject) {
+            <option [value]="identity.subject">{{ identity.displayName }}</option>
+          }
+        </hlm-native-select>
+      }
+
+      <label hlmLabel class="sr-only" for="pf-language">{{ 'layout.language' | transloco }}</label>
+      <hlm-native-select
+        class="w-28"
+        size="sm"
+        selectId="pf-language"
+        [value]="language.language()"
+        (valueChange)="changeLanguage($event)"
+      >
+        @for (code of languages; track code) {
+          <option [value]="code">{{ 'layout.languages.' + code | transloco }}</option>
+        }
+      </hlm-native-select>
+
+      @if (auth.user(); as user) {
+        <span class="hidden text-sm text-muted-foreground lg:inline">
+          {{ 'layout.signedInAs' | transloco: { name: user.displayName } }}
+        </span>
+        <button
+          hlmBtn
+          variant="ghost"
+          size="icon"
+          [attr.aria-label]="'layout.logout' | transloco"
+          (click)="logout()"
+        >
+          <ng-icon name="lucideLogOut" />
+        </button>
+      } @else {
+        <button hlmBtn size="sm" (click)="login()">
+          <ng-icon name="lucideLogIn" />
+          {{ 'layout.login' | transloco }}
+        </button>
+      }
+    </div>
+  </header>
+
+  <div class="flex flex-1">
+    <nav
+      class="hidden w-64 shrink-0 border-r bg-background p-3 lg:block"
+      [attr.aria-label]="'layout.mainNavigation' | transloco"
+    >
+      <ng-container *ngTemplateOutlet="navList; context: { $implicit: null }" />
+    </nav>
+
+    <main id="pf-main" class="min-w-0 flex-1 p-4 md:p-6" tabindex="-1">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+<ng-template #navList let-sheet>
+  <ul class="flex flex-col gap-1">
+    @for (item of visibleNavigation(); track item.route) {
+      <li>
+        <a
+          [routerLink]="item.route"
+          routerLinkActive="bg-accent text-accent-foreground font-medium"
+          [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
+          (click)="sheet?.close()"
+          class="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          <ng-icon [name]="item.icon" class="text-base" />
+          <span>{{ item.labelKey | transloco }}</span>
+        </a>
+      </li>
+    }
+  </ul>
+</ng-template>

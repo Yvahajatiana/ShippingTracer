@@ -1,0 +1,160 @@
+{
+  "common": {
+    "actions": "Actions",
+    "add": "Add",
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "create": "Create",
+    "delete": "Delete",
+    "details": "Details",
+    "download": "Download",
+    "edit": "Edit",
+    "empty": "Nothing to display.",
+    "loading": "Loading…",
+    "next": "Next",
+    "no": "No",
+    "previous": "Previous",
+    "refresh": "Refresh",
+    "retry": "Retry",
+    "save": "Save",
+    "search": "Search",
+    "yes": "Yes",
+    "active": "Active",
+    "inactive": "Inactive",
+    "status": "Status",
+    "createdAt": "Created on",
+    "confirmTitle": "Confirmation",
+    "deleteConfirm": "Do you confirm the deletion?",
+    "saved": "Changes saved.",
+    "created": "Item created.",
+    "deleted": "Item deleted."
+  },
+  "layout": {
+    "language": "Language",
+    "languages": { "fr": "Français", "en": "English" },
+    "login": "Sign in",
+    "logout": "Sign out",
+    "signedInAs": "Signed in as {{name}}",
+    "mockMode": "Demo mode",
+    "mockIdentity": "Simulated identity",
+    "openMenu": "Open menu",
+    "mainNavigation": "Main navigation",
+    "skipToContent": "Skip to content"
+  },
+  "pages": {
+    "forbidden": {
+      "title": "Access denied",
+      "message": "You do not have the permissions required to view this page."
+    },
+    "notFound": {
+      "title": "Page not found",
+      "message": "The requested page does not exist or has been moved."
+    },
+    "home": "Back to home"
+  },
+  "errors": {
+    "title": "Error",
+    "traceId": "Reference: {{traceId}}",
+    "config": "The application configuration is invalid or unreachable.",
+    "http": {
+      "0": "The service cannot be reached. Check your connection.",
+      "400": "Please check the information you entered.",
+      "401": "Your session has expired. Please sign in again.",
+      "403": "You do not have the required permissions.",
+      "404": "No result found.",
+      "409": "This operation conflicts with the current state.",
+      "413": "The uploaded file is too large.",
+      "422": "The request cannot be processed.",
+      "429": "Too many requests. Please try again shortly.",
+      "5xx": "The service is unavailable. Please try again shortly.",
+      "unknown": "An unexpected error occurred."
+    }
+  },
+  "validation": {
+    "required": "This field is required.",
+    "email": "Invalid email address.",
+    "minlength": "At least {{requiredLength}} characters.",
+    "maxlength": "At most {{requiredLength}} characters.",
+    "min": "The minimum value is {{min}}.",
+    "max": "The maximum value is {{max}}.",
+    "pattern": "Invalid format.",
+    "countryCode": "Two-letter ISO country code (e.g. FR).",
+    "invalid": "Invalid value."
+  },
+  "enum": {
+    "ParcelStatus": {
+      "Created": "Created",
+      "PickedUp": "Picked up",
+      "InTransit": "In transit",
+      "AtSortingCenter": "At sorting centre",
+      "OutForDelivery": "Out for delivery",
+      "Delivered": "Delivered",
+      "Failed": "Delivery failed",
+      "Returned": "Returned"
+    },
+    "ShipmentStatus": {
+      "AwaitingPayment": "Awaiting payment",
+      "ReadyForPickup": "Ready for pickup",
+      "PaymentFailed": "Payment failed",
+      "PickedUp": "Picked up"
+    },
+    "DeliveryZone": {
+      "Domestic": "Domestic",
+      "Europe": "Europe",
+      "International": "International"
+    },
+    "WarehouseKind": {
+      "Warehouse": "Warehouse",
+      "SortingCenter": "Sorting centre"
+    },
+    "ScanDirection": {
+      "Entry": "Entry",
+      "Exit": "Exit"
+    },
+    "DeliveryRouteStatus": {
+      "Planned": "Planned",
+      "InProgress": "In progress",
+      "Completed": "Completed"
+    },
+    "DeliveryStopStatus": {
+      "Pending": "Pending",
+      "Delivered": "Delivered",
+      "Failed": "Failed"
+    },
+    "DeliveryOutcome": {
+      "Delivered": "Delivered",
+      "Failed": "Failed"
+    },
+    "DeliveryFailureReason": {
+      "RecipientAbsent": "Recipient absent",
+      "AddressNotFound": "Address not found",
+      "RecipientRefused": "Refused by recipient"
+    },
+    "InvoiceStatus": {
+      "PendingPayment": "Pending payment",
+      "Paid": "Paid",
+      "PaymentFailed": "Payment failed",
+      "PartiallyCredited": "Partially credited",
+      "Credited": "Credited"
+    },
+    "MockPaymentOutcome": {
+      "Approved": "Approved",
+      "Declined": "Declined"
+    },
+    "CreditReason": {
+      "BillingCorrection": "Billing correction",
+      "ServiceIssue": "Service issue"
+    },
+    "NotificationChannel": {
+      "Email": "Email",
+      "Sms": "SMS"
+    },
+    "Role": {
+      "customer": "Customer",
+      "operator": "Operator",
+      "admin": "Administrator"
+    }
+  }
+}
