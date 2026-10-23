@@ -1,0 +1,197 @@
+<pf-page-header
+  [title]="'dashboard.title' | transloco"
+  [subtitle]="'dashboard.subtitle' | transloco"
+/>
+
+<section hlmCard class="mb-6" [attr.aria-label]="'dashboard.range.title' | transloco">
+  <div hlmCardContent>
+    <form
+      class="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end"
+      [formGroup]="form"
+      (ngSubmit)="apply()"
+    >
+      <div class="grid gap-2">
+        <label hlmLabel for="kpi-from">{{ 'dashboard.range.from' | transloco }}</label>
+        <input hlmInput id="kpi-from" type="date" class="sm:w-44" formControlName="from" />
+        <pf-field-error [control]="form.controls.from" />
+      </div>
+      <div class="grid gap-2">
+        <label hlmLabel for="kpi-to">{{ 'dashboard.range.to' | transloco }}</label>
+        <input hlmInput id="kpi-to" type="date" class="sm:w-44" formControlName="to" />
+        <pf-field-error [control]="form.controls.to" />
+      </div>
+      <div class="flex gap-2">
+        <button hlmBtn type="submit" [disabled]="store.loading()">
+          <ng-icon name="lucideCalendarRange" />
+          {{ 'dashboard.range.apply' | transloco }}
+        </button>
+        <button hlmBtn variant="outline" type="button" (click)="reset()">
+          {{ 'dashboard.range.reset' | transloco }}
+        </button>
+      </div>
+    </form>
+    @if (form.hasError('rangeOrder') && form.touched) {
+      <p class="mt-2 text-sm text-destructive" role="alert">
+        {{ 'dashboard.range.invalid' | transloco }}
+      </p>
+    }
+    <p class="mt-3 text-sm text-muted-foreground">
+      {{
+        'dashboard.range.current'
+          | transloco: { from: (store.from() | pfDate: 'date'), to: (store.to() | pfDate: 'date') }
+      }}
+    </p>
+  </div>
+</section>
+
+@if (store.error(); as error) {
+  <pf-error-banner [error]="error" (retry)="store.reload()" />
+} @else if (store.loading() && !store.report()) {
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5" data-testid="kpi-skeleton">
+    @for (card of [1, 2, 3, 4, 5]; track card) {
+      <hlm-skeleton class="h-28 w-full rounded-xl" />
+    }
+  </div>
+  <div class="mt-6 grid gap-4 lg:grid-cols-2">
+    <hlm-skeleton class="h-72 w-full rounded-xl" />
+    <hlm-skeleton class="h-72 w-full rounded-xl" />
+  </div>
+} @else if (store.report(); as report) {
+  <div
+    class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
+    [class.opacity-60]="store.loading()"
+    [attr.aria-busy]="store.loading()"
+  >
+    <div hlmCard size="sm" data-testid="kpi-total">
+      <div hlmCardHeader>
+        <p hlmCardDescription class="flex items-center gap-2">
+          <ng-icon name="lucidePackage" aria-hidden="true" />
+          {{ 'dashboard.kpi.total' | transloco }}
+        </p>
+        <p class="mt-1 text-3xl font-semibold">
+          {{ report.totalShipments | pfNumber: 0 }}
+        </p>
+      </div>
+    </div>
+    <div hlmCard size="sm" data-testid="kpi-delivered">
+      <div hlmCardHeader>
+        <p hlmCardDescription class="flex items-center gap-2">
+          <ng-icon name="lucidePackageCheck" aria-hidden="true" />
+          {{ 'dashboard.kpi.delivered' | transloco }}
+        </p>
+        <p class="mt-1 text-3xl font-semibold text-success">
+          {{ report.deliveredShipments | pfNumber: 0 }}
+        </p>
+      </div>
+    </div>
+    <div hlmCard size="sm" data-testid="kpi-rate">
+      <div hlmCardHeader>
+        <p hlmCardDescription class="flex items-center gap-2">
+          <ng-icon name="lucidePercent" aria-hidden="true" />
+          {{ 'dashboard.kpi.rate' | transloco }}
+        </p>
+        <p class="mt-1 text-3xl font-semibold">
+          @if (report.deliveryRatePercent !== null) {
+            {{
+              'dashboard.kpi.percent'
+                | transloco: { value: (report.deliveryRatePercent | pfNumber: 1) }
+            }}
+          } @else {
+            <span class="text-muted-foreground">{{
+              'dashboard.kpi.notAvailable' | transloco
+            }}</span>
+          }
+        </p>
+      </div>
+    </div>
+    <div hlmCard size="sm" data-testid="kpi-delivery-hours">
+      <div hlmCardHeader>
+        <p hlmCardDescription class="flex items-center gap-2">
+          <ng-icon name="lucideClock" aria-hidden="true" />
+          {{ 'dashboard.kpi.deliveryHours' | transloco }}
+        </p>
+        <p class="mt-1 text-3xl font-semibold">
+          @if (report.averageDeliveryHours !== null) {
+            {{
+              'dashboard.kpi.hours'
+                | transloco: { value: (report.averageDeliveryHours | pfNumber: 1) }
+            }}
+          } @else {
+            <span class="text-muted-foreground">{{
+              'dashboard.kpi.notAvailable' | transloco
+            }}</span>
+          }
+        </p>
+        <p class="text-xs text-muted-foreground">
+          {{ 'dashboard.kpi.samples' | transloco: { count: report.deliveryDurationSamples } }}
+        </p>
+      </div>
+    </div>
+    <div hlmCard size="sm" data-testid="kpi-transit-hours">
+      <div hlmCardHeader>
+        <p hlmCardDescription class="flex items-center gap-2">
+          <ng-icon name="lucideTruck" aria-hidden="true" />
+          {{ 'dashboard.kpi.transitHours' | transloco }}
+        </p>
+        <p class="mt-1 text-3xl font-semibold">
+          @if (report.averageTransitHours !== null) {
+            {{
+              'dashboard.kpi.hours'
+                | transloco: { value: (report.averageTransitHours | pfNumber: 1) }
+            }}
+          } @else {
+            <span class="text-muted-foreground">{{
+              'dashboard.kpi.notAvailable' | transloco
+            }}</span>
+          }
+        </p>
+        <p class="text-xs text-muted-foreground">
+          {{ 'dashboard.kpi.samples' | transloco: { count: report.transitDurationSamples } }}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  @if (store.isEmpty()) {
+    <pf-empty-state
+      class="mt-6"
+      icon="lucidePackage"
+      [title]="'dashboard.empty.title' | transloco"
+      [description]="'dashboard.empty.description' | transloco"
+    />
+  } @else {
+    <div class="mt-6 grid gap-4 lg:grid-cols-2">
+      <section hlmCard>
+        <div hlmCardHeader>
+          <h2 hlmCardTitle>{{ 'dashboard.charts.daily' | transloco }}</h2>
+        </div>
+        <div hlmCardContent>
+          <pf-chart
+            type="bar"
+            class="h-64"
+            [labels]="dailyLabels()"
+            [series]="dailySeries()"
+            [ariaLabel]="'dashboard.charts.daily' | transloco"
+          />
+        </div>
+      </section>
+      <section hlmCard>
+        <div hlmCardHeader>
+          <h2 hlmCardTitle>{{ 'dashboard.charts.status' | transloco }}</h2>
+        </div>
+        <div hlmCardContent>
+          <pf-chart
+            type="doughnut"
+            class="h-64"
+            [labels]="statusLabels()"
+            [series]="statusSeries()"
+            [ariaLabel]="'dashboard.charts.status' | transloco"
+          />
+        </div>
+      </section>
+    </div>
+  }
+  <p class="mt-4 text-xs text-muted-foreground">
+    {{ 'dashboard.generatedAt' | transloco: { date: (report.generatedAtUtc | pfDate) } }}
+  </p>
+}

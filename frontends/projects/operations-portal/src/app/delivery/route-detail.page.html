@@ -1,0 +1,364 @@
+<a hlmBtn variant="ghost" size="sm" class="mb-2 -ml-2" routerLink="/delivery/routes">
+  <ng-icon name="lucideArrowLeft" />
+  {{ 'routes.backToList' | transloco }}
+</a>
+
+@if (store.error(); as error) {
+  <pf-error-banner [error]="error" (retry)="store.load(id())" />
+} @else if (store.loading() && !store.route()) {
+  <hlm-skeleton class="mb-6 h-10 w-64" />
+  <pf-list-skeleton [rows]="5" />
+} @else if (store.route(); as route) {
+  <pf-page-header
+    [title]="route.name"
+    [subtitle]="
+      'routes.detail.serviceDate' | transloco: { date: (route.serviceDate | pfDate: 'date') }
+    "
+  >
+    <pf-status-tag type="DeliveryRouteStatus" [value]="route.status" />
+    @if (store.isPlanned()) {
+      <button
+        hlmBtn
+        type="button"
+        data-testid="start-route"
+        [disabled]="!store.canStart() || store.busy() !== null"
+        (click)="start()"
+      >
+        @if (store.busy() === 'start') {
+          <hlm-spinner [aria-label]="'common.loading' | transloco" />
+        } @else {
+          <ng-icon name="lucidePlay" />
+        }
+        {{ 'routes.detail.start' | transloco }}
+      </button>
+    }
+  </pf-page-header>
+
+  @if (store.isPlanned() && !store.canStart()) {
+    <p class="mb-4 rounded-md bg-info/10 p-3 text-sm text-info" role="status">
+      {{ 'routes.detail.startRequirements' | transloco }}
+    </p>
+  }
+
+  <div class="grid gap-6 lg:grid-cols-3">
+    <div class="space-y-6">
+      <section hlmCard>
+        <div hlmCardHeader>
+          <h2 hlmCardTitle>{{ 'routes.detail.driver' | transloco }}</h2>
+        </div>
+        <div hlmCardContent class="space-y-3">
+          @if (store.isPlanned()) {
+            <label hlmLabel for="route-driver">{{
+              'routes.detail.chooseDriver' | transloco
+            }}</label>
+            <hlm-native-select
+              class="w-full"
+              selectId="route-driver"
+              [value]="selectedDriver()"
+              (valueChange)="selectedDriver.set($event ?? '')"
+            >
+              <option value="" disabled [selected]="!selectedDriver()">
+                {{ 'routes.detail.noDriver' | transloco }}
+              </option>
+              @for (driver of store.activeDrivers(); track driver.subject) {
+                <option [value]="driver.subject" [selected]="driver.subject === selectedDriver()">
+                  {{ driver.displayName }}
+                </option>
+              }
+            </hlm-native-select>
+            <button
+              hlmBtn
+              variant="outline"
+              type="button"
+              class="w-full"
+              data-testid="assign-driver"
+              [disabled]="
+                !selectedDriver() ||
+                selectedDriver() === route.driverSubject ||
+                store.busy() !== null
+              "
+              (click)="assignDriver()"
+            >
+              @if (store.busy() === 'driver') {
+                <hlm-spinner [aria-label]="'common.loading' | transloco" />
+              } @else {
+                <ng-icon name="lucideUserCheck" />
+              }
+              {{ 'routes.detail.assignDriver' | transloco }}
+            </button>
+          }
+          <p class="text-sm" data-testid="route-driver-name">
+            @if (store.driverName(); as name) {
+              {{ 'routes.detail.assignedTo' | transloco: { name: name } }}
+            } @else {
+              <span class="text-muted-foreground">{{ 'routes.detail.noDriver' | transloco }}</span>
+            }
+          </p>
+        </div>
+      </section>
+
+      <section hlmCard>
+        <div hlmCardHeader>
+          <h2 hlmCardTitle>{{ 'routes.detail.progress' | transloco }}</h2>
+        </div>
+        <div hlmCardContent class="space-y-3">
+          <hlm-progress
+            [value]="store.progress().percent"
+            [attr.aria-label]="'routes.detail.progress' | transloco"
+          >
+            <hlm-progress-indicator />
+          </hlm-progress>
+          <dl class="grid grid-cols-3 gap-2 text-center text-sm">
+            <div>
+              <dt class="text-xs text-muted-foreground">
+                {{ 'enum.DeliveryStopStatus.Pending' | transloco }}
+              </dt>
+              <dd class="text-lg font-semibold">{{ store.progress().pending }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-muted-foreground">
+                {{ 'enum.DeliveryStopStatus.Delivered' | transloco }}
+              </dt>
+              <dd class="text-lg font-semibold text-success">{{ store.progress().delivered }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-muted-foreground">
+                {{ 'enum.DeliveryStopStatus.Failed' | transloco }}
+              </dt>
+              <dd class="text-lg font-semibold text-destructive">{{ store.progress().failed }}</dd>
+            </div>
+          </dl>
+          @if (route.startedAtUtc) {
+            <p class="text-xs text-muted-foreground">
+              {{ 'routes.detail.startedAt' | transloco: { date: (route.startedAtUtc | pfDate) } }}
+            </p>
+          }
+          @if (route.completedAtUtc) {
+            <p class="text-xs text-muted-foreground">
+              {{
+                'routes.detail.completedAt' | transloco: { date: (route.completedAtUtc | pfDate) }
+              }}
+            </p>
+          }
+        </div>
+      </section>
+
+      @if (store.isPlanned()) {
+        <section hlmCard data-testid="add-stop">
+          <div hlmCardHeader>
+            <h2 hlmCardTitle>{{ 'routes.detail.addStop' | transloco }}</h2>
+            <p hlmCardDescription>{{ 'routes.detail.addStopHint' | transloco }}</p>
+            <div hlmCardAction>
+              <button
+                hlmBtn
+                variant="ghost"
+                size="icon-sm"
+                type="button"
+                [attr.aria-label]="'routes.detail.refreshParcels' | transloco"
+                (click)="store.reloadParcels()"
+              >
+                <ng-icon name="lucideRefreshCw" />
+              </button>
+            </div>
+          </div>
+          <div hlmCardContent class="space-y-3">
+            @if (store.parcelsLoading() && store.parcels().length === 0) {
+              <hlm-skeleton class="h-9 w-full" />
+            } @else if (store.parcels().length === 0) {
+              <p class="text-sm text-muted-foreground">
+                {{ 'routes.detail.noParcels' | transloco }}
+              </p>
+            } @else {
+              <label hlmLabel for="route-parcel">{{ 'routes.detail.parcel' | transloco }}</label>
+              <hlm-native-select
+                class="w-full"
+                selectId="route-parcel"
+                [value]="selectedParcel()"
+                (valueChange)="selectedParcel.set($event ?? '')"
+              >
+                <option value="" disabled [selected]="!selectedParcel()">
+                  {{ 'routes.detail.chooseParcel' | transloco }}
+                </option>
+                @for (parcel of store.parcels(); track parcel.shipmentId) {
+                  <option
+                    [value]="parcel.shipmentId"
+                    [selected]="parcel.shipmentId === selectedParcel()"
+                  >
+                    {{ parcel.trackingNumber }}
+                  </option>
+                }
+              </hlm-native-select>
+              <button
+                hlmBtn
+                variant="outline"
+                type="button"
+                class="w-full"
+                data-testid="add-stop-submit"
+                [disabled]="!selectedParcel() || store.busy() !== null"
+                (click)="addStop()"
+              >
+                @if (store.busy() === 'addStop') {
+                  <hlm-spinner [aria-label]="'common.loading' | transloco" />
+                } @else {
+                  <ng-icon name="lucidePlus" />
+                }
+                {{ 'routes.detail.addStopAction' | transloco }}
+              </button>
+            }
+          </div>
+        </section>
+      }
+    </div>
+
+    <section hlmCard class="lg:col-span-2">
+      <div hlmCardHeader>
+        <h2 hlmCardTitle>{{ 'routes.detail.stops' | transloco }}</h2>
+        <p hlmCardDescription>
+          {{ 'routes.detail.stopCount' | transloco: { count: store.progress().total } }}
+        </p>
+      </div>
+      <div hlmCardContent>
+        @if (store.stops().length === 0) {
+          <pf-empty-state [title]="'routes.detail.noStops' | transloco" />
+        } @else {
+          <ol class="space-y-3" data-testid="stops">
+            @for (stop of store.stops(); track stop.shipmentId) {
+              <li
+                class="flex flex-wrap items-center gap-3 rounded-lg border bg-background p-3"
+                [attr.data-status]="stop.status"
+              >
+                <div class="flex min-w-0 flex-1 items-start gap-3">
+                  <span
+                    class="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold"
+                    [attr.aria-label]="
+                      'routes.detail.sequence' | transloco: { sequence: stop.sequence }
+                    "
+                    >{{ stop.sequence }}</span
+                  >
+                  <div class="min-w-0">
+                    <a
+                      class="font-mono font-medium break-all text-primary hover:underline"
+                      [routerLink]="['/shipments', stop.shipmentId]"
+                      >{{ label(stop) }}</a
+                    >
+                    @if (stop.recipientName) {
+                      <p class="text-sm text-muted-foreground">
+                        {{ stop.recipientName }}
+                        @if (stop.city) {
+                          · {{ stop.city }}
+                        }
+                      </p>
+                    }
+                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                      <pf-status-tag type="DeliveryStopStatus" [value]="stop.status" />
+                      @if (stop.failureReason) {
+                        <pf-status-tag type="DeliveryFailureReason" [value]="stop.failureReason" />
+                      }
+                      @if (stop.completedAtUtc) {
+                        <span class="text-xs text-muted-foreground">{{
+                          stop.completedAtUtc | pfDate
+                        }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+                <div
+                  class="ml-auto flex gap-2 sm:basis-auto"
+                  [class.basis-full]="!store.isPlanned()"
+                >
+                  @if (store.isPlanned()) {
+                    <button
+                      hlmBtn
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      [attr.aria-label]="
+                        'routes.detail.removeStopLabel' | transloco: { number: label(stop) }
+                      "
+                      [disabled]="store.busy() !== null"
+                      (click)="removeStop(stop)"
+                    >
+                      <ng-icon name="lucideTrash2" class="text-destructive" />
+                    </button>
+                  } @else if (store.isInProgress() && stop.status === 'Pending') {
+                    <button
+                      hlmBtn
+                      type="button"
+                      class="flex-1 sm:flex-none"
+                      data-testid="open-confirm-delivery"
+                      (click)="open('confirm', stop)"
+                    >
+                      <ng-icon name="lucideCircleCheck" />
+                      {{ 'routes.delivery.deliver' | transloco }}
+                    </button>
+                    <button
+                      hlmBtn
+                      variant="outline"
+                      type="button"
+                      class="flex-1 sm:flex-none"
+                      data-testid="open-fail-delivery"
+                      (click)="open('fail', stop)"
+                    >
+                      <ng-icon name="lucideCircleX" />
+                      {{ 'routes.delivery.fail' | transloco }}
+                    </button>
+                  } @else if (stop.status !== 'Pending') {
+                    <button
+                      hlmBtn
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      class="w-full sm:w-auto"
+                      data-testid="open-proof"
+                      (click)="open('proof', stop)"
+                    >
+                      <ng-icon name="lucideEye" />
+                      {{ 'routes.proof.view' | transloco }}
+                    </button>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        }
+      </div>
+    </section>
+  </div>
+}
+
+<hlm-dialog [state]="dialogState()" (closed)="closeDialog()">
+  <hlm-dialog-content
+    *hlmDialogPortal="let ctx"
+    class="max-h-[90dvh] overflow-y-auto sm:max-w-lg"
+    [closeLabel]="'common.close' | transloco"
+  >
+    @if (dialog(); as current) {
+      @switch (current.kind) {
+        @case ('confirm') {
+          <pf-confirm-delivery-form
+            [shipmentId]="current.stop.shipmentId"
+            [trackingNumber]="label(current.stop)"
+            [defaultRecipient]="current.stop.recipientName"
+            (completed)="closeDialog()"
+            (cancelled)="closeDialog()"
+          />
+        }
+        @case ('fail') {
+          <pf-fail-delivery-form
+            [shipmentId]="current.stop.shipmentId"
+            [trackingNumber]="label(current.stop)"
+            (completed)="closeDialog()"
+            (cancelled)="closeDialog()"
+          />
+        }
+        @case ('proof') {
+          <pf-proof-view
+            [routeId]="id()"
+            [shipmentId]="current.stop.shipmentId"
+            [trackingNumber]="label(current.stop)"
+          />
+        }
+      }
+    }
+  </hlm-dialog-content>
+</hlm-dialog>
