@@ -1,0 +1,46 @@
+# Build context for the .NET host images is the repository root.
+# The Dockerfiles only copy global.json, Directory.Build.props and src/.
+
+# Version control and tooling
+.git
+.gitattributes
+.gitignore
+.gitleaks.toml
+.github
+.claude
+.config
+.tools
+.dotnet
+.vs
+.vscode
+.idea
+
+# Parts of the monorepo not needed by the .NET images
+# (frontends/ ships its own Dockerfile and .dockerignore)
+frontends/
+tests/
+docs/
+deploy/
+*.md
+
+# Build outputs and caches
+**/bin/
+**/obj/
+**/TestResults/
+**/node_modules/
+**/dist/
+**/*.log
+**/*.user
+**/*.suo
+
+# Local secrets and environment files
+**/.env
+**/.env.*
+
+# Docker files themselves: BuildKit still reads the selected Dockerfile, and
+# excluding them keeps source layers cached when only a Dockerfile changes.
+**/Dockerfile
+**/Dockerfile.*
+**/.dockerignore
+docker-compose*.yml
+compose*.yml

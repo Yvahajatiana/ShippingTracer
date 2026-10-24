@@ -100,5 +100,5 @@ Le job CI `frontends` exécute audit npm, formatage, lint, tests et builds de pr
 
 ## Limites connues
 
-- Le realm Keycloak (clients publics, rôles, mappers d'audience vers `customer-api`, `shipment-api`…) n'est pas encore versionné : il sera fourni avec l'étape Docker.
+- Le realm Keycloak (clients publics, rôles, mappers d'audience) est versionné dans `deploy/keycloak` et importé par la plateforme Docker Compose (voir `docs/docker.md`).
 - Les données simulées simplifient certaines règles métier (tarification, saga de paiement) et ne remplacent pas les tests d'intégration des services.

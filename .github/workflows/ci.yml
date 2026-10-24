@@ -168,3 +168,142 @@ jobs:
         run: npm test
       - name: Production builds
         run: npm run build
+
+  docker-lint:
+    name: Dockerfile lint and compose validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # Lints every file named Dockerfile with the ignores documented in .hadolint.yaml.
+      # Pinned to the commit of v3.5.0, which bundles hadolint v2.15.1.
+      - name: Lint Dockerfiles with hadolint
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          recursive: true
+          config: .hadolint.yaml
+      # The compose file refuses to render without its required secrets; dummy values are enough here.
+      - name: Validate docker-compose.yml
+        env:
+          POSTGRES_PASSWORD: ci-dummy
+          RABBITMQ_PASSWORD: ci-dummy
+          KEYCLOAK_ADMIN_PASSWORD: ci-dummy
+          NOTIFICATION_CLIENT_SECRET: ci-dummy
+          DEMO_USER_PASSWORD: ci-dummy
+        run: docker compose --file docker-compose.yml config --quiet
+
+  images:
+    name: Image (${{ matrix.image.name }})
+    # Publication also requires a clean secret scan and Dockerfile lint. Integration and smoke
+    # tests are enforced before the merge by branch protection, so they do not delay the builds.
+    needs: [secret-scan, build, frontends, docker-lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Permissions cannot depend on the event: packages:write is only used by the push steps,
+    # which are gated to push events on main and develop. Fork pull requests always receive a
+    # read-only token from GitHub. security-events:write uploads the Trivy SARIF report.
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: gateway, context: ., dockerfile: src/Gateway/ParcelFlow.Gateway/Dockerfile, portal: '' }
+          - { name: customer, context: ., dockerfile: src/Services/Customer/ParcelFlow.Customer.Api/Dockerfile, portal: '' }
+          - { name: shipment, context: ., dockerfile: src/Services/Shipment/ParcelFlow.Shipment.Api/Dockerfile, portal: '' }
+          - { name: tracking, context: ., dockerfile: src/Services/Tracking/ParcelFlow.Tracking.Api/Dockerfile, portal: '' }
+          - { name: warehouse, context: ., dockerfile: src/Services/Warehouse/ParcelFlow.Warehouse.Api/Dockerfile, portal: '' }
+          - { name: delivery, context: ., dockerfile: src/Services/Delivery/ParcelFlow.Delivery.Api/Dockerfile, portal: '' }
+          - { name: billing, context: ., dockerfile: src/Services/Billing/ParcelFlow.Billing.Api/Dockerfile, portal: '' }
+          - { name: notification, context: ., dockerfile: src/Services/Notification/ParcelFlow.Notification.Api/Dockerfile, portal: '' }
+          - { name: reporting, context: ., dockerfile: src/Services/Reporting/ParcelFlow.Reporting.Api/Dockerfile, portal: '' }
+          - { name: customer-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: customer-portal }
+          - { name: operations-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: operations-portal }
+          - { name: admin-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: admin-portal }
+          - { name: rabbitmq, context: deploy/rabbitmq, dockerfile: deploy/rabbitmq/Dockerfile, portal: '' }
+    env:
+      # Only branch pushes to this repository publish; pull requests and forks build and scan only.
+      PUBLISH: ${{ github.event_name == 'push' && !github.event.repository.fork && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') }}
+      SCAN_REF: local/parcelflow-${{ matrix.image.name }}:scan
+    steps:
+      - uses: actions/checkout@v7
+      # GHCR repository names must be lower case.
+      - name: Resolve image name
+        id: image
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/parcelflow-${{ matrix.image.name }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      # No semver tags: the workflow does not run on git tags.
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.name }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+      # Loaded into the local Docker engine so that Trivy scans, and docker push publishes, the
+      # very same image. OCI labels come from the Dockerfile and the VERSION/REVISION build args.
+      - name: Build
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.dockerfile }}
+          load: true
+          push: false
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ env.SCAN_REF }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            REVISION=${{ github.sha }}
+            ${{ matrix.image.portal != '' && format('PORTAL={0}', matrix.image.portal) || '' }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
+      # Pinned to the commit of v0.36.0 because trivy-action tags have been rewritten in the past.
+      - name: Scan with Trivy (fixable HIGH and CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.SCAN_REF }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: table
+          exit-code: '1'
+      # Second pass on the cached database for code scanning only. It never fails the job:
+      # the table scan above does.
+      - name: Trivy SARIF report
+        if: always() && steps.build.outcome == 'success' && github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.SCAN_REF }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-${{ matrix.image.name }}.sarif
+          exit-code: '0'
+      - name: Upload SARIF to code scanning
+        if: always() && steps.build.outcome == 'success' && github.event_name != 'pull_request'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.image.name }}.sarif
+          category: trivy-${{ matrix.image.name }}
+      - name: Log in to GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push to GHCR
+        if: env.PUBLISH == 'true'
+        run: docker push --all-tags "${{ steps.image.outputs.name }}"

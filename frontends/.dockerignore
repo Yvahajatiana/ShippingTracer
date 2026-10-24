@@ -1,0 +1,23 @@
+# Dependencies and build outputs are recreated inside the image.
+node_modules
+dist
+out-tsc
+tmp
+.angular
+.nx
+coverage
+__screenshots__
+
+# Logs and local tooling
+npm-debug.log*
+yarn-error.log
+testem.log
+.vscode
+.idea
+.history
+.DS_Store
+Thumbs.db
+
+# The Dockerfile itself is not needed in the build context.
+Dockerfile
+.dockerignore
