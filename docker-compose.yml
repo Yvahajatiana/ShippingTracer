@@ -79,16 +79,16 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
-      # Browsers and containers must see the same issuer: tokens are issued for localhost:8080
+      # Browsers and containers must see the same issuer: tokens are issued for localhost:KEYCLOAK_PORT
       # while services reach Keycloak on keycloak:8080 for metadata, keys and client credentials.
-      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HTTP_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
       NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?set NOTIFICATION_CLIENT_SECRET in .env}
       DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?set DEMO_USER_PASSWORD in .env}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:${KEYCLOAK_PORT:-8080}:8080"
     volumes:
       - ./deploy/keycloak:/opt/keycloak/data/import:ro
     healthcheck:
@@ -218,7 +218,7 @@ services:
       args:
         PORTAL: customer-portal
     environment:
-      KEYCLOAK_URL: http://localhost:8080
+      KEYCLOAK_URL: http://localhost:${KEYCLOAK_PORT:-8080}
       GATEWAY_URL: http://gateway:8080
     ports:
       - "127.0.0.1:4201:8080"
@@ -233,7 +233,7 @@ services:
       args:
         PORTAL: operations-portal
     environment:
-      KEYCLOAK_URL: http://localhost:8080
+      KEYCLOAK_URL: http://localhost:${KEYCLOAK_PORT:-8080}
       GATEWAY_URL: http://gateway:8080
     ports:
       - "127.0.0.1:4202:8080"
@@ -248,7 +248,7 @@ services:
       args:
         PORTAL: admin-portal
     environment:
-      KEYCLOAK_URL: http://localhost:8080
+      KEYCLOAK_URL: http://localhost:${KEYCLOAK_PORT:-8080}
       GATEWAY_URL: http://gateway:8080
     ports:
       - "127.0.0.1:4203:8080"
