@@ -186,10 +186,18 @@ function Invoke-Up {
         }
         $cpus = if ($env:PARCELFLOW_MINIKUBE_CPUS) { $env:PARCELFLOW_MINIKUBE_CPUS } else { '4' }
         $memory = if ($env:PARCELFLOW_MINIKUBE_MEMORY) { $env:PARCELFLOW_MINIKUBE_MEMORY } else { '8g' }
-        $startArgs = @('start', '-p', $KubeContext, '--driver=docker', "--cpus=$cpus", "--memory=$memory")
+        # --keep-context: never switch the user's current kubectl context to minikube.
+        $startArgs = @('start', '-p', $KubeContext, '--keep-context', '--driver=docker', "--cpus=$cpus", "--memory=$memory")
         if ($env:PARCELFLOW_MINIKUBE_CNI) { $startArgs += "--cni=$($env:PARCELFLOW_MINIKUBE_CNI)" }
+        # minikube still switches the current context when it restarts an existing profile: put the
+        # user's context back afterwards.
+        $previousContext = & $Kubectl config current-context 2>$null
+        if ($LASTEXITCODE -ne 0) { $previousContext = $null }
         Write-Step "Starting minikube profile $KubeContext"
         Invoke-Tool $Minikube @startArgs
+        if ($previousContext -and $previousContext -ne $KubeContext) {
+            Invoke-Tool $Kubectl config use-context $previousContext | Out-Null
+        }
     }
     Assert-LocalContext
 

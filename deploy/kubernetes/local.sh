@@ -147,10 +147,18 @@ cmd_up() {
 
   if ! cluster_running; then
     $start_cluster || die "minikube profile '$kube_context' is not running. Start it with 'up --start-cluster' or: minikube start -p $kube_context --driver=docker --cpus 4 --memory 8g"
-    local start_args=(start -p "$kube_context" --driver=docker "--cpus=${PARCELFLOW_MINIKUBE_CPUS:-4}" "--memory=${PARCELFLOW_MINIKUBE_MEMORY:-8g}")
+    # --keep-context: never switch the user's current kubectl context to minikube.
+    local start_args=(start -p "$kube_context" --keep-context --driver=docker "--cpus=${PARCELFLOW_MINIKUBE_CPUS:-4}" "--memory=${PARCELFLOW_MINIKUBE_MEMORY:-8g}")
     [[ -n "${PARCELFLOW_MINIKUBE_CNI:-}" ]] && start_args+=("--cni=$PARCELFLOW_MINIKUBE_CNI")
+    # minikube still switches the current context when it restarts an existing profile: put the
+    # user's context back afterwards.
+    local previous_context
+    previous_context=$("$kubectl" config current-context 2>/dev/null || true)
     step "Starting minikube profile $kube_context"
     "$minikube" "${start_args[@]}"
+    if [[ -n "$previous_context" && "$previous_context" != "$kube_context" ]]; then
+      "$kubectl" config use-context "$previous_context" >/dev/null
+    fi
   fi
   assert_local_context
 
