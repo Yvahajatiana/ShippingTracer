@@ -1,0 +1,36 @@
+{{- /*
+CPU-based HorizontalPodAutoscaler per workload (services, gateway, portals) when
+autoscaling.enabled; the Deployments then omit "replicas" so upgrades do not reset the scale.
+Requires the metrics-server and the CPU requests set in dotnetDefaults / portalDefaults.
+*/ -}}
+{{- if .Values.autoscaling.enabled }}
+{{- $root := . }}
+{{- $autoscaling := .Values.autoscaling }}
+{{- if gt (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas) }}
+{{- fail "autoscaling.minReplicas must not exceed autoscaling.maxReplicas" }}
+{{- end }}
+{{- range (include "parcelflow.workloads" . | fromYaml).items }}
+{{- $ctx := dict "root" $root "component" .component }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "parcelflow.componentName" $ctx }}
+  minReplicas: {{ $autoscaling.minReplicas }}
+  maxReplicas: {{ $autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}
