@@ -1,0 +1,195 @@
+{{- /*
+Bundled development PostgreSQL: one instance, one database per service (generated from
+.Values.services[*].database). Never for production: no backups, no replication, no TLS.
+*/ -}}
+{{- if .Values.infrastructure.enabled }}
+{{- $name := include "parcelflow.componentName" (dict "root" . "component" "postgres") }}
+{{- $ctx := dict "root" . "component" "postgres" }}
+{{- $pg := .Values.infrastructure.postgres }}
+{{- $databases := list }}
+{{- range $service, $config := .Values.services }}
+{{- with $config.database }}
+{{- if not (regexMatch "^[a-z_][a-z0-9_]{0,62}$" .) }}
+{{- fail (printf "services.%s.database %q must be a lower-case PostgreSQL identifier" $service .) }}
+{{- end }}
+{{- $databases = append $databases . }}
+{{- end }}
+{{- end }}
+{{- $databases = $databases | uniq | sortAlpha }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-init
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+data:
+  init-databases.sh: |
+    #!/bin/sh
+    # Creates one database per ParcelFlow service, owned by the application role.
+    # Runs once, on the first start of an empty data directory (docker-entrypoint-initdb.d).
+    # Databases added later are created by the services themselves in Development (EF Core
+    # migrations run as the owner role, which is a superuser in this development instance).
+    set -eu
+    for database in{{ range $databases }} {{ . }}{{ end }}
+    do
+      echo "Creating database ${database}"
+      psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
+        -c "CREATE DATABASE ${database} OWNER \"${POSTGRES_USER}\";"
+    done
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-headless
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "parcelflow.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "parcelflow.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ $name }}-headless
+  selector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      # No version label: an application tag bump must not restart the infrastructure.
+      labels:
+        {{- include "parcelflow.selectorLabels" $ctx | nindent 8 }}
+        app.kubernetes.io/part-of: parcelflow
+      annotations:
+        checksum/init: {{ $databases | toJson | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        # uid / gid of the "postgres" user of the alpine image.
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: {{ $pg.image }}
+          imagePullPolicy: {{ .Values.infrastructure.pullPolicy }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "parcelflow.secretName" . }}
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: postgres
+            # Subdirectory of the volume: the volume root may hold lost+found, which initdb rejects.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          # TCP on 127.0.0.1: the temporary server of the init phase only listens on the Unix socket,
+          # so the pod becomes ready once the databases exist and the real server accepts connections.
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", {{ .Values.database.username | quote }}, "-d", "postgres"]
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", {{ .Values.database.username | quote }}, "-d", "postgres"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", {{ .Values.database.username | quote }}, "-d", "postgres"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml $pg.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: shm
+              mountPath: /dev/shm
+      volumes:
+        - name: init
+          configMap:
+            name: {{ $name }}-init
+            # Executable: the entrypoint runs it in its own shell instead of sourcing it.
+            defaultMode: 0555
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        # Selector labels only: volume claim templates are immutable.
+        labels:
+          {{- include "parcelflow.selectorLabels" $ctx | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.infrastructure.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $pg.storage }}
+{{- end }}

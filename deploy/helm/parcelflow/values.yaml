@@ -219,14 +219,35 @@ infrastructure:
   postgres:
     image: postgres:16-alpine
     storage: 2Gi
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 1Gi }
   redis:
     image: redis:7-alpine
+    resources:
+      requests: { cpu: 20m, memory: 32Mi }
+      limits: { memory: 256Mi }
   rabbitmq:
     # ParcelFlow image built from deploy/rabbitmq (see image.registry / image.prefix).
     name: rabbitmq
     storage: 1Gi
+    # Memory RabbitMQ sizes its alarms from (it ignores the container limit): keep it below the
+    # memory limit, the high watermark being 40% of it.
+    totalMemoryAvailable: 800MB
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 1Gi }
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1
     # Realm JSON, passed with --set-file infrastructure.keycloak.realm=deploy/keycloak/parcelflow-realm.json
     realm: ""
+    # Bootstrap administrator of the master realm (password: secret key keycloak-admin-password).
+    adminUsername: admin
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 1536Mi }
+  # Empty: the cluster default StorageClass.
   storageClassName: ""
+  # Image pull policy of the public infrastructure images (postgres, redis, keycloak). The RabbitMQ
+  # image is a ParcelFlow image and follows image.pullPolicy.
+  pullPolicy: IfNotPresent

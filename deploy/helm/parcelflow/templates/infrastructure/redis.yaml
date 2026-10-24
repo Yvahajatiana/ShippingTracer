@@ -1,0 +1,92 @@
+{{- /*
+Bundled development Redis: cache only, no persistence and no password (as in docker compose).
+*/ -}}
+{{- if .Values.infrastructure.enabled }}
+{{- $name := include "parcelflow.componentName" (dict "root" . "component" "redis") }}
+{{- $ctx := dict "root" . "component" "redis" }}
+{{- $redis := .Values.infrastructure.redis }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "parcelflow.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  # Single instance without persistence: no point in surging a second one.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      # No version label: an application tag bump must not restart the infrastructure.
+      labels:
+        {{- include "parcelflow.selectorLabels" $ctx | nindent 8 }}
+        app.kubernetes.io/part-of: parcelflow
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        # uid / gid of the "redis" user of the alpine image.
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: {{ $redis.image }}
+          imagePullPolicy: {{ .Values.infrastructure.pullPolicy }}
+          args: ["redis-server", "--save", "", "--appendonly", "no"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          resources:
+            {{- toYaml $redis.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+{{- end }}

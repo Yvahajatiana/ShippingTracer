@@ -1,0 +1,152 @@
+{{- /*
+Bundled development Keycloak: start-dev (embedded H2, no volume) importing the ParcelFlow realm at
+every start, as in docker compose. Tokens carry the public issuer (keycloak.url, seen by browsers)
+while workloads use the in-cluster address thanks to KC_HOSTNAME_BACKCHANNEL_DYNAMIC.
+*/ -}}
+{{- if .Values.infrastructure.enabled }}
+{{- $name := include "parcelflow.componentName" (dict "root" . "component" "keycloak") }}
+{{- $ctx := dict "root" . "component" "keycloak" }}
+{{- $kc := .Values.infrastructure.keycloak }}
+{{- $realm := required "infrastructure.keycloak.realm is required with the bundled Keycloak: add --set-file infrastructure.keycloak.realm=deploy/keycloak/parcelflow-realm.json" $kc.realm }}
+{{- $secretName := include "parcelflow.secretName" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-realm
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+data:
+  # ${VARIABLE} placeholders are resolved by Keycloak from the container environment at import.
+  parcelflow-realm.json: |
+    {{- $realm | trim | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "parcelflow.selectorLabels" $ctx | nindent 4 }}
+  # The management port (9000, health) is deliberately not exposed.
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  # The embedded H2 database is per pod: never run two instances side by side.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      # No version label: an application tag bump must not restart Keycloak (and reset its data).
+      labels:
+        {{- include "parcelflow.selectorLabels" $ctx | nindent 8 }}
+        app.kubernetes.io/part-of: parcelflow
+      annotations:
+        checksum/realm: {{ $realm | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        # uid of the "keycloak" user of the image (group root, as built upstream).
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          image: {{ $kc.image }}
+          imagePullPolicy: {{ .Values.infrastructure.pullPolicy }}
+          args: ["start-dev", "--import-realm"]
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: {{ $kc.adminUsername | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: keycloak-admin-password
+            # Browsers and workloads must see the same issuer: the public URL here, in-cluster URLs for
+            # keys and the token endpoint when Keycloak is reached on its service name.
+            - name: KC_HOSTNAME
+              value: {{ include "parcelflow.keycloakPublicUrl" . | quote }}
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: NOTIFICATION_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: notification-client-secret
+            - name: DEMO_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: demo-user-password
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 72
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml $kc.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            # start-dev re-augments the server and writes its H2 database inside the image tree.
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import/parcelflow-realm.json
+              subPath: parcelflow-realm.json
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            name: {{ $name }}-realm
+{{- end }}
