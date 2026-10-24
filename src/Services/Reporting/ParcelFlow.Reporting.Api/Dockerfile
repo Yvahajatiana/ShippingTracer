@@ -15,9 +15,8 @@ WORKDIR /src
 # Restore layer: only the files that influence restore, so it stays cached
 # until a project file or a shared build setting changes.
 COPY global.json Directory.Build.props ./
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
+# Shared building blocks are copied whole: every service depends on them and new ones need no Dockerfile change.
+COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Reporting/ParcelFlow.Reporting.Domain/ParcelFlow.Reporting.Domain.csproj src/Services/Reporting/ParcelFlow.Reporting.Domain/
 COPY src/Services/Reporting/ParcelFlow.Reporting.Application/ParcelFlow.Reporting.Application.csproj src/Services/Reporting/ParcelFlow.Reporting.Application/
 COPY src/Services/Reporting/ParcelFlow.Reporting.Infrastructure/ParcelFlow.Reporting.Infrastructure.csproj src/Services/Reporting/ParcelFlow.Reporting.Infrastructure/
@@ -25,9 +24,6 @@ COPY src/Services/Reporting/ParcelFlow.Reporting.Api/ParcelFlow.Reporting.Api.cs
 RUN dotnet restore src/Services/Reporting/ParcelFlow.Reporting.Api/ParcelFlow.Reporting.Api.csproj -r linux-musl-x64
 
 # Sources of the project closure only.
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
 COPY src/Services/Reporting/ParcelFlow.Reporting.Domain/ src/Services/Reporting/ParcelFlow.Reporting.Domain/
 COPY src/Services/Reporting/ParcelFlow.Reporting.Application/ src/Services/Reporting/ParcelFlow.Reporting.Application/
 COPY src/Services/Reporting/ParcelFlow.Reporting.Infrastructure/ src/Services/Reporting/ParcelFlow.Reporting.Infrastructure/

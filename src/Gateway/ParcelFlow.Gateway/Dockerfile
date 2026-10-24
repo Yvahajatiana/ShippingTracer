@@ -15,14 +15,12 @@ WORKDIR /src
 # Restore layer: only the files that influence restore, so it stays cached
 # until a project file or a shared build setting changes.
 COPY global.json Directory.Build.props ./
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
+# Shared building blocks are copied whole: every service depends on them and new ones need no Dockerfile change.
+COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Gateway/ParcelFlow.Gateway/ParcelFlow.Gateway.csproj src/Gateway/ParcelFlow.Gateway/
 RUN dotnet restore src/Gateway/ParcelFlow.Gateway/ParcelFlow.Gateway.csproj -r linux-musl-x64
 
 # Sources of the project closure only.
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
 COPY src/Gateway/ParcelFlow.Gateway/ src/Gateway/ParcelFlow.Gateway/
 RUN dotnet publish src/Gateway/ParcelFlow.Gateway/ParcelFlow.Gateway.csproj \
         -c Release \

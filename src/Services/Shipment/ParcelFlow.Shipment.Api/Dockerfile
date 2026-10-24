@@ -15,9 +15,8 @@ WORKDIR /src
 # Restore layer: only the files that influence restore, so it stays cached
 # until a project file or a shared build setting changes.
 COPY global.json Directory.Build.props ./
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
+# Shared building blocks are copied whole: every service depends on them and new ones need no Dockerfile change.
+COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Shipment/ParcelFlow.Shipment.Domain/ParcelFlow.Shipment.Domain.csproj src/Services/Shipment/ParcelFlow.Shipment.Domain/
 COPY src/Services/Shipment/ParcelFlow.Shipment.Application/ParcelFlow.Shipment.Application.csproj src/Services/Shipment/ParcelFlow.Shipment.Application/
 COPY src/Services/Shipment/ParcelFlow.Shipment.Infrastructure/ParcelFlow.Shipment.Infrastructure.csproj src/Services/Shipment/ParcelFlow.Shipment.Infrastructure/
@@ -25,9 +24,6 @@ COPY src/Services/Shipment/ParcelFlow.Shipment.Api/ParcelFlow.Shipment.Api.cspro
 RUN dotnet restore src/Services/Shipment/ParcelFlow.Shipment.Api/ParcelFlow.Shipment.Api.csproj -r linux-musl-x64
 
 # Sources of the project closure only.
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
 COPY src/Services/Shipment/ParcelFlow.Shipment.Domain/ src/Services/Shipment/ParcelFlow.Shipment.Domain/
 COPY src/Services/Shipment/ParcelFlow.Shipment.Application/ src/Services/Shipment/ParcelFlow.Shipment.Application/
 COPY src/Services/Shipment/ParcelFlow.Shipment.Infrastructure/ src/Services/Shipment/ParcelFlow.Shipment.Infrastructure/

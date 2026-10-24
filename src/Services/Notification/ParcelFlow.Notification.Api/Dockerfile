@@ -15,9 +15,8 @@ WORKDIR /src
 # Restore layer: only the files that influence restore, so it stays cached
 # until a project file or a shared build setting changes.
 COPY global.json Directory.Build.props ./
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
+# Shared building blocks are copied whole: every service depends on them and new ones need no Dockerfile change.
+COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Notification/ParcelFlow.Notification.Domain/ParcelFlow.Notification.Domain.csproj src/Services/Notification/ParcelFlow.Notification.Domain/
 COPY src/Services/Notification/ParcelFlow.Notification.Application/ParcelFlow.Notification.Application.csproj src/Services/Notification/ParcelFlow.Notification.Application/
 COPY src/Services/Notification/ParcelFlow.Notification.Infrastructure/ParcelFlow.Notification.Infrastructure.csproj src/Services/Notification/ParcelFlow.Notification.Infrastructure/
@@ -25,9 +24,6 @@ COPY src/Services/Notification/ParcelFlow.Notification.Api/ParcelFlow.Notificati
 RUN dotnet restore src/Services/Notification/ParcelFlow.Notification.Api/ParcelFlow.Notification.Api.csproj -r linux-musl-x64
 
 # Sources of the project closure only.
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
 COPY src/Services/Notification/ParcelFlow.Notification.Domain/ src/Services/Notification/ParcelFlow.Notification.Domain/
 COPY src/Services/Notification/ParcelFlow.Notification.Application/ src/Services/Notification/ParcelFlow.Notification.Application/
 COPY src/Services/Notification/ParcelFlow.Notification.Infrastructure/ src/Services/Notification/ParcelFlow.Notification.Infrastructure/

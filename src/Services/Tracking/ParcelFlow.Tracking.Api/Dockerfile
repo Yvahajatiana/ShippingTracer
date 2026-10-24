@@ -15,9 +15,8 @@ WORKDIR /src
 # Restore layer: only the files that influence restore, so it stays cached
 # until a project file or a shared build setting changes.
 COPY global.json Directory.Build.props ./
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
+# Shared building blocks are copied whole: every service depends on them and new ones need no Dockerfile change.
+COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Tracking/ParcelFlow.Tracking.Domain/ParcelFlow.Tracking.Domain.csproj src/Services/Tracking/ParcelFlow.Tracking.Domain/
 COPY src/Services/Tracking/ParcelFlow.Tracking.Application/ParcelFlow.Tracking.Application.csproj src/Services/Tracking/ParcelFlow.Tracking.Application/
 COPY src/Services/Tracking/ParcelFlow.Tracking.Infrastructure/ParcelFlow.Tracking.Infrastructure.csproj src/Services/Tracking/ParcelFlow.Tracking.Infrastructure/
@@ -25,9 +24,6 @@ COPY src/Services/Tracking/ParcelFlow.Tracking.Api/ParcelFlow.Tracking.Api.cspro
 RUN dotnet restore src/Services/Tracking/ParcelFlow.Tracking.Api/ParcelFlow.Tracking.Api.csproj -r linux-musl-x64
 
 # Sources of the project closure only.
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
 COPY src/Services/Tracking/ParcelFlow.Tracking.Domain/ src/Services/Tracking/ParcelFlow.Tracking.Domain/
 COPY src/Services/Tracking/ParcelFlow.Tracking.Application/ src/Services/Tracking/ParcelFlow.Tracking.Application/
 COPY src/Services/Tracking/ParcelFlow.Tracking.Infrastructure/ src/Services/Tracking/ParcelFlow.Tracking.Infrastructure/

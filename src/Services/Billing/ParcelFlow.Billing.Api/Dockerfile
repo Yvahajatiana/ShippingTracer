@@ -15,9 +15,8 @@ WORKDIR /src
 # Restore layer: only the files that influence restore, so it stays cached
 # until a project file or a shared build setting changes.
 COPY global.json Directory.Build.props ./
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
+# Shared building blocks are copied whole: every service depends on them and new ones need no Dockerfile change.
+COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Billing/ParcelFlow.Billing.Domain/ParcelFlow.Billing.Domain.csproj src/Services/Billing/ParcelFlow.Billing.Domain/
 COPY src/Services/Billing/ParcelFlow.Billing.Application/ParcelFlow.Billing.Application.csproj src/Services/Billing/ParcelFlow.Billing.Application/
 COPY src/Services/Billing/ParcelFlow.Billing.Infrastructure/ParcelFlow.Billing.Infrastructure.csproj src/Services/Billing/ParcelFlow.Billing.Infrastructure/
@@ -25,9 +24,6 @@ COPY src/Services/Billing/ParcelFlow.Billing.Api/ParcelFlow.Billing.Api.csproj s
 RUN dotnet restore src/Services/Billing/ParcelFlow.Billing.Api/ParcelFlow.Billing.Api.csproj -r linux-musl-x64
 
 # Sources of the project closure only.
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/
-COPY src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/
 COPY src/Services/Billing/ParcelFlow.Billing.Domain/ src/Services/Billing/ParcelFlow.Billing.Domain/
 COPY src/Services/Billing/ParcelFlow.Billing.Application/ src/Services/Billing/ParcelFlow.Billing.Application/
 COPY src/Services/Billing/ParcelFlow.Billing.Infrastructure/ src/Services/Billing/ParcelFlow.Billing.Infrastructure/
