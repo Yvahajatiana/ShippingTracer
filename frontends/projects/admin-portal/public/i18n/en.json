@@ -8,7 +8,12 @@
     "warehouses": "Warehouses",
     "drivers": "Drivers",
     "invoices": "Invoices",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "groups": {
+      "monitoring": "Monitoring",
+      "referenceData": "Reference data",
+      "finance": "Finance & relations"
+    }
   },
   "pager": {
     "label": "Pagination",
@@ -48,6 +53,7 @@
     "subtitle": "Customer companies that accounts can be attached to.",
     "new": "New company",
     "empty": "No companies yet.",
+    "count": "{{count}} company record(s)",
     "createTitle": "New company",
     "editTitle": "Edit company",
     "editNamed": "Edit {{name}}",
@@ -89,6 +95,7 @@
     "title": "Tariffs",
     "subtitle": "Base price and price per kg applied to each delivery zone.",
     "empty": "No tariffs configured.",
+    "zone": "Delivery zone",
     "currency": "Amounts in {{currency}}",
     "basePrice": "Base price",
     "pricePerKg": "Price per kg",
@@ -154,6 +161,8 @@
     "summary": "Summary",
     "creditNotes": "Credit notes",
     "noCreditNotes": "No credit notes issued.",
+    "totalCount": "{{total}} invoice(s)",
+    "invoiceLabel": "Invoice",
     "fields": {
       "number": "Number",
       "customer": "Customer",
@@ -189,6 +198,7 @@
     "shipmentPlaceholder": "e.g. 3f2b8c1e-…",
     "clearFilter": "Clear filter",
     "empty": "No notifications.",
+    "totalCount": "{{total}} notification(s)",
     "openNamed": "View notification \"{{subject}}\"",
     "detailDescription": "Details of the recorded notification.",
     "fields": {

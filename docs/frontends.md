@@ -34,6 +34,14 @@ frontends/
     └── admin-portal/        port 4203
 ```
 
+### Thème de l'administration
+
+Le portail d'administration adopte une identité « corporate », maquettée dans un canevas Claude Design (vue d'ensemble, liste et détail de facture) : barre latérale marine avec navigation par sections (Pilotage, Référentiel, Finance et relation client), espace de travail gris clair, primaire bleu acier, IBM Plex Sans pour le texte et IBM Plex Mono pour les références et montants. Les polices sont auto-hébergées (`@fontsource`), sans appel à un CDN.
+
+- Le shell partagé accepte `layout="sidebar"` et un `groupKey` par entrée de navigation ; les portails client et opérations conservent la mise en page `header` par défaut.
+- Les jetons propres au portail sont dans `admin-portal/src/theme.css`, importé après le thème partagé. Les composants helm ne sont pas modifiés : les en-têtes et cellules de tableau sont ajustés via leurs attributs `data-slot`.
+- Les pages suivent un même gabarit : en-tête avec libellé de section, panneaux blancs à bandeau de titre, tableaux bord à bord avec barre de filtres et pagination intégrées.
+
 La bibliothèque est consommée depuis ses sources par l'alias `@parcelflow/shared`, sans étape de build intermédiaire. Les helpers de test sont exposés par `@parcelflow/shared/testing`.
 
 ## Configuration d'exécution

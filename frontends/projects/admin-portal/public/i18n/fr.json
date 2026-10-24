@@ -8,7 +8,12 @@
     "warehouses": "Entrepôts",
     "drivers": "Livreurs",
     "invoices": "Factures",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "groups": {
+      "monitoring": "Pilotage",
+      "referenceData": "Référentiel",
+      "finance": "Finance et relation client"
+    }
   },
   "pager": {
     "label": "Pagination",
@@ -48,6 +53,7 @@
     "subtitle": "Entreprises clientes auxquelles des comptes peuvent être rattachés.",
     "new": "Nouvelle entreprise",
     "empty": "Aucune entreprise enregistrée.",
+    "count": "{{count}} entreprise(s)",
     "createTitle": "Nouvelle entreprise",
     "editTitle": "Modifier l'entreprise",
     "editNamed": "Modifier {{name}}",
@@ -89,6 +95,7 @@
     "title": "Tarifs",
     "subtitle": "Prix de base et prix au kilo appliqués à chaque zone de livraison.",
     "empty": "Aucun tarif configuré.",
+    "zone": "Zone de livraison",
     "currency": "Montants en {{currency}}",
     "basePrice": "Prix de base",
     "pricePerKg": "Prix par kg",
@@ -154,6 +161,8 @@
     "summary": "Récapitulatif",
     "creditNotes": "Avoirs",
     "noCreditNotes": "Aucun avoir émis.",
+    "totalCount": "{{total}} facture(s)",
+    "invoiceLabel": "Facture",
     "fields": {
       "number": "Numéro",
       "customer": "Client",
@@ -189,6 +198,7 @@
     "shipmentPlaceholder": "ex. 3f2b8c1e-…",
     "clearFilter": "Effacer le filtre",
     "empty": "Aucune notification.",
+    "totalCount": "{{total}} notification(s)",
     "openNamed": "Voir la notification « {{subject}} »",
     "detailDescription": "Détail de la notification enregistrée.",
     "fields": {

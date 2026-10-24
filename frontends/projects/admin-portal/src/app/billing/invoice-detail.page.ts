@@ -2,10 +2,9 @@ import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angu
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideArrowLeft, lucideReceipt } from '@ng-icons/lucide';
+import { lucideChevronLeft, lucideReceipt } from '@ng-icons/lucide';
 import {
   ErrorBannerComponent,
-  PageHeaderComponent,
   PfDatePipe,
   PfMoneyPipe,
   StatusTagComponent,
@@ -14,7 +13,6 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTableImports } from '@spartan-ng/helm/table';
-import { EmptyStateComponent } from '../core/list-states.component';
 import { CreditNoteDialogComponent } from './credit-note-dialog.component';
 import { InvoiceDetailStore } from './invoice-detail.store';
 
@@ -26,21 +24,22 @@ import { InvoiceDetailStore } from './invoice-detail.store';
     NgIcon,
     PfDatePipe,
     PfMoneyPipe,
-    PageHeaderComponent,
     ErrorBannerComponent,
     StatusTagComponent,
     HlmButtonImports,
     HlmCardImports,
     HlmSkeletonImports,
     HlmTableImports,
-    EmptyStateComponent,
     CreditNoteDialogComponent,
   ],
-  providers: [InvoiceDetailStore, provideIcons({ lucideArrowLeft, lucideReceipt })],
+  providers: [InvoiceDetailStore, provideIcons({ lucideChevronLeft, lucideReceipt })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <a hlmBtn variant="ghost" size="sm" class="mb-4" routerLink="/billing/invoices">
-      <ng-icon name="lucideArrowLeft" />
+    <a
+      class="mb-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      routerLink="/billing/invoices"
+    >
+      <ng-icon name="lucideChevronLeft" size="16" aria-hidden="true" />
       {{ 'invoices.backToList' | transloco }}
     </a>
 
@@ -49,86 +48,126 @@ import { InvoiceDetailStore } from './invoice-detail.store';
     } @else if (!store.invoice()) {
       <div class="grid gap-4" role="status" [attr.aria-label]="'common.loading' | transloco">
         <hlm-skeleton class="h-8 w-64" />
+        <hlm-skeleton class="h-24 w-full" />
         <hlm-skeleton class="h-48 w-full" />
-        <hlm-skeleton class="h-32 w-full" />
       </div>
     } @else {
       @let invoice = store.invoice()!;
-      <pf-page-header
-        [title]="'invoices.detailTitle' | transloco: { number: invoice.number }"
-        [subtitle]="'invoices.issuedOn' | transloco: { date: (invoice.issuedAtUtc | pfDate) }"
-      >
-        @if (store.canIssueCreditNote()) {
-          <button hlmBtn type="button" (click)="creditDialogOpen.set(true)">
-            <ng-icon name="lucideReceipt" />
-            {{ 'invoices.creditNote.open' | transloco }}
-          </button>
-        }
-      </pf-page-header>
-
-      <div class="grid gap-6 lg:grid-cols-2">
-        <section hlmCard aria-labelledby="invoice-summary-title">
-          <div hlmCardHeader>
-            <h2 hlmCardTitle id="invoice-summary-title">{{ 'invoices.summary' | transloco }}</h2>
+      <!-- Same layout as pf-page-header, with a mono invoice number and the status next to it -->
+      <header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0">
+          <p class="mb-1.5 text-xs font-semibold tracking-[0.08em] text-primary uppercase">
+            {{ 'nav.groups.finance' | transloco }}
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <h1 class="text-2xl font-semibold tracking-tight">
+              {{ 'invoices.invoiceLabel' | transloco }}
+              <span class="font-mono font-medium">{{ invoice.number }}</span>
+            </h1>
+            <pf-status-tag type="InvoiceStatus" [value]="invoice.status" />
           </div>
-          <dl hlmCardContent class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3">
-            <dt class="text-muted-foreground">{{ 'common.status' | transloco }}</dt>
-            <dd><pf-status-tag type="InvoiceStatus" [value]="invoice.status" /></dd>
-            <dt class="text-muted-foreground">{{ 'invoices.fields.amount' | transloco }}</dt>
-            <dd class="font-medium tabular-nums">
+          <p class="mt-1 text-muted-foreground">
+            {{ 'invoices.issuedOn' | transloco: { date: (invoice.issuedAtUtc | pfDate) } }}
+          </p>
+        </div>
+        @if (store.canIssueCreditNote()) {
+          <div class="flex flex-wrap gap-2">
+            <button hlmBtn type="button" (click)="creditDialogOpen.set(true)">
+              <ng-icon name="lucideReceipt" />
+              {{ 'invoices.creditNote.open' | transloco }}
+            </button>
+          </div>
+        }
+      </header>
+
+      <!-- Amounts band -->
+      <div hlmCard class="mb-6 gap-0 py-0">
+        <dl class="grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div class="px-6 py-4">
+            <dt class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              {{ 'invoices.fields.amount' | transloco }}
+            </dt>
+            <dd class="mt-1 font-mono text-2xl font-semibold">
               {{ invoice.amount | pfMoney: invoice.currency }}
             </dd>
-            <dt class="text-muted-foreground">{{ 'invoices.fields.creditTotal' | transloco }}</dt>
-            <dd class="tabular-nums">{{ invoice.creditTotal | pfMoney: invoice.currency }}</dd>
-            <dt class="text-muted-foreground">
+          </div>
+          <div class="px-6 py-4">
+            <dt class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              {{ 'invoices.fields.creditTotal' | transloco }}
+            </dt>
+            <dd class="mt-1 font-mono text-2xl font-semibold">
+              {{ invoice.creditTotal | pfMoney: invoice.currency }}
+            </dd>
+          </div>
+          <div class="px-6 py-4">
+            <dt class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
               {{ 'invoices.fields.remainingCredit' | transloco }}
             </dt>
-            <dd class="tabular-nums">{{ invoice.remainingCredit | pfMoney: invoice.currency }}</dd>
-            <dt class="text-muted-foreground">{{ 'invoices.fields.customer' | transloco }}</dt>
-            <dd class="font-mono text-xs break-all">{{ invoice.customerSubject }}</dd>
-            <dt class="text-muted-foreground">{{ 'invoices.fields.shipment' | transloco }}</dt>
-            <dd class="font-mono text-xs break-all">{{ invoice.shipmentId }}</dd>
-          </dl>
-        </section>
+            <dd class="mt-1 font-mono text-2xl font-semibold text-success">
+              {{ invoice.remainingCredit | pfMoney: invoice.currency }}
+            </dd>
+          </div>
+        </dl>
+      </div>
 
-        <section hlmCard aria-labelledby="invoice-payment-title">
-          <div hlmCardHeader>
-            <h2 hlmCardTitle id="invoice-payment-title">
-              {{ 'invoices.payment.title' | transloco }}
-            </h2>
-          </div>
-          <div hlmCardContent>
-            @if (store.payment(); as payment) {
-              <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3">
-                <dt class="text-muted-foreground">{{ 'invoices.payment.outcome' | transloco }}</dt>
-                <dd><pf-status-tag type="MockPaymentOutcome" [value]="payment.outcome" /></dd>
-                <dt class="text-muted-foreground">{{ 'invoices.fields.amount' | transloco }}</dt>
-                <dd class="tabular-nums">{{ payment.amount | pfMoney: payment.currency }}</dd>
-                <dt class="text-muted-foreground">{{ 'invoices.payment.date' | transloco }}</dt>
-                <dd>{{ payment.occurredAtUtc | pfDate }}</dd>
-                <dt class="text-muted-foreground">
-                  {{ 'invoices.payment.operation' | transloco }}
-                </dt>
-                <dd class="font-mono text-xs break-all">{{ payment.operationId }}</dd>
-              </dl>
-            } @else {
-              <p class="text-muted-foreground">{{ 'invoices.payment.none' | transloco }}</p>
-            }
-          </div>
-        </section>
+      <div class="flex flex-wrap items-start gap-6">
+        <!-- Main column -->
+        <div class="flex min-w-0 grow-2 basis-[520px] flex-col gap-6">
+          <section hlmCard class="gap-0 py-0" aria-labelledby="invoice-payment-title">
+            <div class="border-b px-6 py-4">
+              <h2 id="invoice-payment-title" class="text-[15px] font-semibold">
+                {{ 'invoices.payment.title' | transloco }}
+              </h2>
+            </div>
+            <div class="px-6 py-5">
+              @if (store.payment(); as payment) {
+                <dl class="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <dt class="text-[13px] text-muted-foreground">
+                      {{ 'invoices.payment.outcome' | transloco }}
+                    </dt>
+                    <dd class="mt-1.5">
+                      <pf-status-tag type="MockPaymentOutcome" [value]="payment.outcome" />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="text-[13px] text-muted-foreground">
+                      {{ 'invoices.payment.date' | transloco }}
+                    </dt>
+                    <dd class="mt-1.5 tabular-nums">{{ payment.occurredAtUtc | pfDate }}</dd>
+                  </div>
+                  <div class="min-w-0">
+                    <dt class="text-[13px] text-muted-foreground">
+                      {{ 'invoices.payment.operation' | transloco }}
+                    </dt>
+                    <dd class="mt-1.5 font-mono text-[13px] break-all">
+                      {{ payment.operationId }}
+                    </dd>
+                  </div>
+                </dl>
+              } @else {
+                <p class="text-sm text-muted-foreground">
+                  {{ 'invoices.payment.none' | transloco }}
+                </p>
+              }
+            </div>
+          </section>
 
-        <section hlmCard class="lg:col-span-2" aria-labelledby="invoice-credit-notes-title">
-          <div hlmCardHeader>
-            <h2 hlmCardTitle id="invoice-credit-notes-title">
-              {{ 'invoices.creditNotes' | transloco }}
-            </h2>
-            @if (!store.canIssueCreditNote()) {
-              <p hlmCardDescription>{{ 'invoices.creditNote.notAllowed' | transloco }}</p>
-            }
-          </div>
-          <div hlmCardContent>
+          <section hlmCard class="gap-0 py-0" aria-labelledby="invoice-credit-notes-title">
+            <div class="border-b px-6 py-4">
+              <h2 id="invoice-credit-notes-title" class="text-[15px] font-semibold">
+                {{ 'invoices.creditNotes' | transloco }}
+              </h2>
+              @if (!store.canIssueCreditNote()) {
+                <p class="mt-1 text-[13px] text-muted-foreground">
+                  {{ 'invoices.creditNote.notAllowed' | transloco }}
+                </p>
+              }
+            </div>
             @if (store.creditNotes().length === 0) {
-              <pf-empty-state titleKey="invoices.noCreditNotes" />
+              <p class="px-6 py-8 text-center text-sm text-muted-foreground">
+                {{ 'invoices.noCreditNotes' | transloco }}
+              </p>
             } @else {
               <div hlmTableContainer>
                 <table hlmTable>
@@ -154,19 +193,19 @@ import { InvoiceDetailStore } from './invoice-detail.store';
                   <tbody hlmTBody>
                     @for (note of store.creditNotes(); track note.id) {
                       <tr hlmTr>
-                        <td hlmTd class="font-mono">
+                        <td hlmTd class="font-mono text-[13px] font-medium">
                           {{ note.number }}
-                          <div class="text-xs text-muted-foreground sm:hidden">
+                          <div class="font-sans text-xs text-muted-foreground sm:hidden">
                             {{ 'enum.CreditReason.' + note.reason | transloco }}
                           </div>
                         </td>
-                        <td hlmTd class="text-right tabular-nums">
+                        <td hlmTd class="text-right font-mono text-[13px]">
                           {{ note.amount | pfMoney: note.currency }}
                         </td>
                         <td hlmTd class="hidden sm:table-cell">
                           {{ 'enum.CreditReason.' + note.reason | transloco }}
                         </td>
-                        <td hlmTd class="hidden md:table-cell">
+                        <td hlmTd class="hidden text-muted-foreground tabular-nums md:table-cell">
                           {{ note.occurredAtUtc | pfDate }}
                         </td>
                       </tr>
@@ -175,7 +214,52 @@ import { InvoiceDetailStore } from './invoice-detail.store';
                 </table>
               </div>
             }
+          </section>
+        </div>
+
+        <!-- Side column -->
+        <section
+          hlmCard
+          class="min-w-0 grow basis-[280px] gap-0 py-0"
+          aria-labelledby="invoice-summary-title"
+        >
+          <div class="border-b px-6 py-4">
+            <h2 id="invoice-summary-title" class="text-[15px] font-semibold">
+              {{ 'invoices.summary' | transloco }}
+            </h2>
           </div>
+          <dl class="px-6 py-2">
+            <div class="flex justify-between gap-3 border-b py-2.5 last:border-0">
+              <dt class="text-[13px] text-muted-foreground">{{ 'common.status' | transloco }}</dt>
+              <dd class="text-right">
+                <pf-status-tag type="InvoiceStatus" [value]="invoice.status" />
+              </dd>
+            </div>
+            <div class="flex justify-between gap-3 border-b py-2.5 last:border-0">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'invoices.fields.issuedAt' | transloco }}
+              </dt>
+              <dd class="text-right text-sm tabular-nums">
+                {{ invoice.issuedAtUtc | pfDate: 'date' }}
+              </dd>
+            </div>
+            <div class="flex justify-between gap-3 border-b py-2.5 last:border-0">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'invoices.fields.customer' | transloco }}
+              </dt>
+              <dd class="min-w-0 text-right font-mono text-[13px] break-all">
+                {{ invoice.customerSubject }}
+              </dd>
+            </div>
+            <div class="flex justify-between gap-3 border-b py-2.5 last:border-0">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'invoices.fields.shipment' | transloco }}
+              </dt>
+              <dd class="min-w-0 text-right font-mono text-[13px] break-all">
+                {{ invoice.shipmentId }}
+              </dd>
+            </div>
+          </dl>
         </section>
       </div>
 

@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideArrowLeft } from '@ng-icons/lucide';
+import { lucideChevronLeft } from '@ng-icons/lucide';
 import {
   ErrorBannerComponent,
   Notifier,
@@ -37,11 +37,14 @@ import { CustomerDetailStore } from './customer-detail.store';
     HlmSpinnerImports,
     EmptyStateComponent,
   ],
-  providers: [CustomerDetailStore, provideIcons({ lucideArrowLeft })],
+  providers: [CustomerDetailStore, provideIcons({ lucideChevronLeft })],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <a hlmBtn variant="ghost" size="sm" class="mb-4" routerLink="/customers">
-      <ng-icon name="lucideArrowLeft" />
+    <a
+      class="mb-3 inline-flex min-h-10 items-center gap-1 rounded-sm text-sm font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none sm:min-h-0"
+      routerLink="/customers"
+    >
+      <ng-icon name="lucideChevronLeft" aria-hidden="true" />
       {{ 'customers.backToList' | transloco }}
     </a>
 
@@ -50,32 +53,38 @@ import { CustomerDetailStore } from './customer-detail.store';
     } @else if (!store.profile()) {
       <div class="grid gap-4" role="status" [attr.aria-label]="'common.loading' | transloco">
         <hlm-skeleton class="h-8 w-64" />
-        <hlm-skeleton class="h-40 w-full" />
-        <hlm-skeleton class="h-40 w-full" />
+        <div class="flex flex-wrap gap-6">
+          <hlm-skeleton class="h-64 min-w-0 flex-[2_1_480px]" />
+          <hlm-skeleton class="h-64 min-w-0 flex-[1_1_280px]" />
+        </div>
       </div>
     } @else {
       @let profile = store.profile()!;
       <pf-page-header
+        [eyebrow]="'nav.groups.referenceData' | transloco"
         [title]="profile.firstName + ' ' + profile.lastName"
         [subtitle]="profile.email"
       />
 
-      <div class="grid gap-6 lg:grid-cols-2">
-        <section hlmCard aria-labelledby="customer-company-title">
-          <div hlmCardHeader>
-            <h2 hlmCardTitle id="customer-company-title">
-              {{ 'customers.company.title' | transloco }}
-            </h2>
-            <p hlmCardDescription>
-              @if (store.company(); as company) {
-                {{ 'customers.company.current' | transloco: { name: company.name } }}
-              } @else {
-                {{ 'customers.company.noneCurrent' | transloco }}
-              }
-            </p>
-          </div>
-          <div hlmCardContent>
-            <form class="flex flex-col gap-3 sm:flex-row sm:items-end" (ngSubmit)="assign()">
+      <div class="flex flex-wrap items-start gap-6">
+        <div class="flex min-w-0 flex-[2_1_480px] flex-col gap-6">
+          <section hlmCard class="gap-0 py-0" aria-labelledby="customer-company-title">
+            <div class="border-b px-6 py-4">
+              <h2 id="customer-company-title" class="text-[15px] font-semibold">
+                {{ 'customers.company.title' | transloco }}
+              </h2>
+              <p class="mt-1 text-[13px] text-muted-foreground">
+                @if (store.company(); as company) {
+                  {{ 'customers.company.current' | transloco: { name: company.name } }}
+                } @else {
+                  {{ 'customers.company.noneCurrent' | transloco }}
+                }
+              </p>
+            </div>
+            <form
+              class="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-end"
+              (ngSubmit)="assign()"
+            >
               <div hlmField class="flex-1">
                 <label hlmFieldLabel for="customer-company">
                   {{ 'customers.company.select' | transloco }}
@@ -95,6 +104,7 @@ import { CustomerDetailStore } from './customer-detail.store';
               <button
                 hlmBtn
                 type="submit"
+                class="max-sm:h-10"
                 [disabled]="store.assigning() || selectedCompany() === (profile.companyId ?? '')"
               >
                 @if (store.assigning()) {
@@ -103,56 +113,82 @@ import { CustomerDetailStore } from './customer-detail.store';
                 {{ 'customers.company.assign' | transloco }}
               </button>
             </form>
-          </div>
-        </section>
+          </section>
 
-        <section hlmCard aria-labelledby="customer-profile-title">
-          <div hlmCardHeader>
-            <h2 hlmCardTitle id="customer-profile-title">
+          <section hlmCard class="gap-0 py-0" aria-labelledby="customer-addresses-title">
+            <div class="border-b px-6 py-4">
+              <h2 id="customer-addresses-title" class="text-[15px] font-semibold">
+                {{ 'customers.addresses' | transloco }}
+              </h2>
+            </div>
+            <div class="px-6 py-5">
+              @if (profile.addresses.length === 0) {
+                <pf-empty-state titleKey="customers.noAddresses" />
+              } @else {
+                <ul class="grid gap-3 sm:grid-cols-2">
+                  @for (address of profile.addresses; track address.id) {
+                    <li class="rounded-md border p-4">
+                      <p class="font-medium">{{ address.label }}</p>
+                      <address class="mt-1 text-sm text-muted-foreground not-italic">
+                        {{ address.line1 }}<br />
+                        @if (address.line2) {
+                          {{ address.line2 }}<br />
+                        }
+                        {{ address.postalCode }} {{ address.city }}<br />
+                        <span class="font-mono text-[13px]">{{ address.countryCode }}</span>
+                      </address>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          </section>
+        </div>
+
+        <section
+          hlmCard
+          class="min-w-0 flex-[1_1_280px] gap-0 py-0"
+          aria-labelledby="customer-profile-title"
+        >
+          <div class="border-b px-6 py-4">
+            <h2 id="customer-profile-title" class="text-[15px] font-semibold">
               {{ 'customers.profile' | transloco }}
             </h2>
           </div>
-          <dl hlmCardContent class="grid grid-cols-1 gap-3 sm:grid-cols-[auto_1fr] sm:gap-x-6">
-            <dt class="text-muted-foreground">{{ 'customers.fields.name' | transloco }}</dt>
-            <dd>{{ profile.firstName }} {{ profile.lastName }}</dd>
-            <dt class="text-muted-foreground">{{ 'customers.fields.email' | transloco }}</dt>
-            <dd class="break-all">{{ profile.email }}</dd>
-            <dt class="text-muted-foreground">{{ 'customers.fields.phone' | transloco }}</dt>
-            <dd>{{ profile.phone ?? '—' }}</dd>
-            <dt class="text-muted-foreground">{{ 'customers.fields.subject' | transloco }}</dt>
-            <dd class="font-mono text-xs break-all">{{ profile.keycloakSubject }}</dd>
-            <dt class="text-muted-foreground">{{ 'common.createdAt' | transloco }}</dt>
-            <dd>{{ profile.createdAtUtc | pfDate }}</dd>
+          <dl class="px-6 py-2">
+            <div class="flex justify-between gap-4 border-b py-2.5">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'customers.fields.name' | transloco }}
+              </dt>
+              <dd class="text-right text-sm">{{ profile.firstName }} {{ profile.lastName }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b py-2.5">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'customers.fields.email' | transloco }}
+              </dt>
+              <dd class="min-w-0 text-right text-sm break-all">{{ profile.email }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b py-2.5">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'customers.fields.phone' | transloco }}
+              </dt>
+              <dd class="text-right text-sm tabular-nums">{{ profile.phone ?? '—' }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b py-2.5">
+              <dt class="shrink-0 text-[13px] text-muted-foreground">
+                {{ 'customers.fields.subject' | transloco }}
+              </dt>
+              <dd class="min-w-0 text-right font-mono text-[13px] break-all">
+                {{ profile.keycloakSubject }}
+              </dd>
+            </div>
+            <div class="flex justify-between gap-4 py-2.5">
+              <dt class="text-[13px] text-muted-foreground">
+                {{ 'common.createdAt' | transloco }}
+              </dt>
+              <dd class="text-right text-sm tabular-nums">{{ profile.createdAtUtc | pfDate }}</dd>
+            </div>
           </dl>
-        </section>
-
-        <section hlmCard class="lg:col-span-2" aria-labelledby="customer-addresses-title">
-          <div hlmCardHeader>
-            <h2 hlmCardTitle id="customer-addresses-title">
-              {{ 'customers.addresses' | transloco }}
-            </h2>
-          </div>
-          <div hlmCardContent>
-            @if (profile.addresses.length === 0) {
-              <pf-empty-state titleKey="customers.noAddresses" />
-            } @else {
-              <ul class="grid gap-3 sm:grid-cols-2">
-                @for (address of profile.addresses; track address.id) {
-                  <li class="rounded-lg border p-3">
-                    <p class="font-medium">{{ address.label }}</p>
-                    <address class="text-muted-foreground not-italic">
-                      {{ address.line1 }}<br />
-                      @if (address.line2) {
-                        {{ address.line2 }}<br />
-                      }
-                      {{ address.postalCode }} {{ address.city }}<br />
-                      {{ address.countryCode }}
-                    </address>
-                  </li>
-                }
-              </ul>
-            }
-          </div>
         </section>
       </div>
     }

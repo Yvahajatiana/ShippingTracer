@@ -28,6 +28,7 @@ import { CompanyDialogComponent } from './company-dialog.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-page-header
+      [eyebrow]="'nav.groups.referenceData' | transloco"
       [title]="'companies.title' | transloco"
       [subtitle]="'companies.subtitle' | transloco"
     >
@@ -37,66 +38,79 @@ import { CompanyDialogComponent } from './company-dialog.component';
       </button>
     </pf-page-header>
 
-    <section hlmCard>
-      <div hlmCardContent>
-        @if (store.error()) {
+    <section hlmCard class="gap-0 py-0">
+      @if (store.error()) {
+        <div class="p-5">
           <pf-error-banner [error]="store.error()" (retry)="store.load()" />
-        } @else if (store.loading() && store.companies().length === 0) {
+        </div>
+      } @else if (store.loading() && store.companies().length === 0) {
+        <div class="p-5">
           <pf-list-skeleton />
-        } @else if (store.sorted().length === 0) {
+        </div>
+      } @else if (store.sorted().length === 0) {
+        <div class="p-5">
           <pf-empty-state titleKey="companies.empty" />
-        } @else {
-          <div hlmTableContainer>
-            <table hlmTable>
-              <caption class="sr-only">
-                {{
-                  'companies.title' | transloco
-                }}
-              </caption>
-              <thead hlmTHead>
+        </div>
+      } @else {
+        <div class="flex flex-wrap items-center gap-3 border-b px-5 py-3.5">
+          <p class="ml-auto text-sm text-muted-foreground" aria-live="polite">
+            {{ 'companies.count' | transloco: { count: store.sorted().length } }}
+          </p>
+        </div>
+        <div hlmTableContainer class="[&_tr>*:first-child]:pl-5! [&_tr>*:last-child]:pr-5!">
+          <table hlmTable>
+            <caption class="sr-only">
+              {{
+                'companies.title' | transloco
+              }}
+            </caption>
+            <thead hlmTHead>
+              <tr hlmTr>
+                <th hlmTh scope="col">{{ 'companies.fields.name' | transloco }}</th>
+                <th hlmTh scope="col" class="hidden sm:table-cell">
+                  {{ 'companies.fields.registrationNumber' | transloco }}
+                </th>
+                <th hlmTh scope="col" class="hidden md:table-cell">
+                  {{ 'companies.fields.email' | transloco }}
+                </th>
+                <th hlmTh scope="col" class="text-right">{{ 'common.actions' | transloco }}</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (company of store.sorted(); track company.id) {
                 <tr hlmTr>
-                  <th hlmTh scope="col">{{ 'companies.fields.name' | transloco }}</th>
-                  <th hlmTh scope="col" class="hidden sm:table-cell">
-                    {{ 'companies.fields.registrationNumber' | transloco }}
-                  </th>
-                  <th hlmTh scope="col" class="hidden md:table-cell">
-                    {{ 'companies.fields.email' | transloco }}
-                  </th>
-                  <th hlmTh scope="col" class="text-right">{{ 'common.actions' | transloco }}</th>
+                  <td hlmTd class="font-medium">
+                    <div>{{ company.name }}</div>
+                    <div class="text-xs font-normal text-muted-foreground md:hidden">
+                      <span class="font-mono">{{ company.registrationNumber }}</span> ·
+                      {{ company.email }}
+                    </div>
+                  </td>
+                  <td hlmTd class="hidden font-mono text-[13px] sm:table-cell">
+                    {{ company.registrationNumber }}
+                  </td>
+                  <td hlmTd class="hidden text-muted-foreground md:table-cell">
+                    {{ company.email }}
+                  </td>
+                  <td hlmTd class="text-right">
+                    <button
+                      hlmBtn
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      class="max-sm:size-10"
+                      [attr.aria-label]="'companies.editNamed' | transloco: { name: company.name }"
+                      (click)="openEdit(company)"
+                    >
+                      <ng-icon name="lucidePencil" />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody hlmTBody>
-                @for (company of store.sorted(); track company.id) {
-                  <tr hlmTr>
-                    <td hlmTd class="font-medium">
-                      <div>{{ company.name }}</div>
-                      <div class="text-xs text-muted-foreground md:hidden">
-                        {{ company.registrationNumber }} · {{ company.email }}
-                      </div>
-                    </td>
-                    <td hlmTd class="hidden sm:table-cell">{{ company.registrationNumber }}</td>
-                    <td hlmTd class="hidden md:table-cell">{{ company.email }}</td>
-                    <td hlmTd class="text-right">
-                      <button
-                        hlmBtn
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        [attr.aria-label]="
-                          'companies.editNamed' | transloco: { name: company.name }
-                        "
-                        (click)="openEdit(company)"
-                      >
-                        <ng-icon name="lucidePencil" />
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      </div>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     </section>
 
     <pf-company-dialog [(open)]="dialogOpen" [company]="editing()" />

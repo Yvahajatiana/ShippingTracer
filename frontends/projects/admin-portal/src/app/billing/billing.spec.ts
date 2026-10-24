@@ -238,7 +238,8 @@ describe('billing', () => {
       await answerDetail(invoice('i1'));
       await fixture.whenStable();
       const text = fixture.nativeElement.textContent as string;
-      expect(text).toContain('invoices.detailTitle');
+      expect(text).toContain('invoices.invoiceLabel');
+      expect(text).toContain('INV-i1');
       expect(text).toContain('CN-n0');
       expect(text).toContain('invoices.creditNote.open');
       expect(text).toContain('op-pay');

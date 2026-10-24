@@ -6,7 +6,7 @@ import { NAVIGATION } from './navigation';
   selector: 'pf-root',
   imports: [ShellComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `<pf-shell titleKey="app.title" [navigation]="navigation" />`,
+  template: `<pf-shell titleKey="app.title" layout="sidebar" [navigation]="navigation" />`,
 })
 export class App {
   protected readonly navigation = NAVIGATION;
