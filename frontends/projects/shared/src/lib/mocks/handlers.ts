@@ -447,8 +447,9 @@ export function createHandlers(db: MockDb = createDb()) {
       };
       db.shipments.unshift(shipment);
       addTracking(db, shipment.id, 'Created');
+      // Billing keys an invoice by its shipment: the invoice id is the shipment id.
       db.invoices.unshift({
-        id: id(),
+        id: shipment.id,
         number: `INV-2026-${1000 + db.invoices.length + 1}`,
         shipmentId: shipment.id,
         customerSubject: who.sub,

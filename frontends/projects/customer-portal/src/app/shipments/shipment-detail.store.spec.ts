@@ -11,7 +11,7 @@ import {
   flushProblem,
   settle,
 } from '../../testing/fixtures';
-import { INVOICE_LOOKUP_PAGE_SIZE, ShipmentDetailStore } from './shipment-detail.store';
+import { ShipmentDetailStore } from './shipment-detail.store';
 
 describe('ShipmentDetailStore', () => {
   let store: InstanceType<typeof ShipmentDetailStore>;
@@ -39,17 +39,15 @@ describe('ShipmentDetailStore', () => {
     expect(store.trackingLoading()).toBe(true);
 
     backend.expectOne('/api/v1/tracking/PF00240000FR').flush(aTracking());
-    const invoices = backend.expectOne((req) => req.url === '/api/v1/billing/invoices');
-    expect(invoices.request.params.get('pageSize')).toBe(String(INVOICE_LOOKUP_PAGE_SIZE));
-    invoices.flush(
-      aPage([anInvoice({ id: 'other', shipmentId: 'shipment-9' }), anInvoice({ id: 'mine' })]),
-    );
+    // The invoice is fetched by id (invoice id == shipment id), never by scanning a page.
+    backend.expectOne('/api/v1/billing/invoices/shipment-0').flush(anInvoice({ id: 'shipment-0' }));
+    backend.expectNone((req) => req.url === '/api/v1/billing/invoices');
     const notifications = backend.expectOne((req) => req.url === '/api/v1/notifications');
     expect(notifications.request.params.get('shipmentId')).toBe('shipment-0');
     notifications.flush(aPage([aNotification(0)]));
 
     expect(store.timeline()[0].status).toBe('InTransit');
-    expect(store.invoice()?.id).toBe('mine');
+    expect(store.invoice()?.id).toBe('shipment-0');
     expect(store.notifications()).toHaveLength(1);
     expect(store.trackingLoading() || store.invoiceLoading() || store.notificationsLoading()).toBe(
       false,
@@ -59,10 +57,7 @@ describe('ShipmentDetailStore', () => {
   it('keeps the shipment visible when secondary sections fail', async () => {
     await loadShipment();
     flushProblem(backend.expectOne('/api/v1/tracking/PF00240000FR'), 404);
-    flushProblem(
-      backend.expectOne((req) => req.url === '/api/v1/billing/invoices'),
-      503,
-    );
+    flushProblem(backend.expectOne('/api/v1/billing/invoices/shipment-0'), 503);
     flushProblem(
       backend.expectOne((req) => req.url === '/api/v1/notifications'),
       503,
@@ -75,6 +70,18 @@ describe('ShipmentDetailStore', () => {
     expect(store.notificationsError()?.status).toBe(503);
   });
 
+  it('treats a missing invoice as no invoice', async () => {
+    await loadShipment();
+    backend.expectOne('/api/v1/tracking/PF00240000FR').flush(aTracking());
+    flushProblem(backend.expectOne('/api/v1/billing/invoices/shipment-0'), 404);
+    backend.expectOne((req) => req.url === '/api/v1/notifications').flush(aPage([]));
+
+    expect(store.invoice()).toBeNull();
+    expect(store.invoiceLoading()).toBe(false);
+    expect(store.error()).toBeNull();
+    expect(store.shipment()).not.toBeNull();
+  });
+
   it('reports a missing shipment', async () => {
     store.load('nope');
     flushProblem(await expectRequest(backend, '/api/v1/shipments/nope'), 404);
@@ -85,7 +92,7 @@ describe('ShipmentDetailStore', () => {
   it('downloads the label as a file', async () => {
     await loadShipment();
     backend.expectOne('/api/v1/tracking/PF00240000FR').flush(aTracking());
-    backend.expectOne((req) => req.url === '/api/v1/billing/invoices').flush(aPage([]));
+    flushProblem(backend.expectOne('/api/v1/billing/invoices/shipment-0'), 404);
     backend.expectOne((req) => req.url === '/api/v1/notifications').flush(aPage([]));
 
     const createObjectURL = vi.fn(() => 'blob:label');

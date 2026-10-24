@@ -41,6 +41,20 @@ describe('mock API handlers', () => {
     expect(typeof items[0].status).toBe('number');
   });
 
+  it('keys invoices by shipment id and serves them to their owner only', async () => {
+    expect(db.invoices.every((item) => item.id === item.shipmentId)).toBe(true);
+    const shipment = db.shipments.find((item) => item.ownerSubject === 'customer-alice')!;
+    const own = await call(`/api/v1/billing/invoices/${shipment.id}`, {
+      headers: bearer('customer-alice', ['customer']),
+    });
+    expect(own.status).toBe(200);
+    expect(((await own.json()) as { shipmentId: string }).shipmentId).toBe(shipment.id);
+    const other = await call(`/api/v1/billing/invoices/${shipment.id}`, {
+      headers: bearer('customer-bob', ['customer']),
+    });
+    expect(other.status).toBe(404);
+  });
+
   it('serves public tracking anonymously', async () => {
     const trackingNumber = db.shipments[0].trackingNumber;
     const response = await call(`/api/v1/tracking/${trackingNumber.toLowerCase()}`);
