@@ -5,11 +5,7 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideArrowRight,
   lucideBuilding2,
-  lucideCircleCheck,
-  lucideClock,
-  lucidePackage,
   lucideReceipt,
-  lucideTimer,
   lucideTrendingUp,
   lucideTruck,
   lucideWarehouse,
@@ -76,11 +72,7 @@ const SECTIONS: SectionLink[] = [
     provideIcons({
       lucideArrowRight,
       lucideBuilding2,
-      lucideCircleCheck,
-      lucideClock,
-      lucidePackage,
       lucideReceipt,
-      lucideTimer,
       lucideTrendingUp,
       lucideTruck,
       lucideWarehouse,
@@ -89,6 +81,7 @@ const SECTIONS: SectionLink[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-page-header
+      [eyebrow]="'nav.groups.monitoring' | transloco"
       [title]="'overview.title' | transloco"
       [subtitle]="'overview.subtitle' | transloco: { days: windowDays }"
     />
@@ -98,92 +91,86 @@ const SECTIONS: SectionLink[] = [
       @if (store.error()) {
         <pf-error-banner [error]="store.error()" (retry)="store.loadReport()" />
       } @else if (!store.report()) {
-        <div
-          class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-          role="status"
-          [attr.aria-label]="'common.loading' | transloco"
-        >
-          @for (placeholder of [1, 2, 3, 4]; track placeholder) {
-            <hlm-skeleton class="h-28 w-full rounded-xl" />
-          }
-          <hlm-skeleton class="h-72 w-full rounded-xl sm:col-span-2 xl:col-span-4" />
+        <div class="grid gap-4" role="status" [attr.aria-label]="'common.loading' | transloco">
+          <hlm-skeleton class="h-32 w-full rounded-md" />
+          <hlm-skeleton class="h-80 w-full rounded-md" />
         </div>
       } @else {
         @let report = store.report()!;
-        <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <li hlmCard size="sm">
-            <div hlmCardHeader>
-              <p hlmCardDescription class="flex items-center gap-2">
-                <ng-icon name="lucidePackage" aria-hidden="true" />
-                {{ 'overview.kpis.totalShipments' | transloco }}
-              </p>
-              <p hlmCardTitle class="text-3xl font-semibold tabular-nums">
-                {{ report.totalShipments | pfNumber }}
-              </p>
-            </div>
+        <!-- A single card holding the four KPIs; 1px dividers come from the gap over a border-coloured background. -->
+        <ul hlmCard class="grid gap-px bg-border py-0 sm:grid-cols-2 xl:grid-cols-4">
+          <li class="flex flex-col gap-1.5 bg-card px-6 py-5">
+            <p class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              {{ 'overview.kpis.totalShipments' | transloco }}
+            </p>
+            <p class="text-3xl font-semibold tracking-tight tabular-nums">
+              {{ report.totalShipments | pfNumber }}
+            </p>
           </li>
-          <li hlmCard size="sm">
-            <div hlmCardHeader>
-              <p hlmCardDescription class="flex items-center gap-2">
-                <ng-icon name="lucideCircleCheck" aria-hidden="true" />
-                {{ 'overview.kpis.delivered' | transloco }}
-              </p>
-              <p hlmCardTitle class="text-3xl font-semibold tabular-nums">
-                {{ report.deliveredShipments | pfNumber }}
-              </p>
-              <p class="text-xs text-muted-foreground">
-                @if (report.deliveryRatePercent !== null) {
+          <li class="flex flex-col gap-1.5 bg-card px-6 py-5">
+            <p class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              {{ 'overview.kpis.delivered' | transloco }}
+            </p>
+            <p class="text-3xl font-semibold tracking-tight tabular-nums">
+              {{ report.deliveredShipments | pfNumber }}
+            </p>
+            @if (report.deliveryRatePercent !== null) {
+              <div class="flex items-center gap-3">
+                <!-- Decorative: the rate is stated in the adjacent text. -->
+                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                  <div
+                    class="h-full rounded-full bg-success"
+                    [style.width.%]="clampPercent(report.deliveryRatePercent)"
+                  ></div>
+                </div>
+                <p class="text-sm text-muted-foreground tabular-nums">
                   {{
                     'overview.kpis.rate'
                       | transloco: { rate: (report.deliveryRatePercent | pfNumber: 1) }
                   }}
-                } @else {
-                  {{ 'overview.kpis.noData' | transloco }}
-                }
+                </p>
+              </div>
+            } @else {
+              <p class="text-sm text-muted-foreground">
+                {{ 'overview.kpis.noData' | transloco }}
               </p>
-            </div>
+            }
           </li>
-          <li hlmCard size="sm">
-            <div hlmCardHeader>
-              <p hlmCardDescription class="flex items-center gap-2">
-                <ng-icon name="lucideClock" aria-hidden="true" />
-                {{ 'overview.kpis.averageDelivery' | transloco }}
-              </p>
-              <p hlmCardTitle class="text-3xl font-semibold tabular-nums">
-                @if (report.averageDeliveryHours !== null) {
-                  {{
-                    'overview.kpis.hours'
-                      | transloco: { hours: (report.averageDeliveryHours | pfNumber: 1) }
-                  }}
-                } @else {
-                  —
-                }
-              </p>
-              <p class="text-xs text-muted-foreground">
-                {{ 'overview.kpis.samples' | transloco: { count: report.deliveryDurationSamples } }}
-              </p>
-            </div>
+          <li class="flex flex-col gap-1.5 bg-card px-6 py-5">
+            <p class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              {{ 'overview.kpis.averageDelivery' | transloco }}
+            </p>
+            <p class="text-3xl font-semibold tracking-tight tabular-nums">
+              @if (report.averageDeliveryHours !== null) {
+                {{
+                  'overview.kpis.hours'
+                    | transloco: { hours: (report.averageDeliveryHours | pfNumber: 1) }
+                }}
+              } @else {
+                —
+              }
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {{ 'overview.kpis.samples' | transloco: { count: report.deliveryDurationSamples } }}
+            </p>
           </li>
-          <li hlmCard size="sm">
-            <div hlmCardHeader>
-              <p hlmCardDescription class="flex items-center gap-2">
-                <ng-icon name="lucideTimer" aria-hidden="true" />
-                {{ 'overview.kpis.averageTransit' | transloco }}
-              </p>
-              <p hlmCardTitle class="text-3xl font-semibold tabular-nums">
-                @if (report.averageTransitHours !== null) {
-                  {{
-                    'overview.kpis.hours'
-                      | transloco: { hours: (report.averageTransitHours | pfNumber: 1) }
-                  }}
-                } @else {
-                  —
-                }
-              </p>
-              <p class="text-xs text-muted-foreground">
-                {{ 'overview.kpis.samples' | transloco: { count: report.transitDurationSamples } }}
-              </p>
-            </div>
+          <li class="flex flex-col gap-1.5 bg-card px-6 py-5">
+            <p class="text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+              {{ 'overview.kpis.averageTransit' | transloco }}
+            </p>
+            <p class="text-3xl font-semibold tracking-tight tabular-nums">
+              @if (report.averageTransitHours !== null) {
+                {{
+                  'overview.kpis.hours'
+                    | transloco: { hours: (report.averageTransitHours | pfNumber: 1) }
+                }}
+              } @else {
+                —
+              }
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {{ 'overview.kpis.samples' | transloco: { count: report.transitDurationSamples } }}
+            </p>
           </li>
         </ul>
 
@@ -266,6 +253,11 @@ export class OverviewPage {
   protected readonly chartSeries = computed<ChartSeries[]>(() => [
     { label: this.seriesLabel(), data: this.store.daily().values },
   ]);
+
+  /** Keeps the progress bar fill within its track. */
+  protected clampPercent(value: number): number {
+    return Math.min(100, Math.max(0, value));
+  }
 
   constructor() {
     this.store.loadReport();
