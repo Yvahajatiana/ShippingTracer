@@ -1,0 +1,146 @@
+<a hlmBtn variant="ghost" size="sm" class="mb-2 -ml-2" routerLink="/shipments">
+  <ng-icon name="lucideArrowLeft" />
+  {{ 'shipments.backToList' | transloco }}
+</a>
+
+@if (store.error(); as error) {
+  <pf-error-banner [error]="error" (retry)="store.load(id())" />
+} @else if (store.loading() && !store.shipment()) {
+  <hlm-skeleton class="mb-6 h-10 w-64" />
+  <pf-list-skeleton [rows]="6" />
+} @else if (store.shipment(); as shipment) {
+  <pf-page-header
+    [title]="'shipments.detailTitle' | transloco: { number: shipment.trackingNumber }"
+    [subtitle]="'shipments.createdOn' | transloco: { date: (shipment.createdAtUtc | pfDate) }"
+  >
+    <button
+      hlmBtn
+      variant="outline"
+      type="button"
+      [disabled]="store.downloading()"
+      (click)="store.downloadLabel()"
+    >
+      @if (store.downloading()) {
+        <hlm-spinner [aria-label]="'common.loading' | transloco" />
+      } @else {
+        <ng-icon name="lucideDownload" />
+      }
+      {{ 'shipments.downloadLabel' | transloco }}
+    </button>
+  </pf-page-header>
+
+  <div class="grid gap-6 lg:grid-cols-3">
+    <div class="space-y-6 lg:col-span-2">
+      <section hlmCard>
+        <div hlmCardHeader>
+          <h2 hlmCardTitle>{{ 'shipments.summary' | transloco }}</h2>
+        </div>
+        <dl hlmCardContent class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div>
+            <dt class="text-xs text-muted-foreground">{{ 'common.status' | transloco }}</dt>
+            <dd class="mt-1"><pf-status-tag type="ShipmentStatus" [value]="shipment.status" /></dd>
+          </div>
+          <div>
+            <dt class="text-xs text-muted-foreground">{{ 'shipments.zone' | transloco }}</dt>
+            <dd class="mt-1"><pf-status-tag type="DeliveryZone" [value]="shipment.zone" /></dd>
+          </div>
+          <div>
+            <dt class="text-xs text-muted-foreground">{{ 'shipments.price' | transloco }}</dt>
+            <dd class="mt-1 font-medium">{{ shipment.price | pfMoney: shipment.currency }}</dd>
+          </div>
+          <div>
+            <dt class="text-xs text-muted-foreground">{{ 'shipments.parcel' | transloco }}</dt>
+            <dd class="mt-1">
+              {{ 'shipments.weight' | transloco: { value: (shipment.parcel.weightKg | pfNumber) } }}
+              <span class="block text-xs text-muted-foreground">
+                {{
+                  'shipments.dimensions'
+                    | transloco
+                      : {
+                          l: shipment.parcel.lengthCm,
+                          w: shipment.parcel.widthCm,
+                          h: shipment.parcel.heightCm,
+                        }
+                }}
+              </span>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <div class="grid gap-6 sm:grid-cols-2">
+        @for (
+          party of [
+            { key: 'shipments.sender', address: shipment.sender },
+            { key: 'shipments.recipient', address: shipment.recipient },
+          ];
+          track party.key
+        ) {
+          <section hlmCard>
+            <div hlmCardHeader>
+              <h2 hlmCardTitle>{{ party.key | transloco }}</h2>
+            </div>
+            <address hlmCardContent class="space-y-1 not-italic">
+              <p class="font-medium">{{ party.address.name }}</p>
+              <p>{{ party.address.line1 }}</p>
+              @if (party.address.line2) {
+                <p>{{ party.address.line2 }}</p>
+              }
+              <p>
+                {{ party.address.postalCode }} {{ party.address.city }} ·
+                {{ party.address.countryCode }}
+              </p>
+              <p class="break-all text-muted-foreground">{{ party.address.email }}</p>
+              <p class="text-muted-foreground">{{ party.address.phone }}</p>
+            </address>
+          </section>
+        }
+      </div>
+    </div>
+
+    <section hlmCard class="h-fit">
+      <div hlmCardHeader>
+        <h2 hlmCardTitle>{{ 'shipments.tracking.title' | transloco }}</h2>
+        @if (store.tracking(); as tracking) {
+          <p hlmCardDescription class="flex flex-wrap items-center gap-2">
+            {{ 'shipments.tracking.current' | transloco }}
+            <pf-status-tag type="ParcelStatus" [value]="tracking.currentStatus" />
+          </p>
+        }
+      </div>
+      <div hlmCardContent>
+        @if (store.trackingError(); as trackingError) {
+          <pf-error-banner [error]="trackingError" (retry)="store.reloadTracking()" />
+        } @else if (store.trackingLoading()) {
+          <pf-list-skeleton [rows]="4" />
+        } @else if (store.timeline().length === 0) {
+          <pf-empty-state icon="lucideMapPin" [title]="'shipments.tracking.empty' | transloco" />
+        } @else {
+          <ol class="relative ml-2 border-l" data-testid="tracking-timeline">
+            @for (entry of store.timeline(); track entry.eventId; let first = $first) {
+              <li class="mb-5 ml-5 last:mb-0">
+                <span
+                  class="absolute -left-1.5 mt-1.5 size-3 rounded-full border-2 border-background"
+                  [class.bg-primary]="first"
+                  [class.bg-muted-foreground]="!first"
+                  aria-hidden="true"
+                ></span>
+                <pf-status-tag type="ParcelStatus" [value]="entry.status" />
+                <p class="mt-1 text-sm">
+                  <time [attr.datetime]="entry.occurredAtUtc">{{
+                    entry.occurredAtUtc | pfDate
+                  }}</time>
+                </p>
+                @if (entry.facilityCode) {
+                  <p class="text-xs text-muted-foreground">
+                    {{ 'shipments.tracking.facility' | transloco: { code: entry.facilityCode } }}
+                  </p>
+                }
+              </li>
+            }
+          </ol>
+        }
+      </div>
+    </section>
+  </div>
+}

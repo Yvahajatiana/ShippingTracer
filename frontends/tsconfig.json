@@ -1,0 +1,100 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "resolveJsonModule": true,
+    "target": "ES2022",
+    "module": "preserve",
+    "paths": {
+      "@parcelflow/shared": ["./projects/shared/src/public-api.ts"],
+      "@parcelflow/shared/testing": ["./projects/shared/src/testing.ts"],
+      "@spartan-ng/helm/utils": ["./projects/shared/helm/utils/src/index.ts"],
+      "@spartan-ng/helm/button": ["./projects/shared/helm/button/src/index.ts"],
+      "@spartan-ng/helm/alert": ["./projects/shared/helm/alert/src/index.ts"],
+      "@spartan-ng/helm/alert-dialog": ["./projects/shared/helm/alert-dialog/src/index.ts"],
+      "@spartan-ng/helm/badge": ["./projects/shared/helm/badge/src/index.ts"],
+      "@spartan-ng/helm/card": ["./projects/shared/helm/card/src/index.ts"],
+      "@spartan-ng/helm/checkbox": ["./projects/shared/helm/checkbox/src/index.ts"],
+      "@spartan-ng/helm/date-picker": ["./projects/shared/helm/date-picker/src/index.ts"],
+      "@spartan-ng/helm/calendar": ["./projects/shared/helm/calendar/src/index.ts"],
+      "@spartan-ng/helm/select": ["./projects/shared/helm/select/src/index.ts"],
+      "@spartan-ng/helm/popover": ["./projects/shared/helm/popover/src/index.ts"],
+      "@spartan-ng/helm/input-group": ["./projects/shared/helm/input-group/src/index.ts"],
+      "@spartan-ng/helm/input": ["./projects/shared/helm/input/src/index.ts"],
+      "@spartan-ng/helm/textarea": ["./projects/shared/helm/textarea/src/index.ts"],
+      "@spartan-ng/helm/dialog": ["./projects/shared/helm/dialog/src/index.ts"],
+      "@spartan-ng/helm/dropdown-menu": ["./projects/shared/helm/dropdown-menu/src/index.ts"],
+      "@spartan-ng/helm/empty": ["./projects/shared/helm/empty/src/index.ts"],
+      "@spartan-ng/helm/field": ["./projects/shared/helm/field/src/index.ts"],
+      "@spartan-ng/helm/label": ["./projects/shared/helm/label/src/index.ts"],
+      "@spartan-ng/helm/separator": ["./projects/shared/helm/separator/src/index.ts"],
+      "@spartan-ng/helm/native-select": ["./projects/shared/helm/native-select/src/index.ts"],
+      "@spartan-ng/helm/pagination": ["./projects/shared/helm/pagination/src/index.ts"],
+      "@spartan-ng/helm/sheet": ["./projects/shared/helm/sheet/src/index.ts"],
+      "@spartan-ng/helm/skeleton": ["./projects/shared/helm/skeleton/src/index.ts"],
+      "@spartan-ng/helm/sonner": ["./projects/shared/helm/sonner/src/index.ts"],
+      "@spartan-ng/helm/spinner": ["./projects/shared/helm/spinner/src/index.ts"],
+      "@spartan-ng/helm/switch": ["./projects/shared/helm/switch/src/index.ts"],
+      "@spartan-ng/helm/table": ["./projects/shared/helm/table/src/index.ts"],
+      "@spartan-ng/helm/tabs": ["./projects/shared/helm/tabs/src/index.ts"],
+      "@spartan-ng/helm/tooltip": ["./projects/shared/helm/tooltip/src/index.ts"],
+      "@spartan-ng/helm/avatar": ["./projects/shared/helm/avatar/src/index.ts"],
+      "@spartan-ng/helm/breadcrumb": ["./projects/shared/helm/breadcrumb/src/index.ts"],
+      "@spartan-ng/helm/progress": ["./projects/shared/helm/progress/src/index.ts"],
+      "@spartan-ng/helm/radio-group": ["./projects/shared/helm/radio-group/src/index.ts"],
+      "@spartan-ng/helm/scroll-area": ["./projects/shared/helm/scroll-area/src/index.ts"],
+      "@spartan-ng/helm/toggle-group": ["./projects/shared/helm/toggle-group/src/index.ts"],
+      "@spartan-ng/helm/toggle": ["./projects/shared/helm/toggle/src/index.ts"],
+      "@spartan-ng/helm/button-group": ["./projects/shared/helm/button-group/src/index.ts"],
+      "@spartan-ng/helm/combobox": ["./projects/shared/helm/combobox/src/index.ts"],
+      "@spartan-ng/helm/autocomplete": ["./projects/shared/helm/autocomplete/src/index.ts"],
+      "@spartan-ng/helm/accordion": ["./projects/shared/helm/accordion/src/index.ts"],
+      "@spartan-ng/helm/item": ["./projects/shared/helm/item/src/index.ts"],
+      "@spartan-ng/helm/collapsible": ["./projects/shared/helm/collapsible/src/index.ts"],
+      "@spartan-ng/helm/kbd": ["./projects/shared/helm/kbd/src/index.ts"],
+      "@spartan-ng/helm/hover-card": ["./projects/shared/helm/hover-card/src/index.ts"]
+    }
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true,
+    "typeCheckHostBindings": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./projects/customer-portal/tsconfig.app.json"
+    },
+    {
+      "path": "./projects/customer-portal/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/operations-portal/tsconfig.app.json"
+    },
+    {
+      "path": "./projects/operations-portal/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/admin-portal/tsconfig.app.json"
+    },
+    {
+      "path": "./projects/admin-portal/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/shared/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/shared/tsconfig.spec.json"
+    }
+  ]
+}

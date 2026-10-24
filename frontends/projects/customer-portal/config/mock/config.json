@@ -1,0 +1,10 @@
+{
+  "apiBaseUrl": "",
+  "authMode": "mock",
+  "mockApi": true,
+  "keycloak": {
+    "url": "http://localhost:8080",
+    "realm": "parcelflow",
+    "clientId": "parcelflow-customer"
+  }
+}

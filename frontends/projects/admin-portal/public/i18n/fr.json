@@ -1,0 +1,217 @@
+{
+  "app": { "title": "Administration" },
+  "nav": {
+    "overview": "Vue d'ensemble",
+    "companies": "Entreprises",
+    "customers": "Clients",
+    "tariffs": "Tarifs",
+    "warehouses": "Entrepôts",
+    "drivers": "Livreurs",
+    "invoices": "Factures",
+    "notifications": "Notifications",
+    "groups": {
+      "monitoring": "Pilotage",
+      "referenceData": "Référentiel",
+      "finance": "Finance et relation client"
+    }
+  },
+  "pager": {
+    "label": "Pagination",
+    "summary": "Page {{page}} sur {{pages}} · {{total}} élément(s)",
+    "page": "Page {{page}}"
+  },
+  "overview": {
+    "title": "Vue d'ensemble",
+    "subtitle": "Indicateurs des {{days}} derniers jours et accès rapide à l'administration.",
+    "kpiTitle": "Indicateurs clés",
+    "kpis": {
+      "totalShipments": "Expéditions créées",
+      "delivered": "Colis livrés",
+      "rate": "Taux de livraison : {{rate}} %",
+      "noData": "Aucune expédition sur la période",
+      "averageDelivery": "Délai moyen de livraison",
+      "averageTransit": "Délai moyen de transit",
+      "hours": "{{hours}} h",
+      "samples": "Sur {{count}} colis mesuré(s)"
+    },
+    "chart": {
+      "title": "Volume quotidien d'expéditions",
+      "range": "Du {{from}} au {{to}}",
+      "series": "Expéditions",
+      "ariaLabel": "Histogramme du nombre d'expéditions par jour, {{total}} au total"
+    },
+    "sectionsTitle": "Administration",
+    "sections": {
+      "companies": "Entreprises",
+      "warehouses": "Entrepôts et centres de tri",
+      "drivers": "Livreurs",
+      "pendingInvoices": "Factures en attente de paiement",
+      "partialCount": "Au moins {{count}} (comptage limité aux factures les plus récentes)"
+    }
+  },
+  "companies": {
+    "title": "Entreprises",
+    "subtitle": "Entreprises clientes auxquelles des comptes peuvent être rattachés.",
+    "new": "Nouvelle entreprise",
+    "empty": "Aucune entreprise enregistrée.",
+    "count": "{{count}} entreprise(s)",
+    "createTitle": "Nouvelle entreprise",
+    "editTitle": "Modifier l'entreprise",
+    "editNamed": "Modifier {{name}}",
+    "dialogDescription": "Raison sociale, numéro d'immatriculation et e-mail de contact.",
+    "created": "Entreprise créée.",
+    "fields": {
+      "name": "Raison sociale",
+      "registrationNumber": "N° d'immatriculation",
+      "email": "E-mail de contact"
+    }
+  },
+  "customers": {
+    "title": "Clients",
+    "subtitle": "Profils clients et rattachement à une entreprise.",
+    "empty": "Aucun client.",
+    "openNamed": "Ouvrir la fiche de {{name}}",
+    "backToList": "Retour aux clients",
+    "profile": "Profil",
+    "addresses": "Carnet d'adresses",
+    "noAddresses": "Aucune adresse enregistrée.",
+    "fields": {
+      "name": "Nom",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "subject": "Identifiant Keycloak"
+    },
+    "company": {
+      "title": "Entreprise",
+      "current": "Rattaché à {{name}}.",
+      "noneCurrent": "Ce client n'est rattaché à aucune entreprise.",
+      "select": "Entreprise de rattachement",
+      "none": "Aucune entreprise",
+      "assign": "Enregistrer le rattachement",
+      "assigned": "Entreprise rattachée au client.",
+      "unassigned": "Rattachement supprimé."
+    }
+  },
+  "tariffs": {
+    "title": "Tarifs",
+    "subtitle": "Prix de base et prix au kilo appliqués à chaque zone de livraison.",
+    "empty": "Aucun tarif configuré.",
+    "zone": "Zone de livraison",
+    "currency": "Montants en {{currency}}",
+    "basePrice": "Prix de base",
+    "pricePerKg": "Prix par kg",
+    "editTitle": "Tarif {{zone}}",
+    "editNamed": "Modifier le tarif {{zone}}",
+    "dialogDescription": "Les nouveaux prix s'appliquent aux prochains devis. Montants en {{currency}}, deux décimales maximum.",
+    "example": "Exemple pour un colis de 2 kg : {{price}}",
+    "updated": "Tarif mis à jour."
+  },
+  "warehouses": {
+    "title": "Entrepôts",
+    "subtitle": "Entrepôts et centres de tri du réseau.",
+    "new": "Nouvel entrepôt",
+    "empty": "Aucun entrepôt enregistré.",
+    "createTitle": "Nouvel entrepôt",
+    "editTitle": "Modifier l'entrepôt",
+    "createDescription": "Le code et le type ne pourront plus être modifiés après la création.",
+    "editDescription": "Le code et le type sont définitifs ; l'adresse, le nom et l'activité restent modifiables.",
+    "editNamed": "Modifier l'entrepôt {{code}}",
+    "codeHint": "Lettres majuscules, chiffres et tirets (ex. PAR-02).",
+    "codeTaken": "Ce code est déjà utilisé par un autre entrepôt.",
+    "created": "Entrepôt créé.",
+    "fields": {
+      "code": "Code",
+      "name": "Nom",
+      "kind": "Type",
+      "address": "Adresse",
+      "street": "Rue",
+      "postalCode": "Code postal",
+      "city": "Ville",
+      "countryCode": "Pays (code ISO)"
+    }
+  },
+  "drivers": {
+    "title": "Livreurs",
+    "subtitle": "Comptes livreurs autorisés à effectuer des tournées.",
+    "new": "Nouveau livreur",
+    "empty": "Aucun livreur enregistré.",
+    "createTitle": "Nouveau livreur",
+    "editTitle": "Modifier le livreur",
+    "editNamed": "Modifier {{name}}",
+    "dialogDescription": "Le livreur est identifié par son identifiant Keycloak, qui ne peut plus être modifié.",
+    "subjectHint": "Identifiant (sub) du compte Keycloak du livreur.",
+    "subjectTaken": "Un livreur existe déjà pour cet identifiant Keycloak.",
+    "created": "Livreur créé.",
+    "fields": {
+      "subject": "Identifiant Keycloak",
+      "displayName": "Nom affiché"
+    }
+  },
+  "invoices": {
+    "title": "Factures",
+    "subtitle": "Toutes les factures émises, avec leurs paiements et avoirs.",
+    "statusFilter": "Filtrer par statut",
+    "allStatuses": "Tous les statuts",
+    "filterHint": "Le filtre s'applique à la page affichée.",
+    "empty": "Aucune facture.",
+    "emptyFiltered": "Aucune facture de cette page ne correspond au filtre.",
+    "openNamed": "Ouvrir la facture {{number}}",
+    "backToList": "Retour aux factures",
+    "detailTitle": "Facture {{number}}",
+    "issuedOn": "Émise le {{date}}",
+    "summary": "Récapitulatif",
+    "creditNotes": "Avoirs",
+    "noCreditNotes": "Aucun avoir émis.",
+    "totalCount": "{{total}} facture(s)",
+    "invoiceLabel": "Facture",
+    "fields": {
+      "number": "Numéro",
+      "customer": "Client",
+      "amount": "Montant",
+      "creditTotal": "Total remboursé",
+      "remainingCredit": "Reste remboursable",
+      "issuedAt": "Émise le",
+      "shipment": "Expédition"
+    },
+    "payment": {
+      "title": "Paiement",
+      "none": "Aucun paiement enregistré pour cette facture.",
+      "outcome": "Résultat",
+      "date": "Date",
+      "operation": "Opération"
+    },
+    "creditNote": {
+      "open": "Émettre un avoir",
+      "title": "Émettre un avoir",
+      "description": "Facture {{number}} : {{remaining}} remboursable au maximum.",
+      "amount": "Montant",
+      "reason": "Motif",
+      "date": "Date",
+      "submit": "Émettre l'avoir",
+      "issued": "Avoir {{number}} émis.",
+      "notAllowed": "Un avoir ne peut être émis que sur une facture payée disposant d'un reste remboursable."
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Journal des notifications envoyées aux clients.",
+    "shipmentFilter": "Identifiant d'expédition",
+    "shipmentPlaceholder": "ex. 3f2b8c1e-…",
+    "clearFilter": "Effacer le filtre",
+    "empty": "Aucune notification.",
+    "totalCount": "{{total}} notification(s)",
+    "openNamed": "Voir la notification « {{subject}} »",
+    "detailDescription": "Détail de la notification enregistrée.",
+    "fields": {
+      "subject": "Objet",
+      "body": "Message",
+      "channel": "Canal",
+      "destination": "Destinataire",
+      "trackingNumber": "N° de suivi",
+      "customer": "Client",
+      "shipment": "Expédition",
+      "occurredAt": "Événement le",
+      "recordedAt": "Enregistrée le"
+    }
+  }
+}
