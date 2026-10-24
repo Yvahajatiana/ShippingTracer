@@ -84,6 +84,17 @@ td[data-slot='table-cell'] {
   padding: 0.8rem 1rem;
 }
 
+/* Outer columns line up with the 1.25rem toolbar and pager strips of list panels. */
+th[data-slot='table-head']:first-child,
+td[data-slot='table-cell']:first-child {
+  padding-inline-start: 1.25rem;
+}
+
+th[data-slot='table-head']:last-child,
+td[data-slot='table-cell']:last-child {
+  padding-inline-end: 1.25rem;
+}
+
 tr[data-slot='table-row'] {
   border-color: #eef1f5;
 }
