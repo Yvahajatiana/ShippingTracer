@@ -307,7 +307,7 @@ export class OverviewPage {
   protected readonly sections = SECTIONS;
 
   protected readonly chartLabels = computed(() =>
-    this.store.daily().dates.map((date) => formatDate(date, this.language.locale(), 'date')),
+    this.store.daily().dates.map((date) => formatDate(date, this.language.locale(), 'dayMonth')),
   );
   protected readonly chartSeries = computed<ChartSeries[]>(() => [
     { label: this.seriesLabel(), data: this.store.daily().values },

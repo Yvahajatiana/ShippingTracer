@@ -1,10 +1,12 @@
 import { Pipe, PipeTransform, inject } from '@angular/core';
 import { LanguageService } from './language.service';
 
-export type DateStyle = 'date' | 'dateTime' | 'time';
+export type DateStyle = 'date' | 'dateTime' | 'time' | 'dayMonth';
 
 const DATE_OPTIONS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
   date: { dateStyle: 'medium' },
+  // Compact day and month (e.g. 24/10), for dense chart axes.
+  dayMonth: { day: '2-digit', month: '2-digit' },
   dateTime: { dateStyle: 'medium', timeStyle: 'short' },
   time: { timeStyle: 'short' },
 };
