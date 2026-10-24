@@ -1,4 +1,6 @@
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +28,19 @@ public static class DependencyInjection
         services.AddScoped<PaymentCompletedActivity>();
         services.AddScoped<PaymentFailedActivity>();
         services.AddScoped<ParcelPickedUpActivity>();
+        services.AddScoped<PaymentTimeoutActivity>();
+        services.AddOptions<ShipmentBookingOptions>()
+            .Configure<IConfiguration>((options, settings) =>
+            {
+                var timeout = settings[$"{ShipmentBookingOptions.SectionName}:PaymentTimeout"];
+                if (!string.IsNullOrWhiteSpace(timeout))
+                    options.PaymentTimeout = TimeSpan.Parse(timeout, System.Globalization.CultureInfo.InvariantCulture);
+            })
+            .Validate(options => options.PaymentTimeout > TimeSpan.Zero, "ShipmentBooking:PaymentTimeout must be positive.")
+            .Validate(options => options.PaymentTimeout <= ShipmentBookingOptions.MaximumPaymentTimeout,
+                $"ShipmentBooking:PaymentTimeout must not exceed {ShipmentBookingOptions.MaximumPaymentTimeout} " +
+                "(RabbitMQ delayed message exchange limit of 2^32-1 ms).")
+            .ValidateOnStart();
         services.AddStackExchangeRedisCache(options => options.InstanceName = "parcelflow:");
         services.AddOptions<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions>()
             .Configure<IConfiguration>((options, settings) =>
@@ -53,8 +68,11 @@ public static class DependencyInjection
                 BreakDuration = TimeSpan.FromSeconds(15)
             }).Build());
 
+        services.AddParcelFlowCorrelation();
         services.AddMassTransit(bus =>
         {
+            // Payment timeouts use RabbitMQ delayed delivery (rabbitmq_delayed_message_exchange plugin).
+            bus.AddDelayedMessageScheduler();
             bus.AddEntityFrameworkOutbox<ShipmentDbContext>(outbox =>
             {
                 outbox.UsePostgres();
@@ -85,6 +103,8 @@ public static class DependencyInjection
                         host.Password(settings["RabbitMq:Password"]
                             ?? throw new InvalidOperationException("RabbitMq:Password is required."));
                     });
+                rabbit.UseDelayedMessageScheduler();
+                rabbit.UseParcelFlowMessageConventions(context);
                 rabbit.ConfigureEndpoints(context);
             });
         });

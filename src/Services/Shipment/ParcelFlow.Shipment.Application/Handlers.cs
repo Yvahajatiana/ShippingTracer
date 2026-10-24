@@ -1,5 +1,6 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Shipment.V1;
 using ParcelFlow.Shipment.Domain;
 
@@ -38,7 +39,7 @@ internal sealed class ShipmentHandlers(IShipmentStore store, ICurrentUser user, 
         var shipment = new ParcelShipment(user.Subject, numbers.Generate(), sender, recipient, parcel, tariff.CalculatePrice(parcel), zone);
         labels.Generate(shipment);
         store.AddShipment(shipment);
-        await publisher.Publish(new ShipmentCreated(Guid.NewGuid(), shipment.Id, DateTimeOffset.UtcNow, shipment.Id,
+        await publisher.Publish(new ShipmentCreated(DeterministicGuid.Create("shipment:created:", shipment.Id), shipment.Id, DateTimeOffset.UtcNow, shipment.Id,
             shipment.TrackingNumber, shipment.OwnerSubject, shipment.Price, shipment.Currency), ct);
         await store.SaveChangesAsync(ct);
         return shipment.ToDto();

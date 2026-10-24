@@ -19,7 +19,8 @@ public static class DependencyInjection
         services.AddScoped<IValidator<UpdateWarehouse>, UpdateWarehouseValidator>();
         services.AddScoped<IValidator<ScanParcel>, ScanParcelValidator>();
         services.AddScoped<IValidator<RegisterReadyShipment>, RegisterReadyShipmentValidator>();
-        services.AddScoped<IValidator<GetWarehouse>, GetWarehouseValidator>();
+        services.AddScoped<IValidator<RecordDeliveryExit>, RecordDeliveryExitValidator>();
+        services.AddScoped<IValidator<GetWarehouse>,GetWarehouseValidator>();
         services.AddScoped<IValidator<ListWarehouses>, ListWarehousesValidator>();
         services.AddScoped<IValidator<GetWarehouseStock>, GetWarehouseStockValidator>();
         return services;

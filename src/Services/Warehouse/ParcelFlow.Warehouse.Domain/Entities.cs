@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace ParcelFlow.Warehouse.Domain;
@@ -13,6 +14,23 @@ public static class WarehouseRules
     public static bool IsCountryCode(string? value) => value is not null && Regex.IsMatch(value.Trim(), "^[A-Za-z]{2}$", RegexOptions.CultureInvariant);
     public static DateTimeOffset NormalizeTimestamp(DateTimeOffset value) => new(value.UtcTicks - value.UtcTicks % 10, TimeSpan.Zero);
     public static bool ContainsNoControlCharacters(string? value) => value is null || !value.Any(char.IsControl);
+    /// <summary>Audit subject recorded on exits triggered automatically by the start of a delivery.</summary>
+    public const string DeliveryStartOperator = "system:delivery-start";
+    /// <summary>Derives a stable scan identifier from the integration event that triggered an automatic exit.</summary>
+    public static Guid DeliveryExitScanId(Guid sourceEventId)
+    {
+        if (sourceEventId == Guid.Empty) throw new ArgumentException("Source event ID is required.", nameof(sourceEventId));
+        Span<byte> input = stackalloc byte[40];
+        "warehouse:delivery-exit:"u8.CopyTo(input);
+        sourceEventId.TryWriteBytes(input[24..40]);
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(input, hash);
+        var bytes = hash[..16];
+        // Mark the value as an RFC 9562 version 8 (custom) UUID with the RFC variant.
+        bytes[7] = (byte)((bytes[7] & 0x0F) | 0x80);
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
+        return new Guid(bytes);
+    }
     internal static string Text(string value, int maximum, string parameter)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameter);

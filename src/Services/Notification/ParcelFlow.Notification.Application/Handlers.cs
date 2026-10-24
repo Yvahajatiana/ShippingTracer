@@ -2,13 +2,15 @@ using System.Globalization;
 using FluentValidation;
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Notification.V1;
 using ParcelFlow.Notification.Domain;
 
 namespace ParcelFlow.Notification.Application;
 
 public sealed class RecordNotificationHandler(INotificationStore store, IShipmentRecipientResolver recipients,
-    IPublishEndpoint publisher, TimeProvider clock) : IRequestHandler<RecordNotification, bool>
+    IPublishEndpoint publisher, TimeProvider clock, ICorrelationContext correlation) : IRequestHandler<RecordNotification, bool>
 {
     public async Task<bool> Handle(RecordNotification request, CancellationToken ct)
     {
@@ -35,7 +37,7 @@ public sealed class RecordNotificationHandler(INotificationStore store, IShipmen
         notification.RecordMessages(recipient.CustomerSubject, recipient.TrackingNumber, recipient.Email, recipient.Phone, subject, body, body, clock.GetUtcNow());
         store.AddEvent(notification);
         foreach (var message in notification.Messages)
-            await publisher.Publish(new NotificationRecorded(Guid.NewGuid(), message.ShipmentId, message.RecordedAtUtc,
+            await publisher.Publish(new NotificationRecorded(DeterministicGuid.Create("notification:recorded:", message.Id), correlation.CorrelationId, message.RecordedAtUtc,
                 message.Id, message.SourceEventId, message.ShipmentId, message.CustomerSubject, message.Channel.ToString()), ct);
         await store.SaveChangesAsync(ct);
         return true;
