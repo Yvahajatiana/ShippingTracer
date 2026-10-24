@@ -1,6 +1,7 @@
 # Security headers shared by every location that serves the portal.
 # add_header is not inherited by a location that declares its own add_header, so each such
-# location includes this file. Rendered by envsubst at container start (KEYCLOAK_URL);
+# location includes this file. Rendered by envsubst at container start (KEYCLOAK_URL, and
+# API_BASE_URL when the API is served from another origin, empty otherwise);
 # __CSP_SCRIPT_HASHES__ is replaced at image build time with the hashes of the inline scripts
 # found in the built index.html.
 
@@ -9,4 +10,4 @@ add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 add_header X-Frame-Options "DENY" always;
 add_header Cross-Origin-Opener-Policy "same-origin" always;
 add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' __CSP_SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${KEYCLOAK_URL}; frame-src ${KEYCLOAK_URL}; form-action 'self' ${KEYCLOAK_URL}; base-uri 'self'; object-src 'none'; frame-ancestors 'none'" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' __CSP_SCRIPT_HASHES__; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ${KEYCLOAK_URL} ${API_BASE_URL}; frame-src ${KEYCLOAK_URL}; form-action 'self' ${KEYCLOAK_URL}; base-uri 'self'; object-src 'none'; frame-ancestors 'none'" always;

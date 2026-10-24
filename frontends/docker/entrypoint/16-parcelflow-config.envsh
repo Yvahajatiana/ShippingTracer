@@ -72,9 +72,11 @@ printf '{\n  "apiBaseUrl": "%s",\n  "authMode": "keycloak",\n  "mockApi": false,
 echo "16-parcelflow-config: wrote $pf_config_file (realm $pf_realm, client $pf_client_id, keycloak $pf_keycloak_url)"
 
 # Normalized values for the nginx templates rendered by 20-envsubst-on-templates.sh.
+# API_BASE_URL is empty (same origin) or a validated origin added to the CSP connect-src.
 KEYCLOAK_URL="$pf_keycloak_url"
 GATEWAY_URL="$pf_gateway_url"
-export KEYCLOAK_URL GATEWAY_URL
+API_BASE_URL="$pf_api_base_url"
+export KEYCLOAK_URL GATEWAY_URL API_BASE_URL
 
 unset pf_keycloak_url pf_realm pf_client_id pf_gateway_url pf_api_base_url pf_config_file
 unset -f pf_fail pf_is_origin pf_is_browser_origin pf_is_identifier
