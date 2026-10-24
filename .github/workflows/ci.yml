@@ -223,6 +223,7 @@ jobs:
           - { name: customer-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: customer-portal }
           - { name: operations-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: operations-portal }
           - { name: admin-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: admin-portal }
+          - { name: rabbitmq, context: deploy/rabbitmq, dockerfile: deploy/rabbitmq/Dockerfile, portal: '' }
     env:
       # Only branch pushes to this repository publish; pull requests and forks build and scan only.
       PUBLISH: ${{ github.event_name == 'push' && !github.event.repository.fork && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') }}

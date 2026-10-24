@@ -9,11 +9,12 @@ Chaque hôte déployable dispose d'une image, et `docker-compose.yml` assemble u
 | `gateway` | `src/Gateway/ParcelFlow.Gateway/Dockerfile` | racine du dépôt |
 | `customer`, `shipment`, `tracking`, `warehouse`, `delivery`, `billing`, `notification`, `reporting` | `src/Services/<Service>/ParcelFlow.<Service>.Api/Dockerfile` | racine du dépôt |
 | `customer-portal`, `operations-portal`, `admin-portal` | `frontends/Dockerfile` (argument `PORTAL`) | `frontends/` |
+| `rabbitmq` | `deploy/rabbitmq/Dockerfile` | `deploy/rabbitmq/` |
 
 Images .NET :
 
 - Construction multi-étapes `sdk:8.0-alpine`, exécution `aspnet:8.0-alpine` avec ICU et tzdata, utilisateur non root (`APP_UID`), port 8080.
-- La restauration ne copie que les `csproj` du graphe de dépendances : modifier un service n'invalide pas le cache des autres.
+- La restauration copie `src/BuildingBlocks` en entier, plus les seuls `csproj` du service : modifier un service n'invalide pas le cache des autres, et un nouveau building block ne demande aucune modification des Dockerfiles.
 - `HEALTHCHECK` sur `/health/live`. Les arguments `VERSION` et `REVISION` alimentent les labels OCI.
 - L'environnement par défaut est `Production`.
 
@@ -54,6 +55,7 @@ Les ports sont publiés sur `127.0.0.1` uniquement. Les comptes de démonstratio
 - **Une base par service.** Une seule instance PostgreSQL 16 est utilisée, et `deploy/postgres/init-databases.sh` crée les huit bases au premier démarrage du volume.
 - **Keycloak en `start-dev` sans volume.** Le realm est réimporté à chaque recréation du conteneur, et une modification de `deploy/keycloak/parcelflow-realm.json` s'applique par `docker compose up -d --force-recreate keycloak`.
 - **Redis sans persistance.** Il ne sert que de cache.
+- **RabbitMQ avec le plugin de messages différés.** La saga de réservation de Shipment programme son délai de paiement par livraison différée. L'image `parcelflow/rabbitmq` ajoute donc `rabbitmq_delayed_message_exchange` 3.13.0, téléchargé avec la même empreinte SHA-256 que les tests d'intégration, ainsi que `rabbitmq_prometheus`. Elle applique aussi les mises à jour de sécurité Alpine que l'image amont n'a pas encore reçues.
 
 ### Opérations courantes
 
@@ -74,4 +76,5 @@ Les ports sont publiés sur `127.0.0.1` uniquement. Les comptes de démonstratio
   - **Opérateur :** entrepôts, tournées et colis disponibles.
   - **Administrateur :** entreprises, clients, tarifs, factures et livreurs.
   - **Sans jeton :** 401.
+- **Saga :** un envoi créé par emma.martin via le portail client produit, par RabbitMQ, la facture Billing `PendingPayment`, les notifications de création et de facture, et le suivi public.
 - **Navigateur :** connexion réelle (code + PKCE) dans Chrome sans interface, sur le portail opérations (camille.martin, tableau de bord alimenté par Reporting) et sur le portail client (emma.martin), thème et données compris.

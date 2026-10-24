@@ -57,7 +57,9 @@ services:
       retries: 20
 
   rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: parcelflow/rabbitmq:${PARCELFLOW_TAG:-local}
+    build:
+      context: deploy/rabbitmq
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: parcelflow
