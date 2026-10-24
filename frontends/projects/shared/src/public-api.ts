@@ -22,4 +22,6 @@ export * from './lib/ui/chart.component';
 export * from './lib/layout/shell.component';
 export * from './lib/layout/status-pages';
 export * from './lib/util/browser';
+export * from './lib/util/dates';
+export * from './lib/util/paging';
 export * from './lib/providers';
