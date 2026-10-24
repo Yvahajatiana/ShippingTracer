@@ -53,4 +53,4 @@ L'import utilise la stratégie `IGNORE_EXISTING` : un realm déjà présent dans
 
 ## Émetteur
 
-L'émetteur des jetons est l'URL publique vue par le navigateur, `http://localhost:8080/realms/parcelflow`, valeur de `Keycloak__Authority` dans les services et la gateway. Dans un réseau de conteneurs, l'émetteur doit rester cette URL publique (`KC_HOSTNAME`), sinon la validation `iss` échoue.
+L'émetteur des jetons est l'URL publique vue par le navigateur, `http://localhost:${KEYCLOAK_PORT}/realms/parcelflow` (8080 par défaut), fixée par `KC_HOSTNAME`. Dans Docker Compose, les services et la gateway joignent Keycloak sur `http://keycloak:8080/realms/parcelflow` (`Keycloak__Authority`) : grâce à `KC_HOSTNAME_BACKCHANNEL_DYNAMIC`, la découverte OIDC y annonce toujours l'émetteur public, mais des URL internes pour les clés et l'endpoint de jeton. La validation `iss` accepte donc les jetons émis pour le navigateur comme ceux obtenus par `client_credentials`.
