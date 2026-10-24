@@ -14,8 +14,8 @@ import {
   blobToBase64,
   toApiError,
 } from '@parcelflow/shared';
-import { Observable, catchError, firstValueFrom, forkJoin, map, of } from 'rxjs';
-import { DRIVER_LOOKUP_SIZE } from './delivery-lists.store';
+import { Observable, catchError, firstValueFrom, forkJoin, of } from 'rxjs';
+import { loadAllDrivers } from './delivery-lists.store';
 
 /** Page size used to list parcels that can be added to a route. */
 export const AVAILABLE_PARCELS_SIZE = 100;
@@ -234,12 +234,7 @@ export const RouteDetailStore = signalStore(
           try {
             const [route, drivers] = await Promise.all([
               firstValueFrom(api.route(id)),
-              firstValueFrom(
-                api.drivers(1, DRIVER_LOOKUP_SIZE).pipe(
-                  map((page) => page.items),
-                  catchError(() => of([] as Driver[])),
-                ),
-              ),
+              firstValueFrom(loadAllDrivers(api).pipe(catchError(() => of([] as Driver[])))),
             ]);
             patchState(store, { drivers, loading: false });
             applyRoute(route);

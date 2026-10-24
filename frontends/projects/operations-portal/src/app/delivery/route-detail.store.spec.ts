@@ -69,6 +69,33 @@ describe('RouteDetailStore', () => {
     expect(store.canStart()).toBe(false);
   });
 
+  it('offers active drivers from every page of the driver list', async () => {
+    const done = store.load('route-1');
+    (await next(ROUTE_URL)).flush(route({ status: 'InProgress' }));
+    // Page 1 is full of inactive drivers; the only active one is on page 2.
+    const inactive = Array.from({ length: 100 }, (_, index) => ({
+      subject: `driver-a${String(index).padStart(3, '0')}`,
+      displayName: `Inactive ${index}`,
+      isActive: false,
+    }));
+    const first = await next(
+      (req) =>
+        req.url === '/api/v1/delivery/drivers' &&
+        req.params.get('page') === '1' &&
+        req.params.get('pageSize') === '100',
+    );
+    first.flush(page(inactive, 1, 100, 101));
+    (
+      await next((req) => req.url === '/api/v1/delivery/drivers' && req.params.get('page') === '2')
+    ).flush(page([DRIVERS[0]], 2, 100, 101));
+    await done;
+    await settle();
+    flushShipments();
+
+    expect(store.drivers()).toHaveLength(101);
+    expect(store.activeDrivers().map((driver) => driver.subject)).toEqual(['driver-emma']);
+  });
+
   it('exposes the load error', async () => {
     const done = store.load('route-1');
     (await next(ROUTE_URL)).flush({}, { status: 404, statusText: 'Not Found' });

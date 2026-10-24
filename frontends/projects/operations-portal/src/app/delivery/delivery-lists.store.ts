@@ -7,14 +7,31 @@ import {
   withMethods,
   withState,
 } from '@ngrx/signals';
-import { DeliveryApi, DeliveryRoute, Driver, IsoDate, Notifier } from '@parcelflow/shared';
-import { catchError, firstValueFrom, of } from 'rxjs';
+import {
+  DeliveryApi,
+  DeliveryRoute,
+  Driver,
+  IsoDate,
+  Notifier,
+  fetchAllPages,
+} from '@parcelflow/shared';
+import { Observable, catchError, firstValueFrom, map, of } from 'rxjs';
 import { fromPage, withPagedList } from '../core/paged-list.feature';
 
 export const ROUTE_PAGE_SIZE = 20;
 export const DRIVER_PAGE_SIZE = 20;
-/** Drivers are few; one large page is enough to resolve names and fill pickers. */
-export const DRIVER_LOOKUP_SIZE = 100;
+
+/**
+ * Every driver, for name lookups and the assignment dropdown. GET /delivery/drivers has no
+ * "active" filter and caps pages at 100 (ordered by subject, inactive ones included), so a
+ * single page could hide active drivers: pages are loaded sequentially up to `total`. Driver
+ * counts stay small, and fetchAllPages bounds the scan anyway.
+ */
+export function loadAllDrivers(api: DeliveryApi): Observable<Driver[]> {
+  return fetchAllPages((page, pageSize) => api.drivers(page, pageSize)).pipe(
+    map((all) => all.items),
+  );
+}
 
 export const DriverListStore = signalStore(
   withPagedList<Driver>(() => {
@@ -48,11 +65,9 @@ export const RouteListStore = signalStore(
   withMethods((store, api = inject(DeliveryApi), notifier = inject(Notifier)) => ({
     async loadDrivers(): Promise<void> {
       // Names are a convenience: subjects are shown when the lookup fails.
-      const page = await firstValueFrom(
-        api.drivers(1, DRIVER_LOOKUP_SIZE).pipe(catchError(() => of(null))),
-      );
-      if (page) {
-        patchState(store, { drivers: page.items });
+      const drivers = await firstValueFrom(loadAllDrivers(api).pipe(catchError(() => of(null))));
+      if (drivers) {
+        patchState(store, { drivers });
       }
     },
     /** Creates a route; errors are rethrown so the form can display field errors. */
