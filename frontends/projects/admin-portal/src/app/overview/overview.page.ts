@@ -3,10 +3,9 @@ import { RouterLink } from '@angular/router';
 import { TranslocoPipe, translateSignal } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
-  lucideArrowRight,
+  lucideChevronRight,
   lucideBuilding2,
   lucideReceipt,
-  lucideTrendingUp,
   lucideTruck,
   lucideWarehouse,
 } from '@ng-icons/lucide';
@@ -29,6 +28,8 @@ interface SectionLink {
   labelKey: string;
   route: string;
   icon: string;
+  /** Highlights sections that need attention (e.g. unpaid invoices). */
+  tone: 'default' | 'warning';
 }
 
 const SECTIONS: SectionLink[] = [
@@ -37,19 +38,28 @@ const SECTIONS: SectionLink[] = [
     labelKey: 'overview.sections.companies',
     route: '/companies',
     icon: 'lucideBuilding2',
+    tone: 'default',
   },
   {
     key: 'warehouses',
     labelKey: 'overview.sections.warehouses',
     route: '/warehouses',
     icon: 'lucideWarehouse',
+    tone: 'default',
   },
-  { key: 'drivers', labelKey: 'overview.sections.drivers', route: '/drivers', icon: 'lucideTruck' },
+  {
+    key: 'drivers',
+    labelKey: 'overview.sections.drivers',
+    route: '/drivers',
+    icon: 'lucideTruck',
+    tone: 'default',
+  },
   {
     key: 'pendingInvoices',
     labelKey: 'overview.sections.pendingInvoices',
     route: '/billing/invoices',
     icon: 'lucideReceipt',
+    tone: 'warning',
   },
 ];
 
@@ -70,10 +80,9 @@ const SECTIONS: SectionLink[] = [
   providers: [
     OverviewStore,
     provideIcons({
-      lucideArrowRight,
+      lucideChevronRight,
       lucideBuilding2,
       lucideReceipt,
-      lucideTrendingUp,
       lucideTruck,
       lucideWarehouse,
     }),
@@ -84,17 +93,33 @@ const SECTIONS: SectionLink[] = [
       [eyebrow]="'nav.groups.monitoring' | transloco"
       [title]="'overview.title' | transloco"
       [subtitle]="'overview.subtitle' | transloco: { days: windowDays }"
-    />
+    >
+      @if (store.report(); as report) {
+        <p class="rounded-md border bg-card px-3 py-1.5 font-mono text-[13px] tabular-nums">
+          <span class="sr-only">
+            {{
+              'overview.chart.range'
+                | transloco
+                  : { from: (report.from | pfDate: 'date'), to: (report.to | pfDate: 'date') }
+            }}
+          </span>
+          <span aria-hidden="true">
+            {{ report.from | pfDate: 'date' }} → {{ report.to | pfDate: 'date' }}
+          </span>
+        </p>
+      }
+    </pf-page-header>
 
-    <section aria-labelledby="overview-kpi-title" class="mb-8">
+    <section aria-labelledby="overview-kpi-title" class="mb-4">
       <h2 id="overview-kpi-title" class="sr-only">{{ 'overview.kpiTitle' | transloco }}</h2>
       @if (store.error()) {
         <pf-error-banner [error]="store.error()" (retry)="store.loadReport()" />
       } @else if (!store.report()) {
-        <div class="grid gap-4" role="status" [attr.aria-label]="'common.loading' | transloco">
-          <hlm-skeleton class="h-32 w-full rounded-md" />
-          <hlm-skeleton class="h-80 w-full rounded-md" />
-        </div>
+        <hlm-skeleton
+          class="block h-32 w-full rounded-md"
+          role="status"
+          [attr.aria-label]="'common.loading' | transloco"
+        />
       } @else {
         @let report = store.report()!;
         <!-- A single card holding the four KPIs; 1px dividers come from the gap over a border-coloured background. -->
@@ -173,70 +198,104 @@ const SECTIONS: SectionLink[] = [
             </p>
           </li>
         </ul>
-
-        <section hlmCard class="mt-4" aria-labelledby="overview-chart-title">
-          <div hlmCardHeader>
-            <h3 hlmCardTitle id="overview-chart-title" class="flex items-center gap-2">
-              <ng-icon name="lucideTrendingUp" aria-hidden="true" />
-              {{ 'overview.chart.title' | transloco }}
-            </h3>
-            <p hlmCardDescription>
-              {{
-                'overview.chart.range'
-                  | transloco
-                    : { from: (report.from | pfDate: 'date'), to: (report.to | pfDate: 'date') }
-              }}
-            </p>
-          </div>
-          <div hlmCardContent>
-            <pf-chart
-              type="bar"
-              class="h-64"
-              [labels]="chartLabels()"
-              [series]="chartSeries()"
-              [ariaLabel]="'overview.chart.ariaLabel' | transloco: { total: report.totalShipments }"
-            />
-          </div>
-        </section>
       }
     </section>
 
-    <section aria-labelledby="overview-sections-title">
-      <h2 id="overview-sections-title" class="mb-4 text-lg font-semibold">
-        {{ 'overview.sectionsTitle' | transloco }}
-      </h2>
-      <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        @for (section of sections; track section.key) {
-          <li>
-            <a
-              hlmCard
-              size="sm"
-              class="h-full transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-              [routerLink]="section.route"
-            >
-              <div hlmCardHeader>
-                <p hlmCardDescription class="flex items-center gap-2">
-                  <ng-icon [name]="section.icon" aria-hidden="true" />
+    <div class="flex flex-wrap items-start gap-4">
+      @if (!store.error()) {
+        <section
+          hlmCard
+          class="min-w-0 flex-[2_1_560px] gap-0 py-0"
+          aria-labelledby="overview-chart-title"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b px-6 py-4">
+            <h2 id="overview-chart-title" class="text-[15px] font-semibold">
+              {{ 'overview.chart.title' | transloco }}
+            </h2>
+            @if (store.report(); as report) {
+              <p class="text-sm text-muted-foreground">
+                {{
+                  'overview.chart.range'
+                    | transloco
+                      : { from: (report.from | pfDate: 'date'), to: (report.to | pfDate: 'date') }
+                }}
+              </p>
+            }
+          </div>
+          <div class="px-6 py-5">
+            @if (store.report(); as report) {
+              <pf-chart
+                type="bar"
+                class="h-72"
+                [labels]="chartLabels()"
+                [series]="chartSeries()"
+                [ariaLabel]="
+                  'overview.chart.ariaLabel' | transloco: { total: report.totalShipments }
+                "
+              />
+            } @else {
+              <hlm-skeleton
+                class="block h-72 w-full rounded-md"
+                role="status"
+                [attr.aria-label]="'common.loading' | transloco"
+              />
+            }
+          </div>
+        </section>
+      }
+
+      <section
+        hlmCard
+        class="min-w-0 flex-[1_1_300px] gap-0 py-0"
+        aria-labelledby="overview-sections-title"
+      >
+        <div class="border-b px-6 py-4">
+          <h2 id="overview-sections-title" class="text-[15px] font-semibold">
+            {{ 'overview.sectionsTitle' | transloco }}
+          </h2>
+        </div>
+        <ul>
+          @for (section of sections; track section.key) {
+            <li class="border-b last:border-b-0">
+              <a
+                class="flex items-center gap-3 px-6 py-3.5 transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
+                [routerLink]="section.route"
+              >
+                <span
+                  class="grid size-9 shrink-0 place-items-center rounded-md"
+                  [class]="
+                    section.tone === 'warning'
+                      ? 'bg-warning/15 text-warning'
+                      : 'bg-accent text-primary'
+                  "
+                  aria-hidden="true"
+                >
+                  <ng-icon [name]="section.icon" size="1.125rem" />
+                </span>
+                <span class="min-w-0 flex-1 text-sm font-medium">
                   {{ section.labelKey | transloco }}
-                </p>
-                <p hlmCardTitle class="flex items-center justify-between text-2xl tabular-nums">
-                  @if (store.countersLoading()) {
-                    <hlm-skeleton class="h-7 w-12" />
-                  } @else {
-                    <span>{{ store.counters()[section.key] ?? '—' }}</span>
-                  }
-                  <ng-icon
-                    name="lucideArrowRight"
-                    class="text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </p>
-              </div>
-            </a>
-          </li>
-        }
-      </ul>
-    </section>
+                </span>
+                @if (store.countersLoading()) {
+                  <hlm-skeleton class="h-6 w-10" />
+                } @else {
+                  <span
+                    class="text-lg font-semibold tabular-nums"
+                    [class.text-warning]="section.tone === 'warning'"
+                  >
+                    {{ store.counters()[section.key] ?? '—' }}
+                  </span>
+                }
+                <ng-icon
+                  name="lucideChevronRight"
+                  class="shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </a>
+            </li>
+          }
+        </ul>
+      </section>
+    </div>
   `,
 })
 export class OverviewPage {
