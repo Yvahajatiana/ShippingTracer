@@ -53,6 +53,7 @@
     "subtitle": "Entreprises clientes auxquelles des comptes peuvent être rattachés.",
     "new": "Nouvelle entreprise",
     "empty": "Aucune entreprise enregistrée.",
+    "count": "{{count}} entreprise(s)",
     "createTitle": "Nouvelle entreprise",
     "editTitle": "Modifier l'entreprise",
     "editNamed": "Modifier {{name}}",

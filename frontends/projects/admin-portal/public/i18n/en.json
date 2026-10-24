@@ -53,6 +53,7 @@
     "subtitle": "Customer companies that accounts can be attached to.",
     "new": "New company",
     "empty": "No companies yet.",
+    "count": "{{count}} company record(s)",
     "createTitle": "New company",
     "editTitle": "Edit company",
     "editNamed": "Edit {{name}}",
