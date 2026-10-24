@@ -1,0 +1,260 @@
+# ParcelFlow local stack: infrastructure, Keycloak, the eight services, the gateway and the three portals.
+# Usage: copy .env.example to .env, set the secrets, then `docker compose up --build -d`.
+# Portals: customer http://localhost:4201, operations http://localhost:4202, admin http://localhost:4203.
+name: parcelflow
+
+x-dotnet-service: &dotnet-service
+  restart: unless-stopped
+  depends_on: &dotnet-dependencies
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    keycloak:
+      condition: service_healthy
+
+# Settings shared by the eight services. The local stack runs in Development: plain HTTP towards
+# Keycloak and migrations plus demo seeds at startup (both are refused or skipped in Production).
+x-dotnet-environment: &dotnet-environment
+  ASPNETCORE_ENVIRONMENT: Development
+  Database__Initialize: "true"
+  Database__SeedDemoData: "true"
+  Keycloak__Authority: http://keycloak:8080/realms/parcelflow
+  ConnectionStrings__Redis: redis:6379,abortConnect=false,connectTimeout=2000,syncTimeout=2000
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  RabbitMq__VirtualHost: /
+  RabbitMq__Username: parcelflow
+  RabbitMq__Password: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parcelflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcelflow -d parcelflow_reporting"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: parcelflow
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_TAG:-26.4.2}
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      # Browsers and containers must see the same issuer: tokens are issued for localhost:8080
+      # while services reach Keycloak on keycloak:8080 for metadata, keys and client credentials.
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?set NOTIFICATION_CLIENT_SECRET in .env}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?set DEMO_USER_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./deploy/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      # The image has no curl: probe the management port with bash.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status": "UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  customer:
+    <<: *dotnet-service
+    image: parcelflow/customer:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Customer/ParcelFlow.Customer.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__CustomerDatabase: Host=postgres;Port=5432;Database=parcelflow_customers;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  shipment:
+    <<: *dotnet-service
+    image: parcelflow/shipment:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Shipment/ParcelFlow.Shipment.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__ShipmentDatabase: Host=postgres;Port=5432;Database=parcelflow_shipments;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  tracking:
+    <<: *dotnet-service
+    image: parcelflow/tracking:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Tracking/ParcelFlow.Tracking.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__TrackingDatabase: Host=postgres;Port=5432;Database=parcelflow_tracking;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  warehouse:
+    <<: *dotnet-service
+    image: parcelflow/warehouse:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Warehouse/ParcelFlow.Warehouse.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__WarehouseDatabase: Host=postgres;Port=5432;Database=parcelflow_warehouse;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  delivery:
+    <<: *dotnet-service
+    image: parcelflow/delivery:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Delivery/ParcelFlow.Delivery.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__DeliveryDatabase: Host=postgres;Port=5432;Database=parcelflow_delivery;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  billing:
+    <<: *dotnet-service
+    image: parcelflow/billing:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Billing/ParcelFlow.Billing.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__BillingDatabase: Host=postgres;Port=5432;Database=parcelflow_billing;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  notification:
+    <<: *dotnet-service
+    image: parcelflow/notification:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Notification/ParcelFlow.Notification.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__NotificationDatabase: Host=postgres;Port=5432;Database=parcelflow_notification;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+      ShipmentService__BaseUrl: http://shipment:8080/
+      ServiceAuthentication__ClientId: notification-service
+      ServiceAuthentication__ClientSecret: ${NOTIFICATION_CLIENT_SECRET}
+
+  reporting:
+    <<: *dotnet-service
+    image: parcelflow/reporting:${PARCELFLOW_TAG:-local}
+    build:
+      context: .
+      dockerfile: src/Services/Reporting/ParcelFlow.Reporting.Api/Dockerfile
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__ReportingDatabase: Host=postgres;Port=5432;Database=parcelflow_reporting;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  gateway:
+    image: parcelflow/gateway:${PARCELFLOW_TAG:-local}
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: src/Gateway/ParcelFlow.Gateway/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Keycloak__Authority: http://keycloak:8080/realms/parcelflow
+      Gateway__Destinations__Customer: http://customer:8080/
+      Gateway__Destinations__Shipment: http://shipment:8080/
+      Gateway__Destinations__Tracking: http://tracking:8080/
+      Gateway__Destinations__Warehouse: http://warehouse:8080/
+      Gateway__Destinations__Delivery: http://delivery:8080/
+      Gateway__Destinations__Billing: http://billing:8080/
+      Gateway__Destinations__Notification: http://notification:8080/
+      Gateway__Destinations__Reporting: http://reporting:8080/
+    ports:
+      - "127.0.0.1:5100:8080"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  customer-portal:
+    image: parcelflow/customer-portal:${PARCELFLOW_TAG:-local}
+    restart: unless-stopped
+    build:
+      context: frontends
+      args:
+        PORTAL: customer-portal
+    environment:
+      KEYCLOAK_URL: http://localhost:8080
+      GATEWAY_URL: http://gateway:8080
+    ports:
+      - "127.0.0.1:4201:8080"
+    depends_on:
+      - gateway
+
+  operations-portal:
+    image: parcelflow/operations-portal:${PARCELFLOW_TAG:-local}
+    restart: unless-stopped
+    build:
+      context: frontends
+      args:
+        PORTAL: operations-portal
+    environment:
+      KEYCLOAK_URL: http://localhost:8080
+      GATEWAY_URL: http://gateway:8080
+    ports:
+      - "127.0.0.1:4202:8080"
+    depends_on:
+      - gateway
+
+  admin-portal:
+    image: parcelflow/admin-portal:${PARCELFLOW_TAG:-local}
+    restart: unless-stopped
+    build:
+      context: frontends
+      args:
+        PORTAL: admin-portal
+    environment:
+      KEYCLOAK_URL: http://localhost:8080
+      GATEWAY_URL: http://gateway:8080
+    ports:
+      - "127.0.0.1:4203:8080"
+    depends_on:
+      - gateway
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
