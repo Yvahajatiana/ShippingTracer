@@ -74,3 +74,4 @@ Les ports sont publiés sur `127.0.0.1` uniquement. Les comptes de démonstratio
   - **Opérateur :** entrepôts, tournées et colis disponibles.
   - **Administrateur :** entreprises, clients, tarifs, factures et livreurs.
   - **Sans jeton :** 401.
+- **Navigateur :** connexion réelle (code + PKCE) dans Chrome sans interface, sur le portail opérations (camille.martin, tableau de bord alimenté par Reporting) et sur le portail client (emma.martin), thème et données compris.

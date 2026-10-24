@@ -21,7 +21,8 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 
 # Only the files the Angular build needs, so nginx/entrypoint edits do not invalidate this stage.
-COPY angular.json tsconfig.json components.json ./
+# .postcssrc.json enables the Tailwind PostCSS plugin; without it the bundle ships no utilities.
+COPY angular.json tsconfig.json components.json .postcssrc.json ./
 COPY projects ./projects
 COPY docker/build/csp-script-hashes.mjs /tools/csp-script-hashes.mjs
 
