@@ -175,3 +175,6 @@ Les images de migration ne sont pas encore publiées par la CI : leur publicatio
   - **opératrice (camille.martin) :** entrepôts, tournées et indicateurs ;
   - **administrateur :** clients et livreurs ;
   - **saga :** un envoi créé par le portail client produit, via RabbitMQ, la facture `PendingPayment` (8,50 EUR), les notifications associées et le suivi public anonyme.
+- **NetworkPolicy (minikube avec Calico) :** le parcours de bout en bout ci-dessus passe à l'identique.
+  - **Flux autorisés :** gateway vers un service, Notification vers Shipment, portail vers gateway et vers Keycloak.
+  - **Flux bloqués :** portail vers un service, service vers un autre service, et un pod étranger à la release vers la gateway, un service ou PostgreSQL.
