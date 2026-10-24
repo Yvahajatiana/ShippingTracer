@@ -55,6 +55,8 @@ export class ChartComponent implements OnDestroy {
           const foreground = token(canvas, '--muted-foreground');
           const grid = token(canvas, '--border');
           const circular = type === 'doughnut';
+          // Render axis and legend text with the portal's typeface rather than chart.js' default.
+          ChartJs.defaults.font.family = getComputedStyle(canvas).fontFamily;
           this.chart?.destroy();
           this.chart = new ChartJs(canvas, {
             type,
@@ -80,7 +82,11 @@ export class ChartComponent implements OnDestroy {
               scales: circular
                 ? {}
                 : {
-                    x: { ticks: { color: foreground }, grid: { display: false } },
+                    // Keep axis labels horizontal; chart.js skips labels instead of tilting them.
+                    x: {
+                      ticks: { color: foreground, maxRotation: 0, autoSkipPadding: 12 },
+                      grid: { display: false },
+                    },
                     y: {
                       beginAtZero: true,
                       ticks: { color: foreground, precision: 0 },
