@@ -95,6 +95,7 @@
     "title": "Tariffs",
     "subtitle": "Base price and price per kg applied to each delivery zone.",
     "empty": "No tariffs configured.",
+    "zone": "Delivery zone",
     "currency": "Amounts in {{currency}}",
     "basePrice": "Base price",
     "pricePerKg": "Price per kg",

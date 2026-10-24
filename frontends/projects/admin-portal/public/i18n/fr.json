@@ -95,6 +95,7 @@
     "title": "Tarifs",
     "subtitle": "Prix de base et prix au kilo appliqués à chaque zone de livraison.",
     "empty": "Aucun tarif configuré.",
+    "zone": "Zone de livraison",
     "currency": "Montants en {{currency}}",
     "basePrice": "Prix de base",
     "pricePerKg": "Prix par kg",
