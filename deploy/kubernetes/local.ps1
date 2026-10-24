@@ -217,6 +217,12 @@ function Invoke-Up {
     # deleted right after the install.
     $secretDir = Join-Path ([System.IO.Path]::GetTempPath()) "parcelflow-secrets-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $secretDir | Out-Null
+    # The Windows temporary directory is per user; elsewhere it is shared, so restrict the directory to
+    # its owner before any secret is written (as local.sh does).
+    if (-not $IsWindows) {
+        & chmod 700 $secretDir
+        if ($LASTEXITCODE -ne 0) { throw "Unable to restrict the permissions of $secretDir" }
+    }
     try {
         $secretFile = Join-Path $secretDir 'secrets.yaml'
         $lines = @('secrets:', '  values:')
