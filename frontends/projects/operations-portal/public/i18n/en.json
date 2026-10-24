@@ -25,7 +25,8 @@
       "to": "To",
       "apply": "Apply",
       "reset": "Last 30 days",
-      "invalid": "The start date must be before the end date.",
+      "invalid": "The start date cannot be after the end date.",
+      "tooLong": "The period cannot exceed {{max}} days.",
       "current": "Showing {{from}} to {{to}}"
     },
     "kpi": {

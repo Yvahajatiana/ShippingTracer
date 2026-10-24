@@ -26,6 +26,27 @@ describe('mock API handlers', () => {
     expect(response.status).toBe(403);
   });
 
+  it('treats the KPI `to` bound as exclusive and caps the range at 366 days', async () => {
+    const staff = { headers: bearer('operator-chloe', ['operator']) };
+    const response = await call('/api/v1/reports/kpis?from=2026-01-01&to=2026-01-04', staff);
+    expect(response.status).toBe(200);
+    const report = (await response.json()) as { dailyVolumes: { date: string }[] };
+    expect(report.dailyVolumes.map((item) => item.date)).toEqual([
+      '2026-01-01',
+      '2026-01-02',
+      '2026-01-03',
+    ]);
+    expect((await call('/api/v1/reports/kpis?from=2026-01-01&to=2026-01-01', staff)).status).toBe(
+      400,
+    );
+    expect((await call('/api/v1/reports/kpis?from=2024-01-01&to=2025-01-01', staff)).status).toBe(
+      200,
+    );
+    expect((await call('/api/v1/reports/kpis?from=2024-01-01&to=2025-01-02', staff)).status).toBe(
+      400,
+    );
+  });
+
   it('only returns the caller own shipments, with integer enums like the real service', async () => {
     const response = await call('/api/v1/shipments?limit=100', {
       headers: bearer('customer-alice', ['customer']),

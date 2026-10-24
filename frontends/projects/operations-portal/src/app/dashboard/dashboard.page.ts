@@ -21,6 +21,7 @@ import {
   ChartSeries,
   ErrorBannerComponent,
   FieldErrorComponent,
+  KPI_MAX_RANGE_DAYS,
   LanguageService,
   PageHeaderComponent,
   PfDatePipe,
@@ -34,11 +35,18 @@ import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmLabelImports } from '@spartan-ng/helm/label';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { EmptyStateComponent } from '../core/states';
-import { KpiStore } from './kpi.store';
+import { KpiStore, rangeLength } from './kpi.store';
 
-function rangeOrder(group: AbstractControl): ValidationErrors | null {
+/** Both bounds are inclusive; the span is capped by the Reporting API maximum. */
+function rangeValidator(group: AbstractControl): ValidationErrors | null {
   const { from, to } = group.value as { from: string; to: string };
-  return from && to && from > to ? { rangeOrder: true } : null;
+  if (!from || !to) {
+    return null;
+  }
+  if (from > to) {
+    return { rangeOrder: true };
+  }
+  return rangeLength({ from, to }) > KPI_MAX_RANGE_DAYS ? { rangeTooLong: true } : null;
 }
 
 @Component({
@@ -76,6 +84,7 @@ function rangeOrder(group: AbstractControl): ValidationErrors | null {
 })
 export class DashboardPage {
   protected readonly store = inject(KpiStore);
+  protected readonly maxRangeDays = KPI_MAX_RANGE_DAYS;
   private readonly transloco = inject(TranslocoService);
   private readonly language = inject(LanguageService);
 
@@ -84,7 +93,7 @@ export class DashboardPage {
       from: [this.store.from(), Validators.required],
       to: [this.store.to(), Validators.required],
     },
-    { validators: rangeOrder },
+    { validators: rangeValidator },
   );
 
   /** Daily volume labels follow the UI locale. */
