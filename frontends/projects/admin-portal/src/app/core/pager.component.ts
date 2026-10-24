@@ -4,7 +4,10 @@ import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideChevronLeft, lucideChevronRight } from '@ng-icons/lucide';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 
-/** Previous/next pager for server-paged lists (Spartan pagination is router-link based). */
+/**
+ * Previous/next pager for server-paged lists (Spartan pagination is router-link based).
+ * Rendered as the bottom strip of a list panel: summary on the left, outline buttons on the right.
+ */
 @Component({
   selector: 'pf-pager',
   imports: [HlmButtonImports, NgIcon, TranslocoPipe],
@@ -12,7 +15,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav
-      class="flex items-center justify-between gap-2 pt-4"
+      class="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3"
       [attr.aria-label]="'pager.label' | transloco"
     >
       <p class="text-sm text-muted-foreground" aria-live="polite">
@@ -28,6 +31,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
           type="button"
           variant="outline"
           size="sm"
+          class="max-sm:h-10 max-sm:min-w-10"
           [disabled]="disabled() || !hasPrevious()"
           (click)="previous.emit()"
         >
@@ -40,6 +44,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
           type="button"
           variant="outline"
           size="sm"
+          class="max-sm:h-10 max-sm:min-w-10"
           [disabled]="disabled() || !hasNext()"
           (click)="next.emit()"
         >
