@@ -1,0 +1,224 @@
+# ParcelFlow Helm chart values.
+# Defaults target a production-like cluster: Production environment, images published by the CI on
+# GHCR, external PostgreSQL / Redis / RabbitMQ / Keycloak, migration jobs and TLS ingress.
+# deploy/kubernetes/values-local.yaml turns this into a self-contained local cluster.
+
+nameOverride: ""
+fullnameOverride: ""
+clusterDomain: cluster.local
+
+image:
+  # Reference: <registry>/<prefix><name>:<tag>. CI images: ghcr.io/<owner>/parcelflow-<name>:<tag>.
+  registry: ghcr.io/yvahajatiana
+  prefix: parcelflow-
+  # Defaults to Chart.appVersion. Pin a commit tag (sha-xxxxxxx) or a digest-backed tag in production.
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# ASPNETCORE_ENVIRONMENT of the services and the gateway. Outside Development the services refuse
+# plain HTTP Keycloak and never migrate or seed at startup (migrations run as jobs, see "migrations").
+environment: Production
+
+keycloak:
+  # Public Keycloak origin: token issuer and portal login URL (https outside localhost).
+  url: https://auth.example.com
+  realm: parcelflow
+
+database:
+  # External PostgreSQL server (ignored when infrastructure.enabled). One database per service.
+  host: ""
+  port: 5432
+  username: parcelflow
+  # Extra Npgsql connection string options, e.g. "SSL Mode=Require;Trust Server Certificate=false".
+  options: ""
+  # Startup migrations and demo seeds: only honoured by the services in Development.
+  initialize: false
+  seedDemoData: false
+
+redis:
+  # External Redis connection string (ignored when infrastructure.enabled), without the password.
+  connectionString: ""
+  # When true, the "redis-password" secret key is appended as ",password=..." to the connection string.
+  passwordFromSecret: false
+
+rabbitmq:
+  # External RabbitMQ broker (ignored when infrastructure.enabled). It needs the
+  # rabbitmq_delayed_message_exchange plugin (Shipment saga payment timeout).
+  host: ""
+  port: 5672
+  virtualHost: /
+  username: parcelflow
+
+# Application secrets. Keys of the Secret:
+#   postgres-password            PostgreSQL password of database.username
+#   rabbitmq-password            RabbitMQ password of rabbitmq.username
+#   notification-client-secret   secret of the confidential Keycloak client notification-service
+#   redis-password               optional, see redis.passwordFromSecret
+#   keycloak-admin-password      bundled development Keycloak only
+#   demo-user-password           bundled development Keycloak only (realm demo accounts)
+secrets:
+  # Name of a pre-provisioned Secret (sealed-secrets, CSI driver, manual...). Takes precedence.
+  existingSecret: ""
+  # When true and no existingSecret, the chart renders the Secret from "values" (local clusters only:
+  # values end up in the Helm release history).
+  create: false
+  values: {}
+  #  postgres-password: ""
+  #  rabbitmq-password: ""
+  #  notification-client-secret: ""
+
+# External Secrets Operator: renders an ExternalSecret that materialises the Secret above
+# (named after parcelflow.secretName) from an external store. Requires the ESO CRDs.
+externalSecrets:
+  enabled: false
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: ""
+  # Secret key -> remote reference ({ key, property }) in the store.
+  data: {}
+  #  postgres-password: { key: parcelflow/postgres, property: password }
+  #  rabbitmq-password: { key: parcelflow/rabbitmq, property: password }
+  #  notification-client-secret: { key: parcelflow/keycloak, property: notification-client-secret }
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Defaults applied to every .NET workload (services and gateway), overridable per workload.
+dotnetDefaults:
+  replicas: 2
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { memory: 512Mi }
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  extraEnv: []
+  # Spread replicas over nodes when the cluster has several.
+  topologySpread: true
+
+# The eight services. Keys are the image names; "database" is the PostgreSQL database and
+# "connectionString" the ConnectionStrings entry read by the service.
+services:
+  customer:
+    database: parcelflow_customers
+    connectionString: CustomerDatabase
+  shipment:
+    database: parcelflow_shipments
+    connectionString: ShipmentDatabase
+  tracking:
+    database: parcelflow_tracking
+    connectionString: TrackingDatabase
+  warehouse:
+    database: parcelflow_warehouse
+    connectionString: WarehouseDatabase
+  delivery:
+    database: parcelflow_delivery
+    connectionString: DeliveryDatabase
+  billing:
+    database: parcelflow_billing
+    connectionString: BillingDatabase
+  notification:
+    database: parcelflow_notification
+    connectionString: NotificationDatabase
+    serviceClientId: notification-service
+  reporting:
+    database: parcelflow_reporting
+    connectionString: ReportingDatabase
+
+gateway:
+  # Optional overrides of dotnetDefaults (replicas, resources...).
+  # Rate limits are applied per remote address. Behind the portals' nginx and the ingress controller
+  # the remote address is a proxy, so the IP limits act as a per-proxy safety net and per-client
+  # limits belong to the edge (controller-specific policy, see docs/kubernetes.md).
+  config:
+    PublicPermitLimit: 3000
+    PrivatePermitLimit: 300
+    IpPermitLimit: 20000
+    RateLimitWindowSeconds: 60
+  # Optional public API host for third-party clients (direct ingress to the gateway).
+  ingress:
+    enabled: false
+    host: api.example.com
+
+# The three portals (nginx-unprivileged, port 8080).
+portals:
+  customer-portal:
+    host: app.example.com
+  operations-portal:
+    host: ops.example.com
+  admin-portal:
+    host: admin.example.com
+portalDefaults:
+  replicas: 2
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+# Exposure of the portals (and optionally the gateway). Controller-agnostic: a standard Ingress
+# (className empty = cluster default) or Gateway API HTTPRoutes attached to an existing Gateway.
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  # TLS secret per host is <host with dots replaced by dashes>-tls unless tls.secretName is set
+  # (e.g. a wildcard certificate). Add a cert-manager annotation to issue them automatically.
+  tls:
+    enabled: true
+    secretName: ""
+
+httpRoute:
+  enabled: false
+  # e.g. [{ name: public, namespace: gateway-system, sectionName: https }]
+  parentRefs: []
+  annotations: {}
+
+# Database migrations: one Helm hook Job per service (pre-install, pre-upgrade) running the EF Core
+# migration bundle image <registry>/<prefix><service>-migrations:<tag> (deploy/migrations/Dockerfile).
+# The Secret must exist before the hook runs: existingSecret, or the ExternalSecret (also a hook).
+migrations:
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 384Mi }
+
+networkPolicy:
+  enabled: true
+  # Namespace labels of the ingress / Gateway API controller allowed to reach the portals and the
+  # public gateway, e.g. { kubernetes.io/metadata.name: envoy-gateway-system }. Empty: any namespace.
+  edgeNamespaceSelector: {}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+
+# Bundled development infrastructure: PostgreSQL, Redis, RabbitMQ (with the delayed message
+# plugin) and Keycloak in start-dev with the realm import. Never for production.
+infrastructure:
+  enabled: false
+  postgres:
+    image: postgres:16-alpine
+    storage: 2Gi
+  redis:
+    image: redis:7-alpine
+  rabbitmq:
+    # ParcelFlow image built from deploy/rabbitmq (see image.registry / image.prefix).
+    name: rabbitmq
+    storage: 1Gi
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    # Realm JSON, passed with --set-file infrastructure.keycloak.realm=deploy/keycloak/parcelflow-realm.json
+    realm: ""
+  storageClassName: ""
