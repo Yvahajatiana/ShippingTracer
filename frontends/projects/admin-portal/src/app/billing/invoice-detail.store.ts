@@ -9,6 +9,7 @@ import {
   Guid,
   Invoice,
   Payment,
+  fetchAllPages,
 } from '@parcelflow/shared';
 import {
   EMPTY,
@@ -70,8 +71,8 @@ export const InvoiceDetailStore = signalStore(
       return forkJoin({
         invoice: api.invoice(id),
         payment: paymentOrNull(api.payment(id)),
-        // An invoice holds a handful of credit notes; the first 100 cover it.
-        creditNotes: api.creditNotes(id, 1, 100),
+        // The detail lists every credit note: page through all of them.
+        creditNotes: fetchAllPages((page, pageSize) => api.creditNotes(id, page, pageSize)),
       });
     }
 
