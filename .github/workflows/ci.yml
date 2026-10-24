@@ -168,3 +168,27 @@ jobs:
         run: npm test
       - name: Production builds
         run: npm run build
+
+  docker-lint:
+    name: Dockerfile lint and compose validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # Lints every file named Dockerfile with the ignores documented in .hadolint.yaml.
+      # Pinned to the commit of v3.5.0, which bundles hadolint v2.15.1.
+      - name: Lint Dockerfiles with hadolint
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          recursive: true
+          config: .hadolint.yaml
+      # The compose file refuses to render without its required secrets; dummy values are enough here.
+      - name: Validate docker-compose.yml
+        env:
+          POSTGRES_PASSWORD: ci-dummy
+          RABBITMQ_PASSWORD: ci-dummy
+          KEYCLOAK_ADMIN_PASSWORD: ci-dummy
+          NOTIFICATION_CLIENT_SECRET: ci-dummy
+          DEMO_USER_PASSWORD: ci-dummy
+        run: docker compose --file docker-compose.yml config --quiet
