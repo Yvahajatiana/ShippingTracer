@@ -181,19 +181,17 @@ import { NotificationsStore } from './notifications.store';
         </div>
       }
 
-      <!-- Pager strip -->
-      <div class="border-t px-5 py-3">
-        <pf-pager
-          [page]="store.page()"
-          [pageCount]="store.pageCount()"
-          [total]="store.total()"
-          [hasPrevious]="store.hasPrevious()"
-          [hasNext]="store.hasNext()"
-          [disabled]="store.loading()"
-          (previous)="store.previousPage()"
-          (next)="store.nextPage()"
-        />
-      </div>
+      <!-- The pager renders its own bottom strip. -->
+      <pf-pager
+        [page]="store.page()"
+        [pageCount]="store.pageCount()"
+        [total]="store.total()"
+        [hasPrevious]="store.hasPrevious()"
+        [hasNext]="store.hasNext()"
+        [disabled]="store.loading()"
+        (previous)="store.previousPage()"
+        (next)="store.nextPage()"
+      />
     </section>
 
     <hlm-sheet side="right" [state]="sheetState()" (closed)="store.select(null)">
