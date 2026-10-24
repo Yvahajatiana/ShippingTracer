@@ -1,0 +1,2 @@
+# Files copied into Linux images: keep LF endings even on Windows checkouts (core.autocrlf).
+* text eol=lf
