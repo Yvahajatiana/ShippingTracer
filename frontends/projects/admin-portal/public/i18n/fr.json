@@ -159,6 +159,8 @@
     "summary": "Récapitulatif",
     "creditNotes": "Avoirs",
     "noCreditNotes": "Aucun avoir émis.",
+    "totalCount": "{{total}} facture(s)",
+    "invoiceLabel": "Facture",
     "fields": {
       "number": "Numéro",
       "customer": "Client",
@@ -194,6 +196,7 @@
     "shipmentPlaceholder": "ex. 3f2b8c1e-…",
     "clearFilter": "Effacer le filtre",
     "empty": "Aucune notification.",
+    "totalCount": "{{total}} notification(s)",
     "openNamed": "Voir la notification « {{subject}} »",
     "detailDescription": "Détail de la notification enregistrée.",
     "fields": {

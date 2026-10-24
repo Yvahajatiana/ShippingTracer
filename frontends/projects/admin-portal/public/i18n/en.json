@@ -159,6 +159,8 @@
     "summary": "Summary",
     "creditNotes": "Credit notes",
     "noCreditNotes": "No credit notes issued.",
+    "totalCount": "{{total}} invoice(s)",
+    "invoiceLabel": "Invoice",
     "fields": {
       "number": "Number",
       "customer": "Customer",
@@ -194,6 +196,7 @@
     "shipmentPlaceholder": "e.g. 3f2b8c1e-…",
     "clearFilter": "Clear filter",
     "empty": "No notifications.",
+    "totalCount": "{{total}} notification(s)",
     "openNamed": "View notification \"{{subject}}\"",
     "detailDescription": "Details of the recorded notification.",
     "fields": {
