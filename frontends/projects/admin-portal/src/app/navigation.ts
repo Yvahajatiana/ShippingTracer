@@ -22,6 +22,10 @@ export const NAVIGATION_ICONS = {
   lucideWarehouse,
 };
 
+const MONITORING = 'nav.groups.monitoring';
+const REFERENCE_DATA = 'nav.groups.referenceData';
+const FINANCE = 'nav.groups.finance';
+
 export const NAVIGATION: NavItem[] = [
   {
     labelKey: 'nav.overview',
@@ -29,12 +33,55 @@ export const NAVIGATION: NavItem[] = [
     route: '/',
     exact: true,
     roles: ['admin'],
+    groupKey: MONITORING,
   },
-  { labelKey: 'nav.companies', icon: 'lucideBuilding2', route: '/companies', roles: ['admin'] },
-  { labelKey: 'nav.customers', icon: 'lucideUsers', route: '/customers', roles: ['admin'] },
-  { labelKey: 'nav.tariffs', icon: 'lucideTags', route: '/tariffs', roles: ['admin'] },
-  { labelKey: 'nav.warehouses', icon: 'lucideWarehouse', route: '/warehouses', roles: ['admin'] },
-  { labelKey: 'nav.drivers', icon: 'lucideTruck', route: '/drivers', roles: ['admin'] },
-  { labelKey: 'nav.invoices', icon: 'lucideReceipt', route: '/billing/invoices', roles: ['admin'] },
-  { labelKey: 'nav.notifications', icon: 'lucideBell', route: '/notifications', roles: ['admin'] },
+  {
+    labelKey: 'nav.companies',
+    icon: 'lucideBuilding2',
+    route: '/companies',
+    roles: ['admin'],
+    groupKey: REFERENCE_DATA,
+  },
+  {
+    labelKey: 'nav.customers',
+    icon: 'lucideUsers',
+    route: '/customers',
+    roles: ['admin'],
+    groupKey: REFERENCE_DATA,
+  },
+  {
+    labelKey: 'nav.tariffs',
+    icon: 'lucideTags',
+    route: '/tariffs',
+    roles: ['admin'],
+    groupKey: REFERENCE_DATA,
+  },
+  {
+    labelKey: 'nav.warehouses',
+    icon: 'lucideWarehouse',
+    route: '/warehouses',
+    roles: ['admin'],
+    groupKey: REFERENCE_DATA,
+  },
+  {
+    labelKey: 'nav.drivers',
+    icon: 'lucideTruck',
+    route: '/drivers',
+    roles: ['admin'],
+    groupKey: REFERENCE_DATA,
+  },
+  {
+    labelKey: 'nav.invoices',
+    icon: 'lucideReceipt',
+    route: '/billing/invoices',
+    roles: ['admin'],
+    groupKey: FINANCE,
+  },
+  {
+    labelKey: 'nav.notifications',
+    icon: 'lucideBell',
+    route: '/notifications',
+    roles: ['admin'],
+    groupKey: FINANCE,
+  },
 ];

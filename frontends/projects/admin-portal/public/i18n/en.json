@@ -8,7 +8,12 @@
     "warehouses": "Warehouses",
     "drivers": "Drivers",
     "invoices": "Invoices",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "groups": {
+      "monitoring": "Monitoring",
+      "referenceData": "Reference data",
+      "finance": "Finance & relations"
+    }
   },
   "pager": {
     "label": "Pagination",

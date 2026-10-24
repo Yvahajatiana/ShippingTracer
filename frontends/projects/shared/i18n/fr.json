@@ -41,6 +41,7 @@
     "mockIdentity": "Identité simulée",
     "openMenu": "Ouvrir le menu",
     "mainNavigation": "Navigation principale",
+    "breadcrumb": "Fil d'Ariane",
     "skipToContent": "Aller au contenu"
   },
   "pages": {

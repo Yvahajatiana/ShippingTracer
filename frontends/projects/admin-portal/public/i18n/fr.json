@@ -8,7 +8,12 @@
     "warehouses": "Entrepôts",
     "drivers": "Livreurs",
     "invoices": "Factures",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "groups": {
+      "monitoring": "Pilotage",
+      "referenceData": "Référentiel",
+      "finance": "Finance et relation client"
+    }
   },
   "pager": {
     "label": "Pagination",

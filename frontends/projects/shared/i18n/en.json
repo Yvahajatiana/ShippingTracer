@@ -41,6 +41,7 @@
     "mockIdentity": "Simulated identity",
     "openMenu": "Open menu",
     "mainNavigation": "Main navigation",
+    "breadcrumb": "Breadcrumb",
     "skipToContent": "Skip to content"
   },
   "pages": {

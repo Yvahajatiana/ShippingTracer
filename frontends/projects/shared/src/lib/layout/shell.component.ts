@@ -1,6 +1,8 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { filter, map } from 'rxjs';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideLogIn, lucideLogOut, lucideMenu, lucidePackage } from '@ng-icons/lucide';
@@ -22,6 +24,23 @@ export interface NavItem {
   /** Roles allowed to see the entry; omitted means visible to everyone, including anonymous visitors. */
   roles?: Role[];
   exact?: boolean;
+  /** Translation key of the navigation section; consecutive items sharing it are grouped under one label. */
+  groupKey?: string;
+}
+
+/** `header`: top bar with a light side menu; `sidebar`: dark full-height sidebar holding brand, sections and user. */
+export type ShellLayout = 'header' | 'sidebar';
+
+interface NavGroup {
+  labelKey?: string;
+  items: NavItem[];
+}
+
+function matchesRoute(url: string, item: NavItem): boolean {
+  if (item.exact || item.route === '/') {
+    return url === item.route;
+  }
+  return url === item.route || url.startsWith(`${item.route}/`);
 }
 
 /** Application frame shared by the three portals. */
@@ -53,15 +72,63 @@ export class ShellComponent {
 
   readonly titleKey = input.required<string>();
   readonly navigation = input.required<NavItem[]>();
+  readonly layout = input<ShellLayout>('header');
 
   protected readonly languages = LANGUAGES;
   protected readonly mockAuth = this.auth instanceof MockAuthService ? this.auth : null;
   protected readonly mockIdentities = this.mockAuth?.identities ?? [];
 
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+
   protected readonly visibleNavigation = computed(() => {
     const roles = this.auth.roles();
     return this.navigation().filter(
       (item) => !item.roles || item.roles.some((role) => roles.includes(role)),
+    );
+  });
+
+  protected readonly navigationGroups = computed<NavGroup[]>(() => {
+    const groups: NavGroup[] = [];
+    for (const item of this.visibleNavigation()) {
+      const last = groups.at(-1);
+      if (last && last.labelKey === item.groupKey) {
+        last.items.push(item);
+      } else {
+        groups.push({ labelKey: item.groupKey, items: [item] });
+      }
+    }
+    return groups;
+  });
+
+  /** Navigation entry of the current page (longest matching route), shown in the breadcrumb. */
+  protected readonly activeItem = computed(() => {
+    const path = this.url().split(/[?#]/)[0];
+    return (
+      this.visibleNavigation()
+        .filter((item) => matchesRoute(path, item))
+        .sort((a, b) => b.route.length - a.route.length)[0] ?? null
+    );
+  });
+
+  protected readonly initials = computed(() => {
+    const words = (this.auth.user()?.displayName ?? '').trim().split(/\s+/).filter(Boolean);
+    return words
+      .slice(0, 2)
+      .map((word) => word[0].toUpperCase())
+      .join('');
+  });
+
+  /** Most privileged role of the user, displayed under their name. */
+  protected readonly primaryRole = computed<Role | null>(() => {
+    const roles = this.auth.roles();
+    return (
+      (['admin', 'operator', 'customer'] as const).find((role) => roles.includes(role)) ?? null
     );
   });
 
