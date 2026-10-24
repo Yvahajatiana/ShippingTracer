@@ -32,6 +32,7 @@ import { DriversStore } from './drivers.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-page-header
+      [eyebrow]="'nav.groups.referenceData' | transloco"
       [title]="'drivers.title' | transloco"
       [subtitle]="'drivers.subtitle' | transloco"
     >
@@ -41,84 +42,96 @@ import { DriversStore } from './drivers.store';
       </button>
     </pf-page-header>
 
-    <section hlmCard>
-      <div hlmCardContent>
-        @if (store.error()) {
+    <section hlmCard class="gap-0 py-0">
+      @if (store.error()) {
+        <div class="p-5">
           <pf-error-banner [error]="store.error()" (retry)="store.reload()" />
-        } @else if (store.loading() && store.items().length === 0) {
+        </div>
+      } @else if (store.loading() && store.items().length === 0) {
+        <div class="p-5">
           <pf-list-skeleton />
-        } @else if (store.items().length === 0) {
+        </div>
+      } @else if (store.items().length === 0) {
+        <div class="p-5">
           <pf-empty-state titleKey="drivers.empty" />
-        } @else {
-          <div hlmTableContainer [attr.aria-busy]="store.loading()">
-            <table hlmTable>
-              <caption class="sr-only">
-                {{
-                  'drivers.title' | transloco
-                }}
-              </caption>
-              <thead hlmTHead>
+        </div>
+      } @else {
+        <div
+          hlmTableContainer
+          class="[&_tr>*:first-child]:pl-5! [&_tr>*:last-child]:pr-5!"
+          [attr.aria-busy]="store.loading()"
+        >
+          <table hlmTable>
+            <caption class="sr-only">
+              {{
+                'drivers.title' | transloco
+              }}
+            </caption>
+            <thead hlmTHead>
+              <tr hlmTr>
+                <th hlmTh scope="col">{{ 'drivers.fields.displayName' | transloco }}</th>
+                <th hlmTh scope="col" class="hidden sm:table-cell">
+                  {{ 'drivers.fields.subject' | transloco }}
+                </th>
+                <th hlmTh scope="col">{{ 'common.status' | transloco }}</th>
+                <th hlmTh scope="col" class="text-right">{{ 'common.actions' | transloco }}</th>
+              </tr>
+            </thead>
+            <tbody hlmTBody>
+              @for (driver of store.items(); track driver.subject) {
                 <tr hlmTr>
-                  <th hlmTh scope="col">{{ 'drivers.fields.displayName' | transloco }}</th>
-                  <th hlmTh scope="col" class="hidden sm:table-cell">
-                    {{ 'drivers.fields.subject' | transloco }}
-                  </th>
-                  <th hlmTh scope="col">{{ 'common.status' | transloco }}</th>
-                  <th hlmTh scope="col" class="text-right">{{ 'common.actions' | transloco }}</th>
-                </tr>
-              </thead>
-              <tbody hlmTBody>
-                @for (driver of store.items(); track driver.subject) {
-                  <tr hlmTr>
-                    <td hlmTd class="font-medium">
-                      <div>{{ driver.displayName }}</div>
-                      <div class="font-mono text-xs text-muted-foreground sm:hidden">
-                        {{ driver.subject }}
-                      </div>
-                    </td>
-                    <td hlmTd class="hidden font-mono text-xs sm:table-cell">
+                  <td hlmTd class="font-medium">
+                    <div>{{ driver.displayName }}</div>
+                    <div class="font-mono text-xs font-normal text-muted-foreground sm:hidden">
                       {{ driver.subject }}
-                    </td>
-                    <td hlmTd>
-                      <span
-                        hlmBadge
-                        [variant]="driver.isActive ? 'secondary' : 'outline'"
-                        [class]="driver.isActive ? 'bg-success/15 text-success' : ''"
-                      >
-                        {{ (driver.isActive ? 'common.active' : 'common.inactive') | transloco }}
-                      </span>
-                    </td>
-                    <td hlmTd class="text-right">
-                      <button
-                        hlmBtn
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        [attr.aria-label]="
-                          'drivers.editNamed' | transloco: { name: driver.displayName }
-                        "
-                        (click)="openEdit(driver)"
-                      >
-                        <ng-icon name="lucidePencil" />
-                      </button>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-        <pf-pager
-          [page]="store.page()"
-          [pageCount]="store.pageCount()"
-          [total]="store.total()"
-          [hasPrevious]="store.hasPrevious()"
-          [hasNext]="store.hasNext()"
-          [disabled]="store.loading()"
-          (previous)="store.previousPage()"
-          (next)="store.nextPage()"
-        />
-      </div>
+                    </div>
+                  </td>
+                  <td
+                    hlmTd
+                    class="hidden font-mono text-[13px] text-muted-foreground sm:table-cell"
+                  >
+                    {{ driver.subject }}
+                  </td>
+                  <td hlmTd>
+                    <span
+                      hlmBadge
+                      [variant]="driver.isActive ? 'secondary' : 'outline'"
+                      [class]="driver.isActive ? 'bg-success/15 text-success' : ''"
+                    >
+                      {{ (driver.isActive ? 'common.active' : 'common.inactive') | transloco }}
+                    </span>
+                  </td>
+                  <td hlmTd class="text-right">
+                    <button
+                      hlmBtn
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      class="max-sm:size-10"
+                      [attr.aria-label]="
+                        'drivers.editNamed' | transloco: { name: driver.displayName }
+                      "
+                      (click)="openEdit(driver)"
+                    >
+                      <ng-icon name="lucidePencil" />
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <pf-pager
+        [page]="store.page()"
+        [pageCount]="store.pageCount()"
+        [total]="store.total()"
+        [hasPrevious]="store.hasPrevious()"
+        [hasNext]="store.hasNext()"
+        [disabled]="store.loading()"
+        (previous)="store.previousPage()"
+        (next)="store.nextPage()"
+      />
     </section>
 
     <pf-driver-dialog [(open)]="dialogOpen" [driver]="editing()" />
