@@ -21,7 +21,12 @@ import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 import { map, startWith } from 'rxjs';
 import { FormFieldComponent } from '../core/form-field.component';
-import { LIMITS, createShipmentAddressForm, toShipmentAddress } from '../core/forms';
+import {
+  LIMITS,
+  createShipmentAddressForm,
+  toShipmentAddress,
+  volumetricWeightValidator,
+} from '../core/forms';
 import { reportFormError } from '../core/result';
 import { ProfileStore } from '../profile/profile.store';
 import { NewShipmentStore } from './new-shipment.store';
@@ -167,6 +172,15 @@ import { ShipmentAddressFieldsComponent } from './shipment-address-fields.compon
               [max]="limits.maxDimensionCm"
               [control]="form.controls.parcel.controls.heightCm"
             />
+            @if (form.controls.parcel.hasError('volumetricWeight')) {
+              <p
+                class="col-span-full text-sm text-destructive"
+                role="alert"
+                data-testid="volumetric-error"
+              >
+                {{ 'newShipment.volumetricTooHigh' | transloco: limits }}
+              </p>
+            }
           </div>
         </section>
       </div>
@@ -243,15 +257,18 @@ export class NewShipmentPage {
   protected readonly form = this.fb.group({
     sender: createShipmentAddressForm(this.fb),
     recipient: createShipmentAddressForm(this.fb),
-    parcel: this.fb.group({
-      weightKg: [
-        1,
-        [Validators.required, Validators.min(0.01), Validators.max(LIMITS.maxWeightKg)],
-      ],
-      lengthCm: [30, this.dimensionValidators()],
-      widthCm: [20, this.dimensionValidators()],
-      heightCm: [15, this.dimensionValidators()],
-    }),
+    parcel: this.fb.group(
+      {
+        weightKg: [
+          1,
+          [Validators.required, Validators.min(0.01), Validators.max(LIMITS.maxWeightKg)],
+        ],
+        lengthCm: [30, this.dimensionValidators()],
+        widthCm: [20, this.dimensionValidators()],
+        heightCm: [15, this.dimensionValidators()],
+      },
+      { validators: volumetricWeightValidator },
+    ),
   });
 
   constructor() {
@@ -274,7 +291,8 @@ export class NewShipmentPage {
   }
 
   private dimensionValidators() {
-    return [Validators.required, Validators.min(1), Validators.max(LIMITS.maxDimensionCm)];
+    // Shipment accepts any positive dimension up to the limit (two decimals).
+    return [Validators.required, Validators.min(0.01), Validators.max(LIMITS.maxDimensionCm)];
   }
 
   private prefillSender(profile: Profile): void {

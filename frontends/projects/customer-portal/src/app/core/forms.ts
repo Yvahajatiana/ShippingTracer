@@ -1,5 +1,11 @@
 import { Directive, inject } from '@angular/core';
-import { NgControl, NonNullableFormBuilder, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  NgControl,
+  NonNullableFormBuilder,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
 import {
   AddressBody,
   ShipmentAddress,
@@ -7,12 +13,39 @@ import {
   trimmedRequired,
 } from '@parcelflow/shared';
 
-/** Server-side limits mirrored by the forms. */
+/**
+ * Server-side limits mirrored by the forms: Shipment `ParcelInputValidator` / `ShipmentAddressValidator`
+ * and Customer profile and address validators.
+ */
 export const LIMITS = {
   maxWeightKg: 30,
-  maxDimensionCm: 150,
+  maxDimensionCm: 200,
+  /** Volumetric weight (L × W × H / divisor) may not exceed this either. */
+  maxVolumetricWeightKg: 30,
+  volumetricDivisor: 5000,
   text: 200,
+  name: 100,
+  city: 100,
+  label: 80,
+  phone: 30,
+  email: 254,
 } as const;
+
+/** Volumetric weight of a parcel in kg, as computed by the Shipment service. */
+export function volumetricWeightKg(lengthCm: number, widthCm: number, heightCm: number): number {
+  return (lengthCm * widthCm * heightCm) / LIMITS.volumetricDivisor;
+}
+
+/** Group validator rejecting parcels whose volumetric weight exceeds the carrier limit. */
+export const volumetricWeightValidator: ValidatorFn = (group: AbstractControl) => {
+  const { lengthCm, widthCm, heightCm } = group.value as Record<string, number | null>;
+  if (!lengthCm || !widthCm || !heightCm) {
+    return null;
+  }
+  return volumetricWeightKg(lengthCm, widthCm, heightCm) > LIMITS.maxVolumetricWeightKg
+    ? { volumetricWeight: { max: LIMITS.maxVolumetricWeightKg } }
+    : null;
+};
 
 /** Upper-cases the bound control value while typing (ISO country codes). */
 @Directive({
@@ -30,19 +63,17 @@ export class UppercaseDirective {
   }
 }
 
-const text = (required = true) =>
-  required
-    ? [trimmedRequired, Validators.maxLength(LIMITS.text)]
-    : [Validators.maxLength(LIMITS.text)];
+const text = (required = true, max: number = LIMITS.text) =>
+  required ? [trimmedRequired, Validators.maxLength(max)] : [Validators.maxLength(max)];
 
 /** Saved customer address (label + postal address). */
 export function createAddressForm(fb: NonNullableFormBuilder) {
   return fb.group({
-    label: ['', text()],
+    label: ['', text(true, LIMITS.label)],
     line1: ['', text()],
     line2: ['', text(false)],
     postalCode: ['', [trimmedRequired, Validators.maxLength(20)]],
-    city: ['', text()],
+    city: ['', text(true, LIMITS.city)],
     countryCode: ['FR', [trimmedRequired, countryCodeValidator]],
   });
 }
@@ -63,13 +94,13 @@ export function toAddressBody(form: AddressForm): AddressBody {
 /** Sender or recipient of a shipment (contact + postal address). */
 export function createShipmentAddressForm(fb: NonNullableFormBuilder) {
   return fb.group({
-    name: ['', text()],
-    email: ['', [trimmedRequired, Validators.email]],
-    phone: ['', [trimmedRequired, Validators.maxLength(32)]],
+    name: ['', text(true, LIMITS.name)],
+    email: ['', [trimmedRequired, Validators.email, Validators.maxLength(LIMITS.email)]],
+    phone: ['', [trimmedRequired, Validators.maxLength(LIMITS.phone)]],
     line1: ['', text()],
     line2: ['', text(false)],
     postalCode: ['', [trimmedRequired, Validators.maxLength(20)]],
-    city: ['', text()],
+    city: ['', text(true, LIMITS.city)],
     countryCode: ['FR', [trimmedRequired, countryCodeValidator]],
   });
 }

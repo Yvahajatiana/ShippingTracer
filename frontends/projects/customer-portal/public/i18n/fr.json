@@ -123,6 +123,7 @@
     "recipient": "Destinataire",
     "parcel": "Colis",
     "parcelHint": "Poids maximal {{maxWeightKg}} kg, chaque dimension jusqu'à {{maxDimensionCm}} cm.",
+    "volumetricTooHigh": "Colis trop volumineux : le poids volumétrique (longueur × largeur × hauteur ÷ {{volumetricDivisor}}) ne doit pas dépasser {{maxVolumetricWeightKg}} kg.",
     "fields": {
       "name": "Nom complet",
       "email": "E-mail",

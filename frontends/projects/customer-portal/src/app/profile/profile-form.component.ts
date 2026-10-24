@@ -73,8 +73,8 @@ export class ProfileFormComponent {
   protected readonly form = inject(NonNullableFormBuilder).group({
     firstName: ['', [trimmedRequired, Validators.maxLength(100)]],
     lastName: ['', [trimmedRequired, Validators.maxLength(100)]],
-    email: ['', [trimmedRequired, Validators.email, Validators.maxLength(LIMITS.text)]],
-    phone: ['', [Validators.maxLength(32)]],
+    email: ['', [trimmedRequired, Validators.email, Validators.maxLength(LIMITS.email)]],
+    phone: ['', [Validators.maxLength(LIMITS.phone)]],
   });
 
   constructor() {
