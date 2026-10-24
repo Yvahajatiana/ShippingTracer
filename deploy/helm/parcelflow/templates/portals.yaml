@@ -1,0 +1,124 @@
+{{- /*
+The three Angular portals served by nginx-unprivileged (uid 101, port 8080): one Deployment and
+one ClusterIP Service each. The key of .Values.portals is the component and image name;
+per-portal entries override .Values.portalDefaults ("host" and "keycloakClientId" are portal
+settings, not overrides).
+
+readOnlyRootFilesystem is false on purpose: the image entrypoint writes config.json next to the
+root-owned static bundle in /usr/share/nginx/html. Mounting a volume there would hide the bundle
+(an emptyDir subPath on a single file is a directory), so a read-only root would require copying
+the bundle at start. Everything else is locked down (non-root, no capabilities, no privilege
+escalation, RuntimeDefault seccomp), and /tmp (nginx pid and temp paths) plus /etc/nginx/conf.d
+(rendered templates) are emptyDirs.
+*/ -}}
+{{- range $name, $portal := .Values.portals }}
+{{- $settings := include "parcelflow.workloadSettings" (dict "defaults" $.Values.portalDefaults "overrides" $portal) | fromYaml }}
+{{- $ctx := dict "root" $ "component" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $.Values.autoscaling.enabled }}
+  replicas: {{ $settings.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "parcelflow.labels" $ctx | nindent 8 }}
+      {{- with $settings.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "parcelflow.serviceAccountName" $ }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with (include "parcelflow.imagePullSecrets" $ | trim) }}
+      {{- . | nindent 6 }}
+      {{- end }}
+      # nginx user of the nginxinc/nginx-unprivileged image.
+      {{- include "parcelflow.podSecurityContext" 101 | nindent 6 }}
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: {{ $name }}
+          image: {{ include "parcelflow.image" (dict "root" $ "name" $name) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            # Browser-facing Keycloak origin written to config.json and the CSP.
+            - name: KEYCLOAK_URL
+              value: {{ include "parcelflow.keycloakPublicUrl" $ | quote }}
+            - name: KEYCLOAK_REALM
+              value: {{ $.Values.keycloak.realm | quote }}
+            {{- with $portal.keycloakClientId }}
+            - name: KEYCLOAK_CLIENT_ID
+              value: {{ . | quote }}
+            {{- end }}
+            # Target of the same-origin /api/ proxy. nginx resolves it per request without the
+            # resolv.conf search domains, hence the FQDN.
+            - name: GATEWAY_URL
+              value: {{ include "parcelflow.gatewayOrigin" $ | quote }}
+            {{- with $settings.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 15
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          {{- with $settings.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "parcelflow.containerSecurityContext" (dict "readOnlyRootFilesystem" false) | nindent 10 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        # The image removes the stock default.conf: conf.d only receives the rendered templates.
+        - name: nginx-conf
+          emptyDir:
+            sizeLimit: 1Mi
+      {{- with (include "parcelflow.scheduling" (dict "ctx" $ctx "settings" $settings) | trim) }}
+      {{- . | nindent 6 }}
+      {{- end }}
+---
+{{ include "parcelflow.clusterIpService" $ctx }}
+{{- end }}

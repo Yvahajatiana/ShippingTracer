@@ -126,6 +126,11 @@ services:
     database: parcelflow_notification
     connectionString: NotificationDatabase
     serviceClientId: notification-service
+    # Shipment API base URL used to resolve recipients. Required outside Development, where the
+    # service only accepts HTTPS: the public gateway URL, e.g. https://api.example.com/ (same
+    # /api/v1/shipments routes; the gateway accepts the shipment-api token audience).
+    # Empty in Development: the in-cluster shipment Service.
+    shipmentBaseUrl: ""
   reporting:
     database: parcelflow_reporting
     connectionString: ReportingDatabase
@@ -158,6 +163,9 @@ portalDefaults:
   resources:
     requests: { cpu: 20m, memory: 32Mi }
     limits: { memory: 128Mi }
+  # Same optional keys as dotnetDefaults (podAnnotations, nodeSelector, tolerations, affinity,
+  # extraEnv). A portal entry may also set keycloakClientId (default parcelflow-<portal>).
+  topologySpread: true
 
 # Exposure of the portals (and optionally the gateway). Controller-agnostic: a standard Ingress
 # (className empty = cluster default) or Gateway API HTTPRoutes attached to an existing Gateway.

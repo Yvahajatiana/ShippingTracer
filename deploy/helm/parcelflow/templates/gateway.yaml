@@ -1,0 +1,8 @@
+{{- /*
+API gateway (YARP): Deployment and ClusterIP Service. .Values.gateway entries other than
+"config" and "ingress" override .Values.dotnetDefaults; "config" entries become Gateway__<key>.
+*/ -}}
+{{- $overrides := omit (default dict .Values.gateway) "config" "ingress" }}
+{{- $settings := include "parcelflow.workloadSettings" (dict "defaults" .Values.dotnetDefaults "overrides" $overrides) | fromYaml }}
+{{- $env := include "parcelflow.gatewayEnv" . }}
+{{ include "parcelflow.dotnetWorkload" (dict "root" . "component" "gateway" "settings" $settings "env" $env) }}
