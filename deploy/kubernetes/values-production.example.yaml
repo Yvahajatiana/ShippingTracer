@@ -1,0 +1,105 @@
+# Example production values for the ParcelFlow chart. Copy, replace every example.com host and
+# placeholder, then:
+#   helm upgrade --install parcelflow deploy/helm/parcelflow -n parcelflow --create-namespace \
+#     --kube-context <production-context> -f values-production.yaml --wait --timeout 15m
+# Prerequisites: an ingress controller, cert-manager (or pre-provisioned TLS secrets), the External
+# Secrets Operator with a ClusterSecretStore (external-secrets/cluster-secret-store.example.yaml),
+# managed PostgreSQL / Redis / RabbitMQ (with rabbitmq_delayed_message_exchange) and a Keycloak
+# serving the parcelflow realm over HTTPS (redirect URIs and web origins set to the portal hosts).
+
+image:
+  registry: ghcr.io/yvahajatiana
+  prefix: parcelflow-
+  # Immutable commit tag published by the CI. Never "latest" or a branch tag in production.
+  tag: sha-0000000
+  pullPolicy: IfNotPresent
+
+environment: Production
+
+keycloak:
+  url: https://auth.example.com
+  realm: parcelflow
+
+database:
+  host: parcelflow-db.postgres.example.com
+  port: 5432
+  username: parcelflow
+  options: "SSL Mode=VerifyFull"
+
+redis:
+  connectionString: parcelflow-cache.redis.example.com:6380,ssl=true,abortConnect=false
+  passwordFromSecret: true
+
+rabbitmq:
+  host: parcelflow-mq.rabbitmq.example.com
+  port: 5672
+  virtualHost: /parcelflow
+  username: parcelflow
+
+# Secrets come from the external store, never from values.
+secrets:
+  create: false
+externalSecrets:
+  enabled: true
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: parcelflow-azure-keyvault
+  # Secret key -> remote reference. Azure Key Vault: one vault secret per key (no property).
+  # AWS Secrets Manager / Vault style: { key: parcelflow/postgres, property: password }.
+  data:
+    postgres-password: { key: parcelflow-postgres-password }
+    rabbitmq-password: { key: parcelflow-rabbitmq-password }
+    notification-client-secret: { key: parcelflow-notification-client-secret }
+    redis-password: { key: parcelflow-redis-password }
+
+services:
+  notification:
+    # Public Shipment API base URL used in notification links.
+    shipmentBaseUrl: https://api.example.com/
+
+gateway:
+  ingress:
+    enabled: true
+    host: api.example.com
+
+portals:
+  customer-portal:
+    host: app.example.com
+  operations-portal:
+    host: ops.example.com
+  admin-portal:
+    host: admin.example.com
+
+ingress:
+  enabled: true
+  # IngressClass of the controller, e.g. nginx, traefik, azure-application-gateway.
+  className: "<ingress-class>"
+  annotations:
+    # cert-manager issues one certificate per host into the <host-with-dashes>-tls secrets.
+    cert-manager.io/cluster-issuer: letsencrypt-production
+  tls:
+    enabled: true
+    secretName: ""
+
+migrations:
+  enabled: true
+
+networkPolicy:
+  enabled: true
+  # Namespace of the ingress controller allowed to reach the portals and the public gateway.
+  edgeNamespaceSelector:
+    kubernetes.io/metadata.name: ingress-nginx
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+
+infrastructure:
+  enabled: false
