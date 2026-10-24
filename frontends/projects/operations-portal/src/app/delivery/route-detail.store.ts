@@ -48,6 +48,10 @@ interface RouteDetailState {
   error: unknown;
   drivers: Driver[];
   parcels: AvailableParcel[];
+  /** Current 1-based page of the available-parcel picker. */
+  parcelsPage: number;
+  /** Total number of available parcels reported by the API. */
+  parcelsTotal: number;
   parcelsLoading: boolean;
   /** Shipment summaries keyed by id, used to label stops. */
   shipments: Record<Guid, Shipment | null>;
@@ -62,11 +66,18 @@ export const RouteDetailStore = signalStore(
     error: null,
     drivers: [],
     parcels: [],
+    parcelsPage: 1,
+    parcelsTotal: 0,
     parcelsLoading: false,
     shipments: {},
     busy: null,
   }),
-  withComputed(({ route, drivers, shipments, parcels }) => ({
+  withComputed(({ route, drivers, shipments, parcels, parcelsPage, parcelsTotal }) => ({
+    parcelsPageCount: computed(() =>
+      Math.max(1, Math.ceil(parcelsTotal() / AVAILABLE_PARCELS_SIZE)),
+    ),
+    parcelsHasPrevious: computed(() => parcelsPage() > 1),
+    parcelsHasNext: computed(() => parcelsPage() * AVAILABLE_PARCELS_SIZE < parcelsTotal()),
     isPlanned: computed(() => route()?.status === 'Planned'),
     isInProgress: computed(() => route()?.status === 'InProgress'),
     activeDrivers: computed(() => drivers().filter((driver) => driver.isActive)),
@@ -133,12 +144,38 @@ export const RouteDetailStore = signalStore(
         patchState(store, { shipments: { ...store.shipments(), ...loaded } });
       };
 
-      const loadParcels = async () => {
+      /** Sequence number of the latest parcel request; older answers are ignored. */
+      let parcelsRequest = 0;
+
+      /**
+       * Loads one page of available parcels (the current one by default). When the page
+       * became empty (e.g. its last parcel was just added to the route), steps back to the
+       * last page that still has parcels.
+       */
+      const loadParcels = async (page = store.parcelsPage()): Promise<void> => {
+        const request = ++parcelsRequest;
         patchState(store, { parcelsLoading: true });
-        const page = await firstValueFrom(
-          api.availableParcels(1, AVAILABLE_PARCELS_SIZE).pipe(catchError(() => of(null))),
+        const result = await firstValueFrom(
+          api.availableParcels(page, AVAILABLE_PARCELS_SIZE).pipe(catchError(() => of(null))),
         );
-        patchState(store, { parcels: page?.items ?? [], parcelsLoading: false });
+        if (request !== parcelsRequest) {
+          return;
+        }
+        if (!result) {
+          patchState(store, { parcels: [], parcelsLoading: false });
+          return;
+        }
+        const lastPage = Math.max(1, Math.ceil(result.total / AVAILABLE_PARCELS_SIZE));
+        if (result.items.length === 0 && page > lastPage) {
+          await loadParcels(lastPage);
+          return;
+        }
+        patchState(store, {
+          parcels: result.items,
+          parcelsPage: page,
+          parcelsTotal: result.total,
+          parcelsLoading: false,
+        });
       };
 
       const applyRoute = (route: DeliveryRoute) => {
@@ -207,14 +244,26 @@ export const RouteDetailStore = signalStore(
             patchState(store, { drivers, loading: false });
             applyRoute(route);
             if (route.status === 'Planned') {
-              await loadParcels();
+              await loadParcels(1);
             }
           } catch (error) {
             patchState(store, { loading: false, error, route: null });
           }
         },
 
-        reloadParcels: loadParcels,
+        reloadParcels: (): Promise<void> => loadParcels(),
+
+        nextParcels(): Promise<void> {
+          return store.parcelsHasNext() && !store.parcelsLoading()
+            ? loadParcels(store.parcelsPage() + 1)
+            : Promise.resolve();
+        },
+
+        previousParcels(): Promise<void> {
+          return store.parcelsHasPrevious() && !store.parcelsLoading()
+            ? loadParcels(store.parcelsPage() - 1)
+            : Promise.resolve();
+        },
 
         assignDriver(driverSubject: string): Promise<boolean> {
           const id = store.routeId()!;
@@ -257,7 +306,7 @@ export const RouteDetailStore = signalStore(
             'start',
             async () => {
               applyRoute(await firstValueFrom(api.startRoute(id)));
-              patchState(store, { parcels: [] });
+              patchState(store, { parcels: [], parcelsPage: 1, parcelsTotal: 0 });
             },
             'routes.detail.started',
           );

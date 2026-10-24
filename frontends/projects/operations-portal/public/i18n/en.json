@@ -178,6 +178,8 @@
       "parcel": "Parcel",
       "chooseParcel": "Choose a parcel",
       "addStopAction": "Add to route",
+      "parcelCount": "{{count}} parcel(s) available",
+      "parcelPager": "Available parcel pages",
       "stops": "Stops",
       "stopCount": "{{count}} stop(s)",
       "noStops": "This route has no stops.",

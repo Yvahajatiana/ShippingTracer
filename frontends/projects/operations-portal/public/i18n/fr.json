@@ -178,6 +178,8 @@
       "parcel": "Colis",
       "chooseParcel": "Choisissez un colis",
       "addStopAction": "Ajouter à la tournée",
+      "parcelCount": "{{count}} colis disponible(s)",
+      "parcelPager": "Pages des colis disponibles",
       "stops": "Arrêts",
       "stopCount": "{{count}} arrêt(s)",
       "noStops": "Aucun arrêt sur cette tournée.",
