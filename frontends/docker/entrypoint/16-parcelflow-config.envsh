@@ -1,0 +1,80 @@
+#!/bin/sh
+# ParcelFlow portal runtime configuration.
+#
+# Sourced by /docker-entrypoint.sh (".envsh"), after 15-local-resolvers and before
+# 20-envsubst-on-templates, so the normalized variables exported here are the ones rendered
+# into the nginx configuration. It:
+#   1. validates the runtime environment (fails the container start on invalid values),
+#   2. writes /usr/share/nginx/html/config.json, read by the portal before bootstrap.
+#
+# Values are restricted to a strict character set, so they can be embedded in JSON and in
+# nginx directives without any escaping (no quotes, backslashes, spaces or semicolons).
+#
+# Environment:
+#   KEYCLOAK_URL        required, Keycloak origin, e.g. https://auth.example.com
+#   KEYCLOAK_REALM      default parcelflow
+#   KEYCLOAK_CLIENT_ID  default set per portal at build time
+#   GATEWAY_URL         default http://gateway:8080 (server side, used by the /api/ proxy)
+#   API_BASE_URL        default "" (same origin through the /api/ proxy)
+
+pf_fail() {
+  echo "16-parcelflow-config: ERROR: $*" >&2
+  exit 1
+}
+
+# Absolute http(s) origin: scheme, host and optional port; no credentials, path, query or fragment.
+pf_is_origin() {
+  printf '%s' "$1" | grep -Eq '^https?://(\[::1\]|[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*)(:[0-9]{1,5})?$'
+}
+
+# Browser-facing origins follow the portal rule: https, or plain http on loopback only.
+pf_is_browser_origin() {
+  pf_is_origin "$1" || return 1
+  case "$1" in
+    https://*) return 0 ;;
+    http://localhost | http://localhost:* | http://127.0.0.1 | http://127.0.0.1:* | http://\[::1\] | http://\[::1\]:*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pf_is_identifier() {
+  printf '%s' "$1" | grep -Eq '^[A-Za-z0-9._-]{1,255}$'
+}
+
+pf_keycloak_url="${KEYCLOAK_URL:-}"
+pf_keycloak_url="${pf_keycloak_url%/}"
+pf_realm="${KEYCLOAK_REALM:-parcelflow}"
+pf_client_id="${KEYCLOAK_CLIENT_ID:-}"
+pf_gateway_url="${GATEWAY_URL:-http://gateway:8080}"
+pf_gateway_url="${pf_gateway_url%/}"
+pf_api_base_url="${API_BASE_URL:-}"
+pf_api_base_url="${pf_api_base_url%/}"
+pf_config_file=/usr/share/nginx/html/config.json
+
+[ -n "$pf_keycloak_url" ] || pf_fail "KEYCLOAK_URL is required (e.g. https://auth.example.com)."
+pf_is_browser_origin "$pf_keycloak_url" \
+  || pf_fail "KEYCLOAK_URL must be an https origin (http allowed on localhost only), got '$pf_keycloak_url'."
+pf_is_identifier "$pf_realm" || pf_fail "KEYCLOAK_REALM must match [A-Za-z0-9._-]+, got '$pf_realm'."
+pf_is_identifier "$pf_client_id" || pf_fail "KEYCLOAK_CLIENT_ID must match [A-Za-z0-9._-]+, got '$pf_client_id'."
+pf_is_origin "$pf_gateway_url" \
+  || pf_fail "GATEWAY_URL must be an http(s) origin without path, got '$pf_gateway_url'."
+if [ -n "$pf_api_base_url" ]; then
+  pf_is_browser_origin "$pf_api_base_url" \
+    || pf_fail "API_BASE_URL must be empty or an https origin (http allowed on localhost only), got '$pf_api_base_url'."
+fi
+[ -n "${NGINX_LOCAL_RESOLVERS:-}" ] \
+  || pf_fail "No DNS resolver found in /etc/resolv.conf (needed to resolve GATEWAY_URL)."
+
+[ -w "$pf_config_file" ] || pf_fail "$pf_config_file is not writable by $(id -un)."
+printf '{\n  "apiBaseUrl": "%s",\n  "authMode": "keycloak",\n  "mockApi": false,\n  "keycloak": {\n    "url": "%s",\n    "realm": "%s",\n    "clientId": "%s"\n  }\n}\n' \
+  "$pf_api_base_url" "$pf_keycloak_url" "$pf_realm" "$pf_client_id" > "$pf_config_file" \
+  || pf_fail "Unable to write $pf_config_file."
+echo "16-parcelflow-config: wrote $pf_config_file (realm $pf_realm, client $pf_client_id, keycloak $pf_keycloak_url)"
+
+# Normalized values for the nginx templates rendered by 20-envsubst-on-templates.sh.
+KEYCLOAK_URL="$pf_keycloak_url"
+GATEWAY_URL="$pf_gateway_url"
+export KEYCLOAK_URL GATEWAY_URL
+
+unset pf_keycloak_url pf_realm pf_client_id pf_gateway_url pf_api_base_url pf_config_file
+unset -f pf_fail pf_is_origin pf_is_browser_origin pf_is_identifier
