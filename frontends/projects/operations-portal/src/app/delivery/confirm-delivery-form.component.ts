@@ -36,8 +36,20 @@ import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
 import { RouteDetailStore } from './route-detail.store';
 import { SignaturePadComponent } from './signature-pad.component';
 
-/** Maximum photo size accepted by the delivery service. */
-export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+/** Maximum photo size accepted by the delivery service (ProofImages.MaxPhotoBytes). */
+export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+/** Maximum decoded signature size accepted by the delivery service (ProofImages.MaxSignatureBytes). */
+export const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024;
+
+/** Photo formats accepted by the delivery service. */
+export const PHOTO_TYPES: readonly string[] = ['image/jpeg', 'image/png'];
+
+/** Decoded byte length of a base64 payload, without decoding it. */
+export function base64ByteLength(base64: string): number {
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.floor((base64.length * 3) / 4) - padding;
+}
 
 /** A delivery needs a signature, a photo, or both. */
 function proofRequired(group: AbstractControl): ValidationErrors | null {
@@ -157,7 +169,7 @@ function proofRequired(group: AbstractControl): ValidationErrors | null {
           class="sr-only"
           tabindex="-1"
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png"
           capture="environment"
           data-testid="photo-input"
           aria-describedby="proof-hint"
@@ -165,7 +177,12 @@ function proofRequired(group: AbstractControl): ValidationErrors | null {
         />
         @if (photoError(); as photoErrorKey) {
           <small class="text-sm text-destructive" role="alert">{{
-            photoErrorKey | transloco: { max: 10 }
+            photoErrorKey | transloco: { max: maxPhotoMb }
+          }}</small>
+        }
+        @if (signatureTooLarge()) {
+          <small class="text-sm text-destructive" role="alert">{{
+            'routes.delivery.signatureTooLarge' | transloco: { max: maxSignatureMb }
           }}</small>
         }
         @if (form.hasError('proofRequired') && form.touched) {
@@ -219,13 +236,19 @@ export class ConfirmDeliveryFormComponent {
   protected readonly photoName = signal('');
   protected readonly photoSizeMb = signal(0);
   protected readonly photoError = signal<string | null>(null);
+  protected readonly signatureTooLarge = signal(false);
+  protected readonly maxPhotoMb = MAX_PHOTO_BYTES / (1024 * 1024);
+  protected readonly maxSignatureMb = MAX_SIGNATURE_BYTES / (1024 * 1024);
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.revokePreview());
   }
 
   protected setSignature(signature: string | null): void {
-    this.form.controls.signature.setValue(signature);
+    // An oversized drawing would be rejected by the server: keep it out of the form.
+    const tooLarge = signature !== null && base64ByteLength(signature) > MAX_SIGNATURE_BYTES;
+    this.signatureTooLarge.set(tooLarge);
+    this.form.controls.signature.setValue(tooLarge ? null : signature);
     this.form.controls.proof.setErrors(null);
   }
 
@@ -235,7 +258,7 @@ export class ConfirmDeliveryFormComponent {
     if (!file) {
       return;
     }
-    if (!file.type.startsWith('image/')) {
+    if (!PHOTO_TYPES.includes(file.type)) {
       this.photoError.set('routes.delivery.photoType');
       fileInput.value = '';
       return;

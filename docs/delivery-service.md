@@ -10,7 +10,7 @@ Une tournée contient un nom, une date de service, un livreur affecté et des ar
 
 Les événements ShipmentReadyForPickup et ParcelPickedUp rendent ensemble le colis disponible pour l’affectation. Leur ordre d’arrivée est libre : une prise en charge reçue avant le numéro de suivi reste enregistrée en attente. Les relectures identiques ne réinitialisent ni l’affectation ni l’état livré ; une réaffectation de numéro est refusée. Un colis n’a qu’une tournée active à la fois. Un succès est terminal ; un échec libère le colis pour une nouvelle tournée tout en conservant l’issue de l’ancienne.
 
-Le départ physique du dépôt reste un scan Exit Warehouse, à effectuer avant la mise en livraison. Delivery ne modifie pas le stock Warehouse et ne déduit pas une sortie de son événement InTransit, également utilisé pour certains scans d’entrée. Ces deux services disposent de bases et de transactions indépendantes ; le workflow testé effectue explicitement la sortie avant le démarrage de la tournée.
+Le départ physique du dépôt reste de préférence un scan Exit Warehouse, effectué avant la mise en livraison. Delivery ne consulte pas le stock Warehouse et ne bloque pas le démarrage d’une tournée : si un colis est encore en stock, Warehouse consomme le `ParcelStatusRecorded` OutForDelivery publié au démarrage (ou Delivered et Failed, en filet de sécurité) et enregistre une sortie automatique idempotente, auditée sous le sujet `system:delivery-start` ([ADR 0001](adr/0001-warehouse-exit-on-delivery-start.md)). Le stock Warehouse est donc cohérent à terme. Delivery ne déduit pas de sortie de son événement InTransit, également utilisé pour certains scans d’entrée. Ces deux services disposent de bases et de transactions indépendantes.
 
 ## Preuves et confidentialité
 
@@ -76,8 +76,8 @@ MassTransit utilise des files durables préfixées delivery-*, Inbox/Outbox EF C
 
 - ShipmentReadyForPickup associe le numéro de suivi au colis.
 - ParcelPickedUp enregistre la prise en charge physique.
-- Le démarrage publie ParcelStatusRecorded avec OutForDelivery pour chaque arrêt.
-- L’issue publie Delivered ou Failed, avec EventId égal à OperationId, CorrelationId égal à ShipmentId et FacilityCode null.
+- Le démarrage publie ParcelStatusRecorded avec OutForDelivery pour chaque arrêt, avec un EventId dérivé de la tournée et de l’envoi (`delivery:out-for-delivery:`) et CorrelationId égal à ShipmentId.
+- L’issue publie Delivered ou Failed, avec un EventId dérivé de l’issue, de ShipmentId et d’OperationId (`delivery:delivered:` ou `delivery:failed:`) : un rejeu garde le même EventId, la même clé client sur un autre envoi en produit un autre ; CorrelationId égal à ShipmentId et FacilityCode null.
 
 Les dates sont générées côté serveur en UTC, à la microseconde, et progressent pour les événements Delivery d’un même colis même si l’horloge recule. Une erreur annule ensemble l’affectation, l’issue, les octets de preuve et l’Outbox. Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis reste configuré pour le socle et la readiness, sans cache de documents ou de tournées.
 

@@ -375,11 +375,18 @@ export class NotificationApi {
   }
 }
 
+/** Longest KPI cohort accepted by Reporting (`GetKpisValidator`), in days. */
+export const KPI_MAX_RANGE_DAYS = 366;
+
 @Injectable({ providedIn: 'root' })
 export class ReportingApi {
   private readonly http = inject(HttpClient);
   private readonly url = inject(ApiUrl);
 
+  /**
+   * KPIs for the UTC cohort `[from, to)`: `to` is EXCLUSIVE and the span must be 1 to
+   * `KPI_MAX_RANGE_DAYS` days. Callers holding an inclusive end date pass `addDays(end, 1)`.
+   */
   kpis(from: IsoDate, to: IsoDate): Observable<KpiReport> {
     return this.http.get<KpiReport>(this.url.to('reports', 'kpis'), {
       params: queryParams({ from, to }),

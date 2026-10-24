@@ -22,11 +22,6 @@ public static class DeliveryEndpoints
         var delivery = app.MapGroup("/api/v{version:apiVersion}/delivery")
             .WithApiVersionSet(versions).MapToApiVersion(1, 0).WithTags("Delivery")
             .RequireAuthorization("operations");
-        delivery.AddEndpointFilter(async (context, next) =>
-        {
-            context.HttpContext.Response.Headers.CacheControl = "no-store";
-            return await next(context);
-        });
         delivery.MapPost("/drivers", async (CreateDriverBody body, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new CreateDriver(body.Subject, body.DisplayName), ct);

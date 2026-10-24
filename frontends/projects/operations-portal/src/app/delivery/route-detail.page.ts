@@ -37,6 +37,7 @@ import { HlmNativeSelectImports } from '@spartan-ng/helm/native-select';
 import { HlmProgressImports } from '@spartan-ng/helm/progress';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmSpinnerImports } from '@spartan-ng/helm/spinner';
+import { PagerComponent } from '../core/pager.component';
 import { EmptyStateComponent, ListSkeletonComponent } from '../core/states';
 import { ConfirmDeliveryFormComponent } from './confirm-delivery-form.component';
 import { FailDeliveryFormComponent } from './fail-delivery-form.component';
@@ -68,6 +69,7 @@ interface StopDialog {
     StatusTagComponent,
     EmptyStateComponent,
     ListSkeletonComponent,
+    PagerComponent,
     ConfirmDeliveryFormComponent,
     FailDeliveryFormComponent,
     ProofViewComponent,
@@ -110,6 +112,16 @@ export class RouteDetailPage {
       const subject = this.store.route()?.driverSubject ?? '';
       untracked(() => this.selectedDriver.set(subject));
     });
+    // Drops a parcel selection that is no longer offered (other page, already planned).
+    effect(() => {
+      const parcels = this.store.parcels();
+      untracked(() => {
+        const selected = this.selectedParcel();
+        if (selected && !parcels.some((parcel) => parcel.shipmentId === selected)) {
+          this.selectedParcel.set('');
+        }
+      });
+    });
   }
 
   protected label(stop: StopView): string {
@@ -128,6 +140,16 @@ export class RouteDetailPage {
     if (shipmentId && (await this.store.addStop(shipmentId))) {
       this.selectedParcel.set('');
     }
+  }
+
+  protected async previousParcels(): Promise<void> {
+    this.selectedParcel.set('');
+    await this.store.previousParcels();
+  }
+
+  protected async nextParcels(): Promise<void> {
+    this.selectedParcel.set('');
+    await this.store.nextParcels();
   }
 
   protected async removeStop(stop: StopView): Promise<void> {

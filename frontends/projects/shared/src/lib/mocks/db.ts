@@ -286,8 +286,9 @@ export function createDb(): MockDb {
     };
     shipments.push(shipment);
     tracking.set(shipment.id, history(seed.parcel, seed.days));
+    // Billing keys an invoice by its shipment: the invoice id is the shipment id.
     const invoice: Invoice = {
-      id: id(),
+      id: shipment.id,
       number: `INV-2026-${(1001 + index).toString()}`,
       shipmentId: shipment.id,
       customerSubject: seed.owner,

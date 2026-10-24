@@ -25,6 +25,7 @@
       "allShipments": "Tous mes envois",
       "pendingInvoices": "Factures à régler",
       "pendingHint": "Les envois sont pris en charge dès le paiement de leur facture.",
+      "partialCount": "Au moins {{count}} (comptage limité aux factures les plus récentes)",
       "viewInvoices": "Voir mes factures"
     },
     "signIn": {
@@ -122,6 +123,7 @@
     "recipient": "Destinataire",
     "parcel": "Colis",
     "parcelHint": "Poids maximal {{maxWeightKg}} kg, chaque dimension jusqu'à {{maxDimensionCm}} cm.",
+    "volumetricTooHigh": "Colis trop volumineux : le poids volumétrique (longueur × largeur × hauteur ÷ {{volumetricDivisor}}) ne doit pas dépasser {{maxVolumetricWeightKg}} kg.",
     "fields": {
       "name": "Nom complet",
       "email": "E-mail",

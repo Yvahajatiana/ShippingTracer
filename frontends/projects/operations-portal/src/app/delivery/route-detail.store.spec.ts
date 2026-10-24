@@ -5,9 +5,10 @@ import { provideRouter } from '@angular/router';
 import { DeliveryRoute } from '@parcelflow/shared';
 import { provideParcelFlowTesting } from '@parcelflow/shared/testing';
 import { DRIVERS, page, route, settle, shipment, stop } from '../testing/fixtures';
-import { RouteDetailStore } from './route-detail.store';
+import { AVAILABLE_PARCELS_SIZE, RouteDetailStore } from './route-detail.store';
 
 const ROUTE_URL = '/api/v1/delivery/routes/route-1';
+const AVAILABLE_URL = '/api/v1/delivery/parcels/available';
 
 describe('RouteDetailStore', () => {
   let backend: HttpTestingController;
@@ -68,6 +69,33 @@ describe('RouteDetailStore', () => {
     expect(store.canStart()).toBe(false);
   });
 
+  it('offers active drivers from every page of the driver list', async () => {
+    const done = store.load('route-1');
+    (await next(ROUTE_URL)).flush(route({ status: 'InProgress' }));
+    // Page 1 is full of inactive drivers; the only active one is on page 2.
+    const inactive = Array.from({ length: 100 }, (_, index) => ({
+      subject: `driver-a${String(index).padStart(3, '0')}`,
+      displayName: `Inactive ${index}`,
+      isActive: false,
+    }));
+    const first = await next(
+      (req) =>
+        req.url === '/api/v1/delivery/drivers' &&
+        req.params.get('page') === '1' &&
+        req.params.get('pageSize') === '100',
+    );
+    first.flush(page(inactive, 1, 100, 101));
+    (
+      await next((req) => req.url === '/api/v1/delivery/drivers' && req.params.get('page') === '2')
+    ).flush(page([DRIVERS[0]], 2, 100, 101));
+    await done;
+    await settle();
+    flushShipments();
+
+    expect(store.drivers()).toHaveLength(101);
+    expect(store.activeDrivers().map((driver) => driver.subject)).toEqual(['driver-emma']);
+  });
+
   it('exposes the load error', async () => {
     const done = store.load('route-1');
     (await next(ROUTE_URL)).flush({}, { status: 404, statusText: 'Not Found' });
@@ -117,6 +145,57 @@ describe('RouteDetailStore', () => {
     await expect(removed).resolves.toBe(true);
     expect(store.stops()).toEqual([]);
     expect(store.parcels()).toHaveLength(1);
+  });
+
+  it('pages through every available parcel using the reported total', async () => {
+    const parcel = (index: number) => ({
+      shipmentId: `sh-${index}`,
+      trackingNumber: `PF${index}FR`,
+    });
+    const done = store.load('route-1');
+    (await next(ROUTE_URL)).flush(route());
+    (await next((req) => req.url === '/api/v1/delivery/drivers')).flush(page(DRIVERS));
+    const first = await next((req) => req.url === AVAILABLE_URL);
+    expect(first.request.params.get('page')).toBe('1');
+    expect(first.request.params.get('pageSize')).toBe(String(AVAILABLE_PARCELS_SIZE));
+    first.flush(page([parcel(1)], 1, AVAILABLE_PARCELS_SIZE, AVAILABLE_PARCELS_SIZE + 1));
+    await done;
+
+    expect(store.parcelsTotal()).toBe(AVAILABLE_PARCELS_SIZE + 1);
+    expect(store.parcelsPageCount()).toBe(2);
+    expect(store.parcelsHasPrevious()).toBe(false);
+    expect(store.parcelsHasNext()).toBe(true);
+
+    const forward = store.nextParcels();
+    const second = await next((req) => req.url === AVAILABLE_URL);
+    expect(second.request.params.get('page')).toBe('2');
+    second.flush(page([parcel(101)], 2, AVAILABLE_PARCELS_SIZE, AVAILABLE_PARCELS_SIZE + 1));
+    await forward;
+    expect(store.parcelsPage()).toBe(2);
+    expect(store.parcels()).toEqual([parcel(101)]);
+    expect(store.parcelsHasNext()).toBe(false);
+
+    // Adding the only parcel of the last page refreshes it, then steps back a page.
+    const added = store.addStop('sh-101');
+    (await next(`${ROUTE_URL}/stops`)).flush(route({ stops: [stop({ shipmentId: 'sh-101' })] }));
+    const refresh = await next((req) => req.url === AVAILABLE_URL);
+    expect(refresh.request.params.get('page')).toBe('2');
+    refresh.flush(page([], 2, AVAILABLE_PARCELS_SIZE, AVAILABLE_PARCELS_SIZE));
+    const back = await next((req) => req.url === AVAILABLE_URL);
+    expect(back.request.params.get('page')).toBe('1');
+    back.flush(page([parcel(1)], 1, AVAILABLE_PARCELS_SIZE, AVAILABLE_PARCELS_SIZE));
+    await expect(added).resolves.toBe(true);
+    await settle();
+    flushShipments();
+
+    expect(store.parcelsPage()).toBe(1);
+    expect(store.parcels()).toEqual([parcel(1)]);
+    expect(store.parcelsPageCount()).toBe(1);
+    expect(store.parcelsHasNext()).toBe(false);
+
+    const previous = store.previousParcels();
+    await previous;
+    // Already on the first page: no request is sent (verified by afterEach).
   });
 
   it('reloads the route when an action conflicts', async () => {

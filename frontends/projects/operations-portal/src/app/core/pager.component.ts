@@ -14,7 +14,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
   template: `
     <nav
       class="flex items-center justify-between gap-2 pt-4"
-      [attr.aria-label]="'pager.label' | transloco"
+      [attr.aria-label]="label() ?? ('pager.label' | transloco)"
     >
       <button
         hlmBtn
@@ -51,6 +51,8 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
   `,
 })
 export class PagerComponent {
+  /** Accessible name of the navigation; defaults to the generic pagination label. */
+  readonly label = input<string | null>(null);
   readonly page = input.required<number>();
   readonly pageCount = input<number | null>(null);
   readonly hasPrevious = input.required<boolean>();

@@ -7,6 +7,7 @@ import {
   Invoice,
   MockPaymentOutcome,
   Payment,
+  fetchAllPages,
   toApiError,
 } from '@parcelflow/shared';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
@@ -57,7 +58,10 @@ export const InvoiceDetailStore = signalStore(
                   throw apiError;
                 }),
               ),
-              creditNotes: api.creditNotes(id).pipe(map((page) => page.items)),
+              // The detail lists every credit note: page through all of them.
+              creditNotes: fetchAllPages((page, pageSize) =>
+                api.creditNotes(id, page, pageSize),
+              ).pipe(map((all) => all.items)),
             }).pipe(
               tap(({ invoice, payment, creditNotes }) =>
                 patchState(store, { invoice, payment, creditNotes, loading: false }),

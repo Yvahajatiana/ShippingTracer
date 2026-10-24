@@ -35,6 +35,11 @@
         {{ 'dashboard.range.invalid' | transloco }}
       </p>
     }
+    @if (form.hasError('rangeTooLong') && form.touched) {
+      <p class="mt-2 text-sm text-destructive" role="alert">
+        {{ 'dashboard.range.tooLong' | transloco: { max: maxRangeDays } }}
+      </p>
+    }
     <p class="mt-3 text-sm text-muted-foreground">
       {{
         'dashboard.range.current'

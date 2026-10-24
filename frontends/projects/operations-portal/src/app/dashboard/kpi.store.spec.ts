@@ -3,7 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideParcelFlowTesting } from '@parcelflow/shared/testing';
 import { kpiReport, settle } from '../testing/fixtures';
-import { KpiStore, defaultRange } from './kpi.store';
+import { addDays } from '@parcelflow/shared';
+import { KpiStore, defaultRange, isValidRange, rangeLength } from './kpi.store';
 
 describe('KpiStore', () => {
   let backend: HttpTestingController;
@@ -22,8 +23,18 @@ describe('KpiStore', () => {
 
   afterEach(() => backend?.verify());
 
-  it('computes the default range as the last 30 days', () => {
-    expect(defaultRange(new Date(2026, 2, 31))).toEqual({ from: '2026-03-01', to: '2026-03-31' });
+  it('computes the default range as the last 30 days, today included', () => {
+    const range = defaultRange(new Date(2026, 2, 31));
+    expect(range).toEqual({ from: '2026-03-02', to: '2026-03-31' });
+    expect(rangeLength(range)).toBe(30);
+  });
+
+  it('accepts single-day ranges and rejects inverted or over-long ones', () => {
+    expect(isValidRange({ from: '2026-05-01', to: '2026-05-01' })).toBe(true);
+    expect(isValidRange({ from: '2026-05-02', to: '2026-05-01' })).toBe(false);
+    // 2024 is a leap year: 366 inclusive days is the Reporting maximum.
+    expect(isValidRange({ from: '2024-01-01', to: '2024-12-31' })).toBe(true);
+    expect(isValidRange({ from: '2024-01-01', to: '2025-01-01' })).toBe(false);
   });
 
   it('loads the default range on init and exposes chart data', async () => {
@@ -33,7 +44,8 @@ describe('KpiStore', () => {
     await settle();
     const request = backend.expectOne((req) => req.url === '/api/v1/reports/kpis');
     expect(request.request.params.get('from')).toBe(range.from);
-    expect(request.request.params.get('to')).toBe(range.to);
+    // The inclusive end (today) is sent as the exclusive next day.
+    expect(request.request.params.get('to')).toBe(addDays(range.to, 1));
     request.flush(kpiReport());
 
     expect(store.loading()).toBe(false);
@@ -54,10 +66,11 @@ describe('KpiStore', () => {
     await settle();
     const request = backend.expectOne((req) => req.url === '/api/v1/reports/kpis');
     expect(request.request.params.get('from')).toBe('2026-05-01');
-    expect(request.request.params.get('to')).toBe('2026-05-10');
+    expect(request.request.params.get('to')).toBe('2026-05-11');
     request.flush(kpiReport({ totalShipments: 0, dailyVolumes: [], statusVolumes: [] }));
 
     expect(store.from()).toBe('2026-05-01');
+    expect(store.to()).toBe('2026-05-10');
     expect(store.isEmpty()).toBe(true);
   });
 

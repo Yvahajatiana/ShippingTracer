@@ -159,7 +159,15 @@ import { DashboardStore } from './dashboard.store';
                     [class.text-warning]="store.pendingInvoices() > 0"
                     data-testid="pending-invoices"
                   >
-                    {{ store.pendingInvoices() }}
+                    @if (store.pendingInvoicesComplete()) {
+                      {{ store.pendingInvoices() }}
+                    } @else {
+                      <span aria-hidden="true">{{ store.pendingInvoices() }}+</span>
+                      <span class="sr-only">{{
+                        'home.dashboard.partialCount'
+                          | transloco: { count: store.pendingInvoices() }
+                      }}</span>
+                    }
                   </p>
                   <p class="mt-1 text-sm text-muted-foreground">
                     {{ 'home.dashboard.pendingHint' | transloco }}

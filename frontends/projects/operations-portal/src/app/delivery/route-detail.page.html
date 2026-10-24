@@ -188,6 +188,22 @@
                   </option>
                 }
               </hlm-native-select>
+              <p class="text-xs text-muted-foreground" data-testid="parcel-count">
+                {{ 'routes.detail.parcelCount' | transloco: { count: store.parcelsTotal() } }}
+              </p>
+              @if (store.parcelsPageCount() > 1) {
+                <pf-pager
+                  data-testid="parcel-pager"
+                  [label]="'routes.detail.parcelPager' | transloco"
+                  [page]="store.parcelsPage()"
+                  [pageCount]="store.parcelsPageCount()"
+                  [hasPrevious]="store.parcelsHasPrevious()"
+                  [hasNext]="store.parcelsHasNext()"
+                  [disabled]="store.parcelsLoading()"
+                  (previous)="previousParcels()"
+                  (next)="nextParcels()"
+                />
+              }
               <button
                 hlmBtn
                 variant="outline"

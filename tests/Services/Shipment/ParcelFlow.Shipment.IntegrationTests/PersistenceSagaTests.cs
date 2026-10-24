@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
 using ParcelFlow.BuildingBlocks.Contracts.Shipment.V1;
 using ParcelFlow.Shipment.Domain;
@@ -20,7 +22,7 @@ public sealed class PersistenceSagaTests(InfrastructureFixture infrastructure)
     private ShipmentDbContext CreateContext() => new(new DbContextOptionsBuilder<ShipmentDbContext>()
         .UseNpgsql(infrastructure.Postgres.GetConnectionString()).Options);
 
-    private IHost CreateHost() => Host.CreateDefaultBuilder()
+    private IHost CreateHost(TimeSpan? paymentTimeout = null, CapturingLoggerProvider? logs = null) => Host.CreateDefaultBuilder()
         .ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:ShipmentDatabase"] = infrastructure.Postgres.GetConnectionString(),
@@ -29,8 +31,13 @@ public sealed class PersistenceSagaTests(InfrastructureFixture infrastructure)
             ["RabbitMq:Port"] = infrastructure.RabbitMq.GetMappedPublicPort(5672).ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["RabbitMq:Username"] = "rabbitmq",
             ["RabbitMq:Password"] = "rabbitmq",
-            ["Database:SeedDemoData"] = "true"
+            ["Database:SeedDemoData"] = "true",
+            ["ShipmentBooking:PaymentTimeout"] = paymentTimeout?.ToString("c", System.Globalization.CultureInfo.InvariantCulture)
         }))
+        .ConfigureLogging(logging =>
+        {
+            if (logs is not null) logging.AddProvider(logs);
+        })
         .ConfigureServices((context, services) => services.AddShipmentInfrastructure(context.Configuration)).Build();
 
     [Fact]
@@ -120,6 +127,103 @@ public sealed class PersistenceSagaTests(InfrastructureFixture infrastructure)
         finally { await host.StopAsync(); }
     }
 
+    [Fact]
+    public async Task Mismatched_payment_is_logged_and_a_valid_payment_cancels_the_timeout()
+    {
+        var logs = new CapturingLoggerProvider();
+        using var host = CreateHost(TimeSpan.FromSeconds(3), logs);
+        await host.Services.InitializeShipmentDatabaseAsync();
+        await host.StartAsync();
+        try
+        {
+            var shipment = PersistenceTests.CreateShipment();
+            await SeedShipment(shipment);
+            var bus = host.Services.GetRequiredService<IBus>();
+            var timedOut = new ConcurrentBag<Guid>();
+            var observer = bus.ConnectReceiveEndpoint($"shipment-test-{Guid.NewGuid():N}", endpoint =>
+                endpoint.Handler<ShipmentPaymentTimedOut>(context =>
+                {
+                    if (context.Message.ShipmentId == shipment.Id) timedOut.Add(context.Message.EventId);
+                    return Task.CompletedTask;
+                }));
+            await observer.Ready;
+            await bus.Publish(new ShipmentCreated(Guid.NewGuid(), shipment.Id, DateTimeOffset.UtcNow, shipment.Id,
+                shipment.TrackingNumber, shipment.OwnerSubject, shipment.Price, shipment.Currency));
+            await WaitFor(shipment.Id, "AwaitingPayment", ShipmentStatus.AwaitingPayment);
+            var mismatched = new PaymentCompleted(Guid.NewGuid(), shipment.Id, DateTimeOffset.UtcNow, shipment.Id, shipment.Price, "USD");
+            await bus.Publish(mismatched, context => context.MessageId = mismatched.EventId);
+            await WaitForInbox(mismatched.EventId);
+            await WaitFor(shipment.Id, "AwaitingPayment", ShipmentStatus.AwaitingPayment);
+            var warning = logs.Entries.Should().ContainSingle(entry => entry.EventId == 3101).Subject;
+            warning.Level.Should().Be(LogLevel.Warning);
+            warning.Message.Should().Contain(shipment.Id.ToString()).And.Contain(mismatched.EventId.ToString())
+                .And.Contain("EUR").And.Contain("USD").And.NotContain(shipment.OwnerSubject);
+            var paid = new PaymentCompleted(Guid.NewGuid(), shipment.Id, DateTimeOffset.UtcNow, shipment.Id, shipment.Price, "EUR");
+            await bus.Publish(paid, context => context.MessageId = paid.EventId);
+            await WaitFor(shipment.Id, "AwaitingPickup", ShipmentStatus.ReadyForPickup);
+            await using (var database = CreateContext())
+                (await database.Bookings.AsNoTracking().SingleAsync(value => value.CorrelationId == shipment.Id))
+                    .PaymentTimeoutTokenId.Should().BeNull();
+            // The broker still delivers the delayed timeout, but its cleared token makes it a no-op.
+            await Task.Delay(TimeSpan.FromSeconds(6));
+            await WaitFor(shipment.Id, "AwaitingPickup", ShipmentStatus.ReadyForPickup);
+            timedOut.Should().BeEmpty();
+            logs.Entries.Should().NotContain(entry => entry.EventId == 3102);
+            await observer.StopAsync();
+        }
+        finally { await host.StopAsync(); }
+    }
+
+    [Fact]
+    public async Task Unconfirmed_payment_times_out_into_a_terminal_state_and_ignores_late_payment()
+    {
+        var logs = new CapturingLoggerProvider();
+        using var host = CreateHost(TimeSpan.FromSeconds(2), logs);
+        await host.Services.InitializeShipmentDatabaseAsync();
+        await host.StartAsync();
+        try
+        {
+            var shipment = PersistenceTests.CreateShipment();
+            await SeedShipment(shipment);
+            var bus = host.Services.GetRequiredService<IBus>();
+            var timedOut = new ConcurrentBag<ConsumeContext<ShipmentPaymentTimedOut>>();
+            var observer = bus.ConnectReceiveEndpoint($"shipment-test-{Guid.NewGuid():N}", endpoint =>
+                endpoint.Handler<ShipmentPaymentTimedOut>(context =>
+                {
+                    if (context.Message.ShipmentId == shipment.Id) timedOut.Add(context);
+                    return Task.CompletedTask;
+                }));
+            await observer.Ready;
+            var created = new ShipmentCreated(Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow, shipment.Id,
+                shipment.TrackingNumber, shipment.OwnerSubject, shipment.Price, shipment.Currency);
+            await bus.Publish(created, context => context.MessageId = created.EventId);
+            await WaitFor(shipment.Id, "AwaitingPayment", ShipmentStatus.AwaitingPayment);
+            // A mismatched payment alone must not keep the booking open past its deadline.
+            await bus.Publish(new PaymentCompleted(Guid.NewGuid(), shipment.Id, DateTimeOffset.UtcNow, shipment.Id, 1m, "EUR"));
+            await WaitFor(shipment.Id, "PaymentTimedOut", ShipmentStatus.PaymentFailed);
+            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                while (timedOut.IsEmpty)
+                    await Task.Delay(100, deadline.Token);
+            var timeoutContext = timedOut.Should().ContainSingle().Subject;
+            var timeoutEvent = timeoutContext.Message;
+            // Saga events carry a deterministic EventId, used as transport MessageId, and the flow correlation.
+            timeoutEvent.EventId.Should().Be(DeterministicGuid.Create("shipment:payment-timed-out:", shipment.Id));
+            timeoutContext.MessageId.Should().Be(timeoutEvent.EventId);
+            timeoutContext.CorrelationId.Should().Be(created.CorrelationId);
+            timeoutEvent.CorrelationId.Should().Be(created.CorrelationId);
+            timeoutEvent.TrackingNumber.Should().Be(shipment.TrackingNumber);
+            logs.Entries.Should().Contain(entry => entry.EventId == 3101);
+            logs.Entries.Should().ContainSingle(entry => entry.EventId == 3102 && entry.Level == LogLevel.Warning);
+            var late = new PaymentCompleted(Guid.NewGuid(), shipment.Id, DateTimeOffset.UtcNow, shipment.Id, shipment.Price, "EUR");
+            await bus.Publish(late, context => context.MessageId = late.EventId);
+            await WaitForInbox(late.EventId);
+            await WaitFor(shipment.Id, "PaymentTimedOut", ShipmentStatus.PaymentFailed);
+            logs.Entries.Should().ContainSingle(entry => entry.EventId == 3103 && entry.Message.Contains(late.EventId.ToString()));
+            await observer.StopAsync();
+        }
+        finally { await host.StopAsync(); }
+    }
+
     private async Task SeedShipment(ParcelShipment shipment)
     {
         await using var database = CreateContext();
@@ -150,6 +254,32 @@ public sealed class PersistenceSagaTests(InfrastructureFixture infrastructure)
                 .AnyAsync(value => value.MessageId == messageId && value.Consumed != null &&
                     (!delivered || value.Delivered != null), deadline.Token)) return;
             await Task.Delay(100, deadline.Token);
+        }
+    }
+}
+
+public sealed record CapturedLog(string Category, LogLevel Level, int EventId, string Message);
+
+public sealed class CapturingLoggerProvider : ILoggerProvider
+{
+    private readonly ConcurrentQueue<CapturedLog> entries = new();
+
+    public IReadOnlyCollection<CapturedLog> Entries => entries.ToArray();
+
+    public ILogger CreateLogger(string categoryName) => new CapturingLogger(categoryName, entries);
+
+    public void Dispose() { }
+
+    private sealed class CapturingLogger(string category, ConcurrentQueue<CapturedLog> entries) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (IsEnabled(logLevel) && category.StartsWith("ParcelFlow.Shipment", StringComparison.Ordinal))
+                entries.Enqueue(new CapturedLog(category, logLevel, eventId.Id, formatter(state, exception)));
         }
     }
 }

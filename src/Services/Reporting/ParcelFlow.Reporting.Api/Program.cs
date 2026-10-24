@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.Reporting.Api;
 using ParcelFlow.Reporting.Application;
@@ -123,20 +124,9 @@ builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddSe
     });
 
 var app = builder.Build();
+app.UseParcelFlowCorrelation();
 app.UseParcelFlowProblemDetails();
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/api"))
-    {
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.OnStarting(() =>
-        {
-            context.Response.Headers.CacheControl = "no-store";
-            return Task.CompletedTask;
-        });
-    }
-    await next(context);
-});
+app.UseParcelFlowNoStore();
 app.Use(async (context, next) =>
 {
     if (context.Request.ContentLength > maximumRequestBytes)

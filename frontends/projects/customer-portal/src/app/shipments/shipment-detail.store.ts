@@ -18,9 +18,6 @@ import { rxMethod } from '@ngrx/signals/rxjs-interop';
 import { EMPTY, catchError, merge, pipe, switchMap, tap } from 'rxjs';
 import { Result, attempt } from '../core/result';
 
-/** Largest page accepted by Billing; used to find the invoice of a shipment. */
-export const INVOICE_LOOKUP_PAGE_SIZE = 100;
-
 interface ShipmentDetailState {
   shipment: Shipment | null;
   loading: boolean;
@@ -77,16 +74,13 @@ export const ShipmentDetailStore = signalStore(
           }),
         );
       const loadInvoice = (shipment: Shipment) =>
-        billing.invoices(1, INVOICE_LOOKUP_PAGE_SIZE).pipe(
-          tap((page) =>
-            patchState(store, {
-              invoice: page.items.find((item) => item.shipmentId === shipment.id) ?? null,
-              invoiceLoading: false,
-            }),
-          ),
+        // Billing keys each invoice by its shipment: the invoice id is the shipment id.
+        billing.invoice(shipment.id).pipe(
+          tap((invoice) => patchState(store, { invoice, invoiceLoading: false })),
           catchError(() => {
-            // The invoice link is optional: hide it when Billing is unavailable.
-            patchState(store, { invoiceLoading: false });
+            // The invoice link is optional: hide it when the shipment has no invoice yet (404)
+            // or when Billing is unavailable.
+            patchState(store, { invoice: null, invoiceLoading: false });
             return EMPTY;
           }),
         );

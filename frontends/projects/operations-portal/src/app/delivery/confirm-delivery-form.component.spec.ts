@@ -1,12 +1,19 @@
 import { HttpTestingController } from '@angular/common/http/testing';
 import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { BrnDialogRef } from '@spartan-ng/brain/dialog';
 import { provideParcelFlowTesting } from '@parcelflow/shared/testing';
 import { route, settle, stop } from '../testing/fixtures';
-import { ConfirmDeliveryFormComponent } from './confirm-delivery-form.component';
+import {
+  ConfirmDeliveryFormComponent,
+  MAX_PHOTO_BYTES,
+  MAX_SIGNATURE_BYTES,
+  base64ByteLength,
+} from './confirm-delivery-form.component';
 import { RouteDetailStore } from './route-detail.store';
+import { SignaturePadComponent } from './signature-pad.component';
 
 @Component({
   selector: 'pf-confirm-host',
@@ -85,14 +92,62 @@ describe('ConfirmDeliveryFormComponent', () => {
     backend.expectNone((req) => req.url.endsWith('/delivery'));
   });
 
-  it('rejects photos above 10 MB', async () => {
-    const { fixture, element } = await render();
+  function pick(element: HTMLElement, file: File): void {
     const input = element.querySelector<HTMLInputElement>('[data-testid=photo-input]')!;
-    const big = new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.jpg', { type: 'image/jpeg' });
-    Object.defineProperty(input, 'files', { value: [big], configurable: true });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
     input.dispatchEvent(new Event('change'));
+  }
+
+  it('rejects photos above the 5 MiB server limit', async () => {
+    const { fixture, element } = await render();
+    expect(MAX_PHOTO_BYTES).toBe(5 * 1024 * 1024);
+    pick(
+      element,
+      new File([new Uint8Array(MAX_PHOTO_BYTES + 1)], 'big.jpg', { type: 'image/jpeg' }),
+    );
     await fixture.whenStable();
     expect(element.textContent).toContain('routes.delivery.photoTooLarge');
+    expect(element.querySelector('img')).toBeNull();
+  });
+
+  it('accepts a photo of exactly 5 MiB', async () => {
+    const { fixture, element } = await render();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:photo');
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined);
+    pick(element, new File([new Uint8Array(MAX_PHOTO_BYTES)], 'ok.png', { type: 'image/png' }));
+    await fixture.whenStable();
+    expect(element.textContent).not.toContain('routes.delivery.photoTooLarge');
+    expect(element.querySelector('img')).not.toBeNull();
+  });
+
+  it('rejects image formats the server does not accept', async () => {
+    const { fixture, element } = await render();
+    pick(element, new File([new Uint8Array(10)], 'photo.webp', { type: 'image/webp' }));
+    await fixture.whenStable();
+    expect(element.textContent).toContain('routes.delivery.photoType');
+  });
+
+  it('measures the decoded size of a base64 signature', () => {
+    expect(base64ByteLength(btoa('abc'))).toBe(3);
+    expect(base64ByteLength(btoa('abcd'))).toBe(4);
+    expect(base64ByteLength(btoa('abcde'))).toBe(5);
+    expect(MAX_SIGNATURE_BYTES).toBe(2 * 1024 * 1024);
+  });
+
+  it('drops a signature above the 2 MiB server limit', async () => {
+    const { fixture, element } = await render();
+    const pad = fixture.debugElement.query(By.directive(SignaturePadComponent))
+      .componentInstance as SignaturePadComponent;
+    pad.signatureChange.emit('A'.repeat(Math.ceil((MAX_SIGNATURE_BYTES * 4) / 3) + 4));
+    await fixture.whenStable();
+    expect(element.textContent).toContain('routes.delivery.signatureTooLarge');
+    element.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    expect(element.textContent).toContain('routes.delivery.proofRequired');
+
+    pad.signatureChange.emit('iVBORw0KGgo=');
+    await fixture.whenStable();
+    expect(element.textContent).not.toContain('routes.delivery.signatureTooLarge');
   });
 
   it('sends the photo as base64 and keeps one operationId across retries', async () => {

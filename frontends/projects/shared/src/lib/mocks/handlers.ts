@@ -20,6 +20,7 @@ import {
   UpdateWarehouseBody,
 } from '../api/models';
 import { Role } from '../auth/auth.service';
+import { addDays, daysBetween } from '../util/dates';
 import { MockDb, createDb, id, today } from './db';
 
 const API = '*/api/v1';
@@ -447,8 +448,9 @@ export function createHandlers(db: MockDb = createDb()) {
       };
       db.shipments.unshift(shipment);
       addTracking(db, shipment.id, 'Created');
+      // Billing keys an invoice by its shipment: the invoice id is the shipment id.
       db.invoices.unshift({
-        id: id(),
+        id: shipment.id,
         number: `INV-2026-${1000 + db.invoices.length + 1}`,
         shipmentId: shipment.id,
         customerSubject: who.sub,
@@ -1063,11 +1065,15 @@ export function createHandlers(db: MockDb = createDb()) {
       if (who instanceof Response) return who;
       const url = new URL(request.url);
       const from = url.searchParams.get('from') ?? today(-30);
-      const to = url.searchParams.get('to') ?? today();
-      if (from > to)
-        return problem(400, 'Validation failed', { From: ["'From' must be before 'To'."] });
+      const to = url.searchParams.get('to') ?? today(1);
+      // Same contract as GetKpisValidator: `to` is exclusive, 1 to 366 days.
+      const span = daysBetween(from, to);
+      if (!(span >= 1 && span <= 366))
+        return problem(400, 'Validation failed', {
+          '': ['The UTC cohort interval must contain between 1 and 366 days; To is exclusive.'],
+        });
       const inRange = db.shipments.filter(
-        (item) => item.createdAtUtc.slice(0, 10) >= from && item.createdAtUtc.slice(0, 10) <= to,
+        (item) => item.createdAtUtc.slice(0, 10) >= from && item.createdAtUtc.slice(0, 10) < to,
       );
       const statusOf = (shipmentId: string) =>
         db.tracking.get(shipmentId)?.at(-1)?.status ?? 'Created';
@@ -1092,9 +1098,11 @@ export function createHandlers(db: MockDb = createDb()) {
         deliveryDurationSamples: delivered,
         averageTransitHours: inRange.length ? 18.25 : null,
         transitDurationSamples: inRange.length,
-        dailyVolumes: [...daily.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([date, shipments]) => ({ date, shipments })),
+        // Like the real service: one entry per day of [from, to), zero-filled.
+        dailyVolumes: Array.from({ length: span }, (_, offset) => {
+          const date = addDays(from, offset);
+          return { date, shipments: daily.get(date) ?? 0 };
+        }),
         statusVolumes: PARCEL_STATUSES.map((status) => ({
           status,
           shipments: inRange.filter((item) => statusOf(item.id) === status).length,

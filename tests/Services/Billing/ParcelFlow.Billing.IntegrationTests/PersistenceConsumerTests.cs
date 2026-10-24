@@ -10,6 +10,7 @@ using ParcelFlow.Billing.Application;
 using ParcelFlow.Billing.Domain;
 using ParcelFlow.Billing.Infrastructure;
 using ParcelFlow.Billing.Infrastructure.Persistence;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
 using Xunit;
 
@@ -106,7 +107,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
         results.Count(x => x).Should().Be(1);
         await using var database = CreateContext(); var payment = await database.Payments.SingleAsync(x => x.InvoiceId == invoice);
         (await database.Invoices.SingleAsync(x => x.Id == invoice)).Status.Should().Be(InvoiceStatus.Paid);
-        (await database.Set<OutboxMessage>().CountAsync(x => x.Body.Contains(payment.OperationId.ToString()))).Should().Be(1);
+        (await database.Set<OutboxMessage>().CountAsync(x => x.MessageId == DeterministicGuid.Create("billing:payment-completed:", invoice, payment.OperationId))).Should().Be(1);
     }
 
     [Fact]
@@ -165,7 +166,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             await using var verify = CreateContext(); var stored = await verify.Invoices.SingleAsync(x => x.Id == invoice);
             stored.Status.Should().Be(InvoiceStatus.PendingPayment); stored.LastActionAtUtc.Should().Be(stored.IssuedAtUtc);
             (await verify.Payments.AnyAsync(x => x.OperationId == operation)).Should().BeFalse();
-            (await verify.Set<OutboxMessage>().AnyAsync(x => x.Body.Contains(operation.ToString()))).Should().BeFalse();
+            (await verify.Set<OutboxMessage>().AnyAsync(x => x.MessageId == DeterministicGuid.Create("billing:payment-completed:", invoice, operation))).Should().BeFalse();
         }
         finally { await database.Database.ExecuteSqlRawAsync("ALTER TABLE billing_payments DROP CONSTRAINT test_billing_payment_rollback"); }
     }

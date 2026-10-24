@@ -22,6 +22,7 @@ ParcelFlow/
 │   │       ├── ParcelFlow.BuildingBlocks.Api.csproj
 │   │       └── Errors/
 │   │           ├── ApiExceptionHandler.cs
+│   │           ├── ApiExceptionMapping.cs
 │   │           └── ProblemDetailsExtensions.cs
 │   ├── Services/
 │   │   ├── Customer/

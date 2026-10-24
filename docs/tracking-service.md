@@ -48,7 +48,7 @@ Les contrats versionnés résident dans `ParcelFlow.BuildingBlocks.Contracts` :
 - `ShipmentCreated` enregistre le numéro et le fait Created.
 - `ParcelPickedUp` enregistre PickedUp, y compris s’il arrive avant ShipmentCreated. Le dossier reste alors interne jusqu’à son association à un numéro.
 - `ParcelStatusRecorded` reçoit les faits des futurs services Warehouse et Delivery. Le code de centre optionnel est limité à 40 caractères ASCII majuscules, chiffres et tirets ; aucun texte libre ne transporte de données personnelles.
-- `TrackingStatusChanged` publie chaque nouveau fait enregistré et son `SourceEventId`, avec la date de survenue initiale. À la première association d’un numéro, les faits précédemment en attente sont publiés une fois. Les consommateurs doivent dédupliquer les faits par SourceEventId et utiliser OccurredAtUtc pour leur chronologie.
+- `TrackingStatusChanged` publie chaque nouveau fait enregistré et son `SourceEventId`, avec la date de survenue initiale. À la première association d’un numéro, les faits précédemment en attente sont publiés une fois. L’EventId est dérivé de l’EventId du fait source et la CorrelationId est celle du message consommé qui déclenche la publication. Les consommateurs doivent dédupliquer les faits par SourceEventId et utiliser OccurredAtUtc pour leur chronologie.
 
 Aucun endpoint HTTP de modification n’est ajouté. Le paiement et ShipmentReadyForPickup ne constituent pas une prise en charge physique et ne changent pas le suivi.
 
@@ -58,7 +58,9 @@ La base dédiée `parcelflow_tracking` contient les dossiers, les faits et les t
 
 Les files durables préfixées `tracking-*` utilisent les consommateurs MassTransit avec Inbox/Outbox EF Core et retries. L’enregistrement métier et les publications sont atomiques. Un verrou transactionnel PostgreSQL par identifiant d’envoi sérialise les mises à jour du même colis, même lors de sa création, tandis que les autres colis restent parallélisables. L’isolation ReadCommitted permet de lire les changements après acquisition du verrou ; xmin et Revision protègent aussi les modifications concurrentes. Les événements invalides épuisent les retries puis suivent le mécanisme de fault/error de MassTransit.
 
-Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis conserve uniquement le DTO public pendant 15 secondes sous `parcelflow:tracking:public:v1:{NUMERO}`. L’écriture invalide ce cache au mieux après sauvegarde. Chaque opération de cache dispose de 250 ms ; une panne ou un JSON illisible déclenche une lecture en base. Les absences ne sont pas cachées. Une lecture concurrente peut réinsérer une ancienne projection : la cohérence du cache reste donc éventuelle, bornée par son expiration de 15 secondes.
+Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires hors transaction (API). Dans la transaction de l’Outbox consommateur, aucun retry Polly n’est appliqué : PostgreSQL annule la transaction à la première erreur, un nouvel essai y serait voué à l’échec ; c’est le retry de message MassTransit qui rejoue le consommateur dans une transaction neuve.
+
+Redis conserve uniquement le DTO public pendant 15 secondes sous `parcelflow:tracking:public:v1:{NUMERO}`. L’invalidation a lieu après le commit de la transaction ouverte par l’Outbox : la sauvegarde ne fait qu’enregistrer les numéros concernés, puis l’intercepteur EF Core `TrackingCacheInvalidator` (`IDbTransactionInterceptor`) supprime les clés lorsque le commit est confirmé et les abandonne en cas de rollback ou d’échec. Une écriture hors transaction explicite est déjà validée à la fin de la sauvegarde et invalide donc immédiatement. Ainsi, une lecture concurrente ne peut plus remettre en cache la projection antérieure pendant la fenêtre entre sauvegarde et commit. Chaque opération de cache dispose de 250 ms ; une panne Redis lors de l’invalidation est journalisée sans remettre en cause l’écriture validée, et une panne ou un JSON illisible en lecture déclenche une lecture en base. Les absences ne sont pas cachées. Une lecture commencée avant le commit et terminée après l’invalidation peut encore réinsérer une ancienne projection : la cohérence du cache reste donc éventuelle, bornée par son expiration de 15 secondes.
 
 ## Exécution du service
 
@@ -90,7 +92,7 @@ Serilog écrit les journaux sur la console. OpenTelemetry instrumente HTTP et Ma
 
 ## Vérifications
 
-Les projets UnitTests, IntegrationTests et ContractTests couvrent les règles de projection, les huit statuts sur le fil JSON, les ProblemDetails, les JWT réels, la confidentialité et le cache dégradé. Les tests Testcontainers utilisent PostgreSQL, RabbitMQ et Redis réels : migrations, seed répété, transaction annulée, collision globale EventId, prise en charge avant création, rejeu à la microseconde et 22 faits concurrents sur trois files avec une publication par fait.
+Les projets UnitTests, IntegrationTests et ContractTests couvrent les règles de projection, les huit statuts sur le fil JSON, les ProblemDetails, les JWT réels, la confidentialité et le cache dégradé. Les tests Testcontainers utilisent PostgreSQL, RabbitMQ et Redis réels : migrations, seed répété, transaction annulée, collision globale EventId, prise en charge avant création, rejeu à la microseconde, invalidation du cache après commit (et non après rollback) et 22 faits concurrents sur trois files avec une publication par fait.
 
 ```powershell
 dotnet test ParcelFlow.sln --configuration Release
