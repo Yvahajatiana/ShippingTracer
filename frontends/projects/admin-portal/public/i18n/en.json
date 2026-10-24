@@ -45,7 +45,8 @@
       "companies": "Companies",
       "warehouses": "Warehouses and sorting centres",
       "drivers": "Drivers",
-      "pendingInvoices": "Invoices awaiting payment"
+      "pendingInvoices": "Invoices awaiting payment",
+      "partialCount": "At least {{count}} (count limited to the most recent invoices)"
     }
   },
   "companies": {

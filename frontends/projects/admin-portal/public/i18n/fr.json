@@ -45,7 +45,8 @@
       "companies": "Entreprises",
       "warehouses": "Entrepôts et centres de tri",
       "drivers": "Livreurs",
-      "pendingInvoices": "Factures en attente de paiement"
+      "pendingInvoices": "Factures en attente de paiement",
+      "partialCount": "Au moins {{count}} (comptage limité aux factures les plus récentes)"
     }
   },
   "companies": {

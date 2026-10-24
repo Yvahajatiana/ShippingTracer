@@ -100,11 +100,11 @@ const SECTIONS: SectionLink[] = [
             {{
               'overview.chart.range'
                 | transloco
-                  : { from: (report.from | pfDate: 'date'), to: (report.to | pfDate: 'date') }
+                  : { from: (report.from | pfDate: 'date'), to: (store.lastDay() | pfDate: 'date') }
             }}
           </span>
           <span aria-hidden="true">
-            {{ report.from | pfDate: 'date' }} → {{ report.to | pfDate: 'date' }}
+            {{ report.from | pfDate: 'date' }} → {{ store.lastDay() | pfDate: 'date' }}
           </span>
         </p>
       }
@@ -217,7 +217,10 @@ const SECTIONS: SectionLink[] = [
                 {{
                   'overview.chart.range'
                     | transloco
-                      : { from: (report.from | pfDate: 'date'), to: (report.to | pfDate: 'date') }
+                      : {
+                          from: (report.from | pfDate: 'date'),
+                          to: (store.lastDay() | pfDate: 'date'),
+                        }
                 }}
               </p>
             }
@@ -275,15 +278,29 @@ const SECTIONS: SectionLink[] = [
                 <span class="min-w-0 flex-1 text-sm font-medium">
                   {{ section.labelKey | transloco }}
                 </span>
-                @if (store.countersLoading()) {
+                @if (counterLoading(section.key)) {
                   <hlm-skeleton class="h-6 w-10" />
                 } @else {
-                  <span
-                    class="text-lg font-semibold tabular-nums"
-                    [class.text-warning]="section.tone === 'warning'"
-                  >
-                    {{ store.counters()[section.key] ?? '—' }}
-                  </span>
+                  @let count = store.counters()[section.key];
+                  @if (count !== null && isPartial(section.key)) {
+                    <span
+                      class="text-lg font-semibold tabular-nums"
+                      [class.text-warning]="section.tone === 'warning'"
+                      [attr.title]="'overview.sections.partialCount' | transloco: { count }"
+                    >
+                      <span aria-hidden="true">{{ count }}+</span>
+                      <span class="sr-only">{{
+                        'overview.sections.partialCount' | transloco: { count }
+                      }}</span>
+                    </span>
+                  } @else {
+                    <span
+                      class="text-lg font-semibold tabular-nums"
+                      [class.text-warning]="section.tone === 'warning'"
+                    >
+                      {{ count ?? '—' }}
+                    </span>
+                  }
                 }
                 <ng-icon
                   name="lucideChevronRight"
@@ -312,6 +329,18 @@ export class OverviewPage {
   protected readonly chartSeries = computed<ChartSeries[]>(() => [
     { label: this.seriesLabel(), data: this.store.daily().values },
   ]);
+
+  /** The pending-invoice counter loads separately because it pages through all invoices. */
+  protected counterLoading(key: keyof AdminCounters): boolean {
+    return key === 'pendingInvoices'
+      ? this.store.pendingInvoicesLoading()
+      : this.store.countersLoading();
+  }
+
+  /** True when the count is a lower bound (scan stopped at the page limit). */
+  protected isPartial(key: keyof AdminCounters): boolean {
+    return key === 'pendingInvoices' && !this.store.pendingInvoicesComplete();
+  }
 
   /** Keeps the progress bar fill within its track. */
   protected clampPercent(value: number): number {
