@@ -47,8 +47,10 @@ LABEL org.opencontainers.image.title="parcelflow-${PORTAL}" \
 
 USER root
 
-# Drop the stock site and welcome page; the portal ships its own configuration.
-RUN rm -f /etc/nginx/conf.d/default.conf \
+# Apply Alpine security updates the upstream nginx image has not picked up yet (e.g. brotli-libs),
+# then drop the stock site and welcome page; the portal ships its own configuration.
+RUN apk upgrade --no-cache \
+ && rm -f /etc/nginx/conf.d/default.conf \
  && rm -rf /usr/share/nginx/html/*
 
 # Static files stay root-owned and read-only; only config.json is writable by nginx (uid 101)
