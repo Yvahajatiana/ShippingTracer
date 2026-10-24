@@ -1,0 +1,89 @@
+# ParcelFlow local cluster profile (minikube): reproduces docker-compose.yml on Kubernetes.
+# Use deploy/kubernetes/local.ps1 (or local.sh): it loads the locally built images, supplies the
+# secrets from the repository .env and the Keycloak realm file. Never commit secret values here.
+#
+# Access is through kubectl port-forward on 127.0.0.1 (the realm only allows http://localhost:420x):
+#   customer portal 4201, operations portal 4202, admin portal 4203, Keycloak 8180, gateway 5100,
+#   RabbitMQ management 15672.
+
+# Images built by `docker compose build`: parcelflow/<name>:local, loaded into minikube by the script.
+image:
+  registry: parcelflow
+  prefix: ""
+  tag: local
+  pullPolicy: Never
+
+# Development, as in compose: startup migrations and demo seeds, plain HTTP Keycloak.
+environment: Development
+
+keycloak:
+  # Public issuer seen by browsers, i.e. the Keycloak port-forward.
+  url: http://localhost:8180
+
+database:
+  initialize: true
+  seedDemoData: true
+
+# Values provided at install time by the script (temporary values file), from .env.
+secrets:
+  create: true
+
+dotnetDefaults:
+  replicas: 1
+  resources:
+    requests: { cpu: 50m, memory: 160Mi }
+    limits: { memory: 384Mi }
+  topologySpread: false
+
+services:
+  notification:
+    # Empty: Development uses the in-cluster Shipment URL.
+    shipmentBaseUrl: ""
+
+portalDefaults:
+  replicas: 1
+  resources:
+    requests: { cpu: 10m, memory: 16Mi }
+    limits: { memory: 64Mi }
+
+ingress:
+  enabled: false
+
+httpRoute:
+  enabled: false
+
+# Startup migrations in Development replace the migration jobs (and their bundle images).
+migrations:
+  enabled: false
+
+networkPolicy:
+  # Enforced only with a policy-capable CNI (minikube start --cni=calico); harmless otherwise.
+  enabled: true
+
+podDisruptionBudget:
+  enabled: false
+
+autoscaling:
+  enabled: false
+
+infrastructure:
+  enabled: true
+  postgres:
+    storage: 1Gi
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { memory: 512Mi }
+  redis:
+    resources:
+      requests: { cpu: 10m, memory: 16Mi }
+      limits: { memory: 128Mi }
+  rabbitmq:
+    storage: 1Gi
+    totalMemoryAvailable: 600MB
+    resources:
+      requests: { cpu: 50m, memory: 192Mi }
+      limits: { memory: 768Mi }
+  keycloak:
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+      limits: { memory: 1280Mi }

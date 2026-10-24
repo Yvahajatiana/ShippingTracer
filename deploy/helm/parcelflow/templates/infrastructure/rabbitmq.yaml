@@ -1,0 +1,168 @@
+{{- /*
+Bundled development RabbitMQ: single node built from deploy/rabbitmq (delayed message exchange
+plugin for the Shipment saga). A StatefulSet keeps a stable pod hostname, hence a stable node name
+(rabbit@<pod>) matching the data on the volume.
+*/ -}}
+{{- if .Values.infrastructure.enabled }}
+{{- $name := include "parcelflow.componentName" (dict "root" . "component" "rabbitmq") }}
+{{- $ctx := dict "root" . "component" "rabbitmq" }}
+{{- $rabbit := .Values.infrastructure.rabbitmq }}
+{{- $config := printf "# Rendered by the ParcelFlow chart.\n# RabbitMQ does not read the container memory limit: size the memory alarm from this value instead.\ntotal_memory_available_override_value = %s\n" $rabbit.totalMemoryAvailable }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-config
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+data:
+  20-parcelflow.conf: |
+    {{- $config | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}-headless
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "parcelflow.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "parcelflow.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+    - name: management
+      port: 15672
+      targetPort: management
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  serviceName: {{ $name }}-headless
+  selector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      # No version label: an application tag bump must not restart the broker. The image tag
+      # itself still follows image.tag.
+      labels:
+        {{- include "parcelflow.selectorLabels" $ctx | nindent 8 }}
+        app.kubernetes.io/part-of: parcelflow
+      annotations:
+        checksum/config: {{ $config | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        # uid / gid of the "rabbitmq" user of the alpine image.
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: rabbitmq
+          image: {{ include "parcelflow.image" (dict "root" . "name" $rabbit.name) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .Values.rabbitmq.username | quote }}
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "parcelflow.secretName" . }}
+                  key: rabbitmq-password
+          ports:
+            - name: amqp
+              containerPort: 5672
+            - name: management
+              containerPort: 15672
+            - name: metrics
+              containerPort: 15692
+          # The diagnostics CLI starts an Erlang VM: allow generous timeouts.
+          startupProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 20
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+            periodSeconds: 15
+            timeoutSeconds: 20
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            periodSeconds: 30
+            timeoutSeconds: 20
+            failureThreshold: 4
+          resources:
+            {{- toYaml $rabbit.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+            - name: config
+              mountPath: /etc/rabbitmq/conf.d/20-parcelflow.conf
+              subPath: 20-parcelflow.conf
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}-config
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        # Selector labels only: volume claim templates are immutable.
+        labels:
+          {{- include "parcelflow.selectorLabels" $ctx | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.infrastructure.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $rabbit.storage }}
+{{- end }}

@@ -1,0 +1,13 @@
+{{- /*
+The eight ParcelFlow services: one Deployment and one ClusterIP Service each. The key of
+.Values.services is the component and image name; per-service overrides (replicas, resources,
+podAnnotations, nodeSelector, tolerations, affinity, extraEnv, topologySpread) replace the
+matching .Values.dotnetDefaults entries. The environment mirrors docker-compose.yml.
+*/ -}}
+{{- include "parcelflow.validate" . -}}
+{{- range $name, $svc := .Values.services }}
+{{- $settings := include "parcelflow.workloadSettings" (dict "defaults" $.Values.dotnetDefaults "overrides" $svc) | fromYaml }}
+{{- $env := include "parcelflow.serviceEnv" (dict "root" $ "name" $name "service" $svc) }}
+---
+{{ include "parcelflow.dotnetWorkload" (dict "root" $ "component" $name "settings" $settings "env" $env "usesSecret" true) }}
+{{- end }}

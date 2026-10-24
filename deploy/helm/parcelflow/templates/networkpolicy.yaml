@@ -1,0 +1,175 @@
+{{- /*
+Ingress isolation of the application pods (services, gateway, portals). Infrastructure pods
+(postgres, redis, rabbitmq, keycloak) have their own policies in templates/infrastructure/.
+
+Allowed flows:
+  edge controller namespace(s) -> portals :8080
+  portals                      -> gateway :8080
+  edge controller namespace(s) -> gateway :8080   (only when gateway.ingress.enabled)
+  gateway                      -> services :8080
+  notification                 -> shipment :8080  (in Development only; elsewhere it goes through
+                                                   the public gateway URL)
+
+Egress is deliberately not restricted: the pods need DNS, the external PostgreSQL / Redis /
+RabbitMQ / Keycloak and the public gateway URL, whose addresses are outside the cluster and
+provider specific; an egress allow-list belongs to the platform (CNI FQDN policies).
+Prometheus scraping is out of scope: the chart exposes no metrics endpoint policy, add one next
+to the monitoring stack when it is installed. Kubelet probes are not affected (node traffic).
+*/ -}}
+{{- if .Values.networkPolicy.enabled }}
+{{- $root := . }}
+{{- $services := keys .Values.services | sortAlpha }}
+{{- $portals := keys .Values.portals | sortAlpha }}
+{{- $all := concat $services (list "gateway") $portals }}
+{{- $edge := default dict .Values.networkPolicy.edgeNamespaceSelector }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" (dict "root" . "component" "default-deny") }}
+  labels:
+    {{- include "parcelflow.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  # Deny all ingress to the application pods; the policies below add the allowed flows.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "parcelflow.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          {{- toYaml $all | nindent 10 }}
+  policyTypes:
+    - Ingress
+{{- if $portals }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" (dict "root" . "component" "portals") }}
+  labels:
+    {{- include "parcelflow.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "parcelflow.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          {{- toYaml $portals | nindent 10 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Ingress / Gateway API controller (an empty selector matches every namespace).
+    - from:
+        - namespaceSelector:
+            {{- if $edge }}
+            matchLabels:
+              {{- toYaml $edge | nindent 14 }}
+            {{- else }} {}
+            {{- end }}
+      ports:
+        - port: http
+          protocol: TCP
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" (dict "root" . "component" "gateway") }}
+  labels:
+    {{- include "parcelflow.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" (dict "root" . "component" "gateway") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if $portals }}
+    # The portals' nginx /api/ proxy.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "parcelflow.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  {{- toYaml $portals | nindent 18 }}
+      ports:
+        - port: http
+          protocol: TCP
+    {{- end }}
+    {{- if .Values.gateway.ingress.enabled }}
+    # Public API host through the edge controller. It is also the path of the Notification
+    # service's ShipmentService__BaseUrl outside Development.
+    - from:
+        - namespaceSelector:
+            {{- if $edge }}
+            matchLabels:
+              {{- toYaml $edge | nindent 14 }}
+            {{- else }} {}
+            {{- end }}
+      ports:
+        - port: http
+          protocol: TCP
+    {{- end }}
+{{- if $services }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" (dict "root" . "component" "services") }}
+  labels:
+    {{- include "parcelflow.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "parcelflow.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          {{- toYaml $services | nindent 10 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Every service API call goes through the gateway.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "parcelflow.selectorLabels" (dict "root" . "component" "gateway") | nindent 14 }}
+      ports:
+        - port: http
+          protocol: TCP
+{{- end }}
+{{- if and (hasKey .Values.services "shipment") (hasKey .Values.services "notification") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" (dict "root" . "component" "shipment-from-notification") }}
+  labels:
+    {{- include "parcelflow.labels" (dict "root" . "component" "network-policy") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" (dict "root" . "component" "shipment") | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Recipient lookups of the Notification service (direct in Development, see header).
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "parcelflow.selectorLabels" (dict "root" . "component" "notification") | nindent 14 }}
+      ports:
+        - port: http
+          protocol: TCP
+{{- end }}
+{{- end }}
