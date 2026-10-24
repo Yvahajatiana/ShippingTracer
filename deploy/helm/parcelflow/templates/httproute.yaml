@@ -1,0 +1,42 @@
+{{- /*
+Gateway API alternative to the Ingress: one HTTPRoute per portal host (and the public gateway
+host when gateway.ingress.enabled), attached to the existing Gateway(s) of httpRoute.parentRefs.
+TLS is terminated by that Gateway's listeners.
+*/ -}}
+{{- if .Values.httpRoute.enabled }}
+{{- $root := . }}
+{{- $routes := list }}
+{{- range $name, $portal := .Values.portals }}
+{{- $routes = append $routes (dict "host" (required (printf "portals.%s.host is required when httpRoute.enabled" $name) $portal.host) "component" $name) }}
+{{- end }}
+{{- if .Values.gateway.ingress.enabled }}
+{{- $routes = append $routes (dict "host" (required "gateway.ingress.host is required when gateway.ingress.enabled" .Values.gateway.ingress.host) "component" "gateway") }}
+{{- end }}
+{{- range $routes }}
+{{- $ctx := dict "root" $root "component" .component }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+  {{- with $root.Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $root.Values.httpRoute.parentRefs | nindent 4 }}
+  hostnames:
+    - {{ .host | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "parcelflow.componentName" $ctx }}
+          port: 8080
+{{- end }}
+{{- end }}
