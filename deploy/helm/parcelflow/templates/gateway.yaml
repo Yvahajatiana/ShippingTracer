@@ -5,4 +5,4 @@ API gateway (YARP): Deployment and ClusterIP Service. .Values.gateway entries ot
 {{- $overrides := omit (default dict .Values.gateway) "config" "ingress" }}
 {{- $settings := include "parcelflow.workloadSettings" (dict "defaults" .Values.dotnetDefaults "overrides" $overrides) | fromYaml }}
 {{- $env := include "parcelflow.gatewayEnv" . }}
-{{ include "parcelflow.dotnetWorkload" (dict "root" . "component" "gateway" "settings" $settings "env" $env) }}
+{{ include "parcelflow.dotnetWorkload" (dict "root" . "component" "gateway" "settings" $settings "env" $env "usesSecret" false) }}

@@ -9,5 +9,5 @@ matching .Values.dotnetDefaults entries. The environment mirrors docker-compose.
 {{- $settings := include "parcelflow.workloadSettings" (dict "defaults" $.Values.dotnetDefaults "overrides" $svc) | fromYaml }}
 {{- $env := include "parcelflow.serviceEnv" (dict "root" $ "name" $name "service" $svc) }}
 ---
-{{ include "parcelflow.dotnetWorkload" (dict "root" $ "component" $name "settings" $settings "env" $env) }}
+{{ include "parcelflow.dotnetWorkload" (dict "root" $ "component" $name "settings" $settings "env" $env "usesSecret" true) }}
 {{- end }}

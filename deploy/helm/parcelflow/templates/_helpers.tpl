@@ -210,12 +210,12 @@ securityContext:
 
 {{/*
 Pod annotations: Secret checksum (only when the chart renders the Secret, so a rotation through
-secrets.values rolls the pods) plus the workload podAnnotations.
-Usage: include "parcelflow.podAnnotations" (dict "root" $ "settings" $settings)
+secrets.values rolls the pods; skipped for workloads reading no secret) plus the podAnnotations.
+Usage: include "parcelflow.podAnnotations" (dict "root" $ "settings" $settings "usesSecret" true)
 */}}
 {{- define "parcelflow.podAnnotations" -}}
 {{- $annotations := dict -}}
-{{- if include "parcelflow.rendersSecret" .root -}}
+{{- if and .usesSecret (include "parcelflow.rendersSecret" .root) -}}
 {{- $_ := set $annotations "checksum/secret" (include (print .root.Template.BasePath "/secret.yaml") .root | sha256sum) -}}
 {{- end -}}
 {{- range $key, $value := (default dict .settings.podAnnotations) -}}
@@ -334,7 +334,7 @@ HTTPS, which the in-cluster shipment Service does not serve: use the public gate
 
 {{/*
 Deployment and ClusterIP Service of a .NET workload (services and gateway).
-Usage: include "parcelflow.dotnetWorkload" (dict "root" $ "component" "gateway" "settings" $settings "env" $envYaml)
+Usage: include "parcelflow.dotnetWorkload" (dict "root" $ "component" "gateway" "settings" $settings "env" $envYaml "usesSecret" false)
 */}}
 {{- define "parcelflow.dotnetWorkload" -}}
 {{- $root := .root -}}
@@ -363,7 +363,7 @@ spec:
     metadata:
       labels:
         {{- include "parcelflow.labels" $ctx | nindent 8 }}
-      {{- with (include "parcelflow.podAnnotations" (dict "root" $root "settings" $settings) | trim) }}
+      {{- with (include "parcelflow.podAnnotations" (dict "root" $root "settings" $settings "usesSecret" .usesSecret) | trim) }}
       {{- . | nindent 6 }}
       {{- end }}
     spec:

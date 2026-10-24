@@ -1,0 +1,74 @@
+{{- /*
+Database migrations: one Helm hook Job per service, run before the workloads are installed or
+upgraded (pre-install, pre-upgrade), so a release never starts code against an older schema.
+The image <prefix><service>-migrations is the EF Core migration bundle of the service
+(deploy/migrations/Dockerfile, entrypoint /app/efbundle); it receives the same connection string
+as the service. A failed Job fails the release; it is kept (ttlSecondsAfterFinished) for its logs.
+
+The Jobs use the namespace default ServiceAccount: the chart ServiceAccount is a regular resource,
+only created after the pre-install hooks. No API token is mounted either way.
+*/ -}}
+{{- if .Values.migrations.enabled }}
+{{- $root := . }}
+{{- $migrations := .Values.migrations }}
+{{- range $name, $svc := .Values.services }}
+{{- $component := printf "%s-migrations" $name }}
+{{- $ctx := dict "root" $root "component" $component }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    # After the Secret / ExternalSecret hooks (weight -10).
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ $migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ $migrations.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "parcelflow.labels" $ctx | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with (include "parcelflow.imagePullSecrets" $root | trim) }}
+      {{- . | nindent 6 }}
+      {{- end }}
+      # 1654 is APP_UID of the .NET base images used by the migration bundle image.
+      {{- include "parcelflow.podSecurityContext" 1654 | nindent 6 }}
+      containers:
+        - name: migrations
+          image: {{ include "parcelflow.image" (dict "root" $root "name" $component) }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          # $(DATABASE_PASSWORD) is expanded by Kubernetes from the env below.
+          args:
+            - --connection
+            - {{ include "parcelflow.connectionString" (dict "root" $root "name" $name "database" $svc.database) | quote }}
+          env:
+            {{- include "parcelflow.secretEnv" (dict "root" $root "name" "DATABASE_PASSWORD" "key" "postgres-password") | nindent 12 }}
+            # The bundle is a single-file app: it extracts its native parts under a writable path.
+            - name: DOTNET_BUNDLE_EXTRACT_BASE_DIR
+              value: /tmp/dotnet-bundle
+            - name: TMPDIR
+              value: /tmp
+          {{- with $migrations.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "parcelflow.containerSecurityContext" (dict "readOnlyRootFilesystem" true) | nindent 10 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+{{- end }}
+{{- end }}
