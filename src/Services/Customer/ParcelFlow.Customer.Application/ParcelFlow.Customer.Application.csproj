@@ -3,6 +3,6 @@
     <ProjectReference Include="../ParcelFlow.Customer.Domain/ParcelFlow.Customer.Domain.csproj" />
     <ProjectReference Include="../../../BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj" />
     <ProjectReference Include="../../../BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj" />
-    <PackageReference Include="MassTransit.Abstractions" Version="8.3.6" />
+    <PackageReference Include="MassTransit.Abstractions" Version="9.2.4" />
   </ItemGroup>
 </Project>
