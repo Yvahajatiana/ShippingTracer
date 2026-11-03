@@ -132,8 +132,6 @@ Les décisions d'architecture notables sont consignées dans [`docs/adr/`](docs/
 # Windows (PowerShell)
 Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1
 ./dotnet-install.ps1 -Channel 8.0.4xx
-# The script does not change PATH: add its default install directory for this session
-$env:PATH = "$env:LOCALAPPDATA\Microsoft\dotnet;$env:PATH"
 ```
 
 ```bash
