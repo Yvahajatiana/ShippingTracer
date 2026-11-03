@@ -22,6 +22,11 @@ env:
   # Must stay in the band pinned by global.json (8.0.400, rollForward latestPatch).
   DOTNET_SDK: 8.0.4xx
   GITLEAKS_IMAGE: zricethezav/gitleaks:v8.21.2
+  HELM_VERSION: v4.3.1
+  KUBECONFORM_VERSION: v0.8.0
+  # Bounds of the Kubernetes versions the chart is validated against (Chart.yaml kubeVersion >= 1.27).
+  KUBERNETES_MIN_VERSION: 1.27.0
+  KUBERNETES_MAX_VERSION: 1.33.0
 
 jobs:
   secret-scan:
@@ -193,6 +198,79 @@ jobs:
           DEMO_USER_PASSWORD: ci-dummy
         run: docker compose --file docker-compose.yml config --quiet
 
+  helm:
+    name: Helm chart lint and schema validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CHART: deploy/helm/parcelflow
+      RENDER_DIR: ${{ github.workspace }}/rendered
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          base="https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "$base/kubeconform-linux-amd64.tar.gz"
+          curl -fsSLO "$base/CHECKSUMS"
+          grep ' kubeconform-linux-amd64.tar.gz$' CHECKSUMS | sha256sum --check --strict
+          tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
+          sudo install -m 0755 kubeconform /usr/local/bin/kubeconform
+      # Dummy secrets: the local profile renders the Secret from values, as deploy/kubernetes/local.sh does.
+      - name: Dummy local secrets
+        run: |
+          cat > "$RUNNER_TEMP/secrets-local.yaml" <<'YAML'
+          secrets:
+            values:
+              postgres-password: ci-dummy
+              rabbitmq-password: ci-dummy
+              notification-client-secret: ci-dummy
+              keycloak-admin-password: ci-dummy
+              demo-user-password: ci-dummy
+          YAML
+      # Four profiles: local (bundled infrastructure, Development), production example with
+      # Ingress, production example with Gateway API routes, production with an existing Secret.
+      - name: Lint and render
+        run: |
+          set -euo pipefail
+          mkdir -p "$RENDER_DIR"
+          local_args=(-f deploy/kubernetes/values-local.yaml -f "$RUNNER_TEMP/secrets-local.yaml"
+            --set-file infrastructure.keycloak.realm=deploy/keycloak/parcelflow-realm.json --set-string image.tag=local)
+          prod_args=(-f deploy/kubernetes/values-production.example.yaml)
+          route_args=("${prod_args[@]}" --set ingress.enabled=false --set httpRoute.enabled=true
+            --set 'httpRoute.parentRefs[0].name=public' --set 'httpRoute.parentRefs[0].namespace=gateway-system')
+          existing_args=("${prod_args[@]}" --set externalSecrets.enabled=false --set secrets.existingSecret=parcelflow-secrets)
+          for profile in local production gateway-api existing-secret; do
+            case "$profile" in
+              local) args=("${local_args[@]}") ;;
+              production) args=("${prod_args[@]}") ;;
+              gateway-api) args=("${route_args[@]}") ;;
+              existing-secret) args=("${existing_args[@]}") ;;
+            esac
+            echo "::group::$profile"
+            helm lint "$CHART" --strict "${args[@]}"
+            helm template parcelflow "$CHART" --namespace parcelflow --kube-version "$KUBERNETES_MIN_VERSION" \
+              "${args[@]}" > "$RENDER_DIR/$profile.yaml"
+            echo "::endgroup::"
+          done
+      # Validated against the oldest Kubernetes version allowed by Chart.yaml (kubeVersion) and a
+      # recent one. CRDs (ExternalSecret, HTTPRoute) use the datreeio CRDs catalog schemas.
+      - name: Validate manifests with kubeconform
+        run: |
+          set -euo pipefail
+          for version in "$KUBERNETES_MIN_VERSION" "$KUBERNETES_MAX_VERSION"; do
+            echo "::group::Kubernetes $version"
+            kubeconform -strict -summary -kubernetes-version "$version" \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+              "$RENDER_DIR"/*.yaml
+            echo "::endgroup::"
+          done
+
   images:
     name: Image (${{ matrix.image.name }})
     # Publication also requires a clean secret scan and Dockerfile lint. Integration and smoke
@@ -211,19 +289,28 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - { name: gateway, context: ., dockerfile: src/Gateway/ParcelFlow.Gateway/Dockerfile, portal: '' }
-          - { name: customer, context: ., dockerfile: src/Services/Customer/ParcelFlow.Customer.Api/Dockerfile, portal: '' }
-          - { name: shipment, context: ., dockerfile: src/Services/Shipment/ParcelFlow.Shipment.Api/Dockerfile, portal: '' }
-          - { name: tracking, context: ., dockerfile: src/Services/Tracking/ParcelFlow.Tracking.Api/Dockerfile, portal: '' }
-          - { name: warehouse, context: ., dockerfile: src/Services/Warehouse/ParcelFlow.Warehouse.Api/Dockerfile, portal: '' }
-          - { name: delivery, context: ., dockerfile: src/Services/Delivery/ParcelFlow.Delivery.Api/Dockerfile, portal: '' }
-          - { name: billing, context: ., dockerfile: src/Services/Billing/ParcelFlow.Billing.Api/Dockerfile, portal: '' }
-          - { name: notification, context: ., dockerfile: src/Services/Notification/ParcelFlow.Notification.Api/Dockerfile, portal: '' }
-          - { name: reporting, context: ., dockerfile: src/Services/Reporting/ParcelFlow.Reporting.Api/Dockerfile, portal: '' }
-          - { name: customer-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: customer-portal }
-          - { name: operations-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: operations-portal }
-          - { name: admin-portal, context: frontends, dockerfile: frontends/Dockerfile, portal: admin-portal }
-          - { name: rabbitmq, context: deploy/rabbitmq, dockerfile: deploy/rabbitmq/Dockerfile, portal: '' }
+          - { name: gateway, context: ., dockerfile: src/Gateway/ParcelFlow.Gateway/Dockerfile, build-arg: '' }
+          - { name: customer, context: ., dockerfile: src/Services/Customer/ParcelFlow.Customer.Api/Dockerfile, build-arg: '' }
+          - { name: shipment, context: ., dockerfile: src/Services/Shipment/ParcelFlow.Shipment.Api/Dockerfile, build-arg: '' }
+          - { name: tracking, context: ., dockerfile: src/Services/Tracking/ParcelFlow.Tracking.Api/Dockerfile, build-arg: '' }
+          - { name: warehouse, context: ., dockerfile: src/Services/Warehouse/ParcelFlow.Warehouse.Api/Dockerfile, build-arg: '' }
+          - { name: delivery, context: ., dockerfile: src/Services/Delivery/ParcelFlow.Delivery.Api/Dockerfile, build-arg: '' }
+          - { name: billing, context: ., dockerfile: src/Services/Billing/ParcelFlow.Billing.Api/Dockerfile, build-arg: '' }
+          - { name: notification, context: ., dockerfile: src/Services/Notification/ParcelFlow.Notification.Api/Dockerfile, build-arg: '' }
+          - { name: reporting, context: ., dockerfile: src/Services/Reporting/ParcelFlow.Reporting.Api/Dockerfile, build-arg: '' }
+          - { name: customer-portal, context: frontends, dockerfile: frontends/Dockerfile, build-arg: PORTAL=customer-portal }
+          - { name: operations-portal, context: frontends, dockerfile: frontends/Dockerfile, build-arg: PORTAL=operations-portal }
+          - { name: admin-portal, context: frontends, dockerfile: frontends/Dockerfile, build-arg: PORTAL=admin-portal }
+          - { name: rabbitmq, context: deploy/rabbitmq, dockerfile: deploy/rabbitmq/Dockerfile, build-arg: '' }
+          # EF Core migration bundles run by the Helm hook Jobs (<prefix><service>-migrations).
+          - { name: customer-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Customer }
+          - { name: shipment-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Shipment }
+          - { name: tracking-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Tracking }
+          - { name: warehouse-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Warehouse }
+          - { name: delivery-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Delivery }
+          - { name: billing-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Billing }
+          - { name: notification-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Notification }
+          - { name: reporting-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Reporting }
     env:
       # Only branch pushes to this repository publish; pull requests and forks build and scan only.
       PUBLISH: ${{ github.event_name == 'push' && !github.event.repository.fork && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') }}
@@ -263,7 +350,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             REVISION=${{ github.sha }}
-            ${{ matrix.image.portal != '' && format('PORTAL={0}', matrix.image.portal) || '' }}
+            ${{ matrix.image.build-arg }}
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
       # Pinned to the commit of v0.36.0 because trivy-action tags have been rewritten in the past.
@@ -307,3 +394,17 @@ jobs:
       - name: Push to GHCR
         if: env.PUBLISH == 'true'
         run: docker push --all-tags "${{ steps.image.outputs.name }}"
+
+  # Continuous deployment of the images just published: develop to staging, main to production.
+  # The environments carry the cluster credentials and the protection rules (reviewers on
+  # production); deploy.yml skips with a notice while an environment is not configured.
+  deploy:
+    name: Deploy
+    needs: [images, integration, gateway-smoke, helm]
+    if: github.event_name == 'push' && !github.event.repository.fork && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    secrets: inherit
