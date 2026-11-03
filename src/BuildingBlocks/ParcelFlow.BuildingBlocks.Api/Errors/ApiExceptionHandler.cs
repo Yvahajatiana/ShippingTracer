@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -19,21 +18,8 @@ public sealed class ApiExceptionHandler(
             return false;
         }
 
-        ProblemDetails problem;
-        if (exception is ValidationException validationException)
-        {
-            var errors = validationException.Errors
-                .GroupBy(failure => failure.PropertyName)
-                .ToDictionary(group => group.Key,
-                    group => group.Select(failure => failure.ErrorMessage).Distinct().ToArray());
-            problem = new HttpValidationProblemDetails(errors)
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Validation failed",
-                Type = "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1"
-            };
-        }
-        else
+        var problem = ApiExceptionMapping.TryMap(httpContext, exception);
+        if (problem is null)
         {
             logger.LogError(exception, "Unhandled exception for {Method} {Path}",
                 httpContext.Request.Method, httpContext.Request.Path);
@@ -43,6 +29,12 @@ public sealed class ApiExceptionHandler(
                 Title = "An unexpected error occurred",
                 Type = "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1"
             };
+        }
+        else if (problem.Status >= StatusCodes.Status500InternalServerError || exception is ArgumentException)
+        {
+            // Keep domain guard failures and unavailable dependencies visible to operators.
+            logger.LogWarning(exception, "Mapped {ExceptionType} to {Status} for {Method} {Path}",
+                exception.GetType().Name, problem.Status, httpContext.Request.Method, httpContext.Request.Path);
         }
 
         problem.Instance = httpContext.Request.Path;

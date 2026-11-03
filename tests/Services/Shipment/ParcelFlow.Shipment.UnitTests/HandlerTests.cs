@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FluentValidation;
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.Shipment.Application;
 using ParcelFlow.Shipment.Domain;
 using System.Reflection;
@@ -26,6 +27,7 @@ public sealed class HandlerTests
         result.Status.Should().Be(ShipmentStatus.AwaitingPayment);
         var integrationEvent = events.Events.Single().Should().BeOfType<BuildingBlocks.Contracts.Shipment.V1.ShipmentCreated>().Subject;
         integrationEvent.CorrelationId.Should().Be(result.Id);
+        integrationEvent.EventId.Should().Be(DeterministicGuid.Create("shipment:created:", result.Id));
         integrationEvent.CustomerSubject.Should().Be("alice");
         integrationEvent.Amount.Should().Be(8m);
         store.Saves.Should().Be(1);

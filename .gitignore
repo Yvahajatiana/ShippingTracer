@@ -346,3 +346,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Claude Code: local settings and agent worktrees
+.claude/

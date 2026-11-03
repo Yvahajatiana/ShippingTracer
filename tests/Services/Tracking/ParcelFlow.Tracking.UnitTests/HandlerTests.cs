@@ -1,6 +1,8 @@
 using System.Reflection;
 using FluentAssertions;
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Tracking.Application;
 using ParcelFlow.Tracking.Domain;
@@ -19,7 +21,8 @@ public sealed class HandlerTests
         var store = new Store();
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>();
         var events = ((Publisher)endpoint).Events;
-        var handler = new RecordTrackingEventHandler(store, endpoint);
+        var flow = Guid.NewGuid();
+        var handler = new RecordTrackingEventHandler(store, endpoint, CorrelationContext.From(flow));
         var shipmentId = Guid.NewGuid();
         var pickupId = Guid.NewGuid();
         var createdId = Guid.NewGuid();
@@ -28,7 +31,9 @@ public sealed class HandlerTests
         store.Records.Single().TrackingNumber.Should().BeNull();
         await handler.Handle(new(createdId, shipmentId, Number, ParcelStatus.Created, Start, null), default);
         events.Select(x => x.SourceEventId).Should().Equal(createdId, pickupId);
-        events.Should().OnlyContain(x => x.TrackingNumber == Number && x.CorrelationId == shipmentId && x.ShipmentId == shipmentId);
+        events.Should().OnlyContain(x => x.TrackingNumber == Number && x.CorrelationId == flow && x.ShipmentId == shipmentId);
+        events.Select(x => x.EventId).Should().Equal(DeterministicGuid.Create("tracking:status-changed:", createdId),
+            DeterministicGuid.Create("tracking:status-changed:", pickupId));
         store.Records.Single().CurrentStatus.Should().Be(ParcelStatus.PickedUp);
         store.Saves.Should().Be(2);
         await handler.Handle(new(createdId, shipmentId, Number, ParcelStatus.Created, Start, null), default);
@@ -41,7 +46,7 @@ public sealed class HandlerTests
     {
         var store = new Store();
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>();
-        var handler = new RecordTrackingEventHandler(store, endpoint);
+        var handler = new RecordTrackingEventHandler(store, endpoint, new CorrelationContext());
         var request = new RecordTrackingEvent(Guid.NewGuid(), Guid.NewGuid(), null, ParcelStatus.PickedUp, Start, null);
         (await handler.Handle(request, default)).Should().BeTrue();
         (await handler.Handle(request with { TrackingNumber = Number }, default)).Should().BeFalse();
@@ -54,7 +59,7 @@ public sealed class HandlerTests
     {
         var store = new Store();
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>();
-        var handler = new RecordTrackingEventHandler(store, endpoint);
+        var handler = new RecordTrackingEventHandler(store, endpoint, new CorrelationContext());
         var request = new RecordTrackingEvent(Guid.NewGuid(), Guid.NewGuid(), Number, ParcelStatus.Created, Start, null);
         await handler.Handle(request, default);
         await FluentActions.Awaiting(() => handler.Handle(request with { Status = ParcelStatus.Delivered }, default))
@@ -83,7 +88,7 @@ public sealed class HandlerTests
         var store = new Store();
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>();
         ((Publisher)endpoint).Failure = new InvalidOperationException("Outbox is unavailable.");
-        var handler = new RecordTrackingEventHandler(store, endpoint);
+        var handler = new RecordTrackingEventHandler(store, endpoint, new CorrelationContext());
         await FluentActions.Awaiting(() => handler.Handle(new(Guid.NewGuid(), Guid.NewGuid(), Number,
             ParcelStatus.Created, Start, null), default)).Should().ThrowAsync<InvalidOperationException>();
         store.Saves.Should().Be(0);
@@ -101,7 +106,7 @@ public sealed class HandlerTests
     public async Task Every_status_maps_to_the_versioned_integration_contract(ParcelStatus status, TrackingStatus expected)
     {
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>();
-        await new RecordTrackingEventHandler(new Store(), endpoint).Handle(new(Guid.NewGuid(), Guid.NewGuid(), Number, status, Start, "PARIS-01"), default);
+        await new RecordTrackingEventHandler(new Store(), endpoint, new CorrelationContext()).Handle(new(Guid.NewGuid(), Guid.NewGuid(), Number, status, Start, "PARIS-01"), default);
         var published = ((Publisher)endpoint).Events.Single();
         published.Status.Should().Be(expected);
         published.OccurredAtUtc.Should().Be(Start);

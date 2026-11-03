@@ -3,6 +3,11 @@
 ###############################################################################
 * text=auto
 
+# Files executed or parsed inside Linux containers must keep LF endings on Windows checkouts.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.template text eol=lf
+
 ###############################################################################
 # Set default behavior for command prompt diff.
 #

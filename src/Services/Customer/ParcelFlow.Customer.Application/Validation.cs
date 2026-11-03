@@ -8,7 +8,7 @@ public sealed class CreateProfileValidator : AbstractValidator<CreateProfile>
     {
         RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().MaximumLength(254).EmailAddress().Must(value => System.Net.Mail.MailAddress.TryCreate(value, out var address) && address.Address == value);
+        RuleFor(x => x.Email).NotEmpty().Must(CustomerText.IsEmail).WithMessage(CustomerText.InvalidEmailMessage);
         RuleFor(x => x.Phone).NotEmpty().MaximumLength(30).When(x => x.Phone is not null);
     }
 }
@@ -20,7 +20,7 @@ public sealed class UpdateProfileValidator : AbstractValidator<UpdateProfile>
         RuleFor(x => x.CustomerId).NotEmpty();
         RuleFor(x => x.FirstName).NotEmpty().MaximumLength(100);
         RuleFor(x => x.LastName).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.Email).NotEmpty().MaximumLength(254).EmailAddress().Must(value => System.Net.Mail.MailAddress.TryCreate(value, out var address) && address.Address == value);
+        RuleFor(x => x.Email).NotEmpty().Must(CustomerText.IsEmail).WithMessage(CustomerText.InvalidEmailMessage);
         RuleFor(x => x.Phone).NotEmpty().MaximumLength(30).When(x => x.Phone is not null);
     }
 }
@@ -92,7 +92,7 @@ public sealed class CreateCompanyValidator : AbstractValidator<CreateCompany>
     {
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.RegistrationNumber).NotEmpty().MaximumLength(80);
-        RuleFor(x => x.Email).NotEmpty().MaximumLength(254).EmailAddress().Must(value => System.Net.Mail.MailAddress.TryCreate(value, out var address) && address.Address == value);
+        RuleFor(x => x.Email).NotEmpty().Must(CustomerText.IsEmail).WithMessage(CustomerText.InvalidEmailMessage);
     }
 }
 
@@ -103,11 +103,24 @@ public sealed class UpdateCompanyValidator : AbstractValidator<UpdateCompany>
         RuleFor(x => x.CompanyId).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.RegistrationNumber).NotEmpty().MaximumLength(80);
-        RuleFor(x => x.Email).NotEmpty().MaximumLength(254).EmailAddress().Must(value => System.Net.Mail.MailAddress.TryCreate(value, out var address) && address.Address == value);
+        RuleFor(x => x.Email).NotEmpty().Must(CustomerText.IsEmail).WithMessage(CustomerText.InvalidEmailMessage);
     }
 }
 
 public sealed class GetCompanyValidator : AbstractValidator<GetCompany>
 {
     public GetCompanyValidator() => RuleFor(x => x.CompanyId).NotEmpty();
+}
+
+// Validates email addresses as the domain stores them: surrounding whitespace is trimmed before persistence.
+internal static class CustomerText
+{
+    internal const string InvalidEmailMessage = "'Email' must be a valid email address of at most 254 characters.";
+
+    internal static bool IsEmail(string? value)
+    {
+        var email = value?.Trim();
+        return email is { Length: > 0 and <= 254 }
+            && System.Net.Mail.MailAddress.TryCreate(email, out var address) && address.Address == email;
+    }
 }

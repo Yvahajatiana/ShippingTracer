@@ -1,0 +1,62 @@
+{{- /*
+Ingress rules of the bundled development infrastructure. PostgreSQL, Redis and RabbitMQ only accept
+pods of this release (services, gateway, migration jobs...). Keycloak also accepts the edge
+namespaces, since browsers may reach it through an ingress controller. kubectl port-forward is not
+subject to these rules. Egress is left to the application policies.
+*/ -}}
+{{- if and .Values.infrastructure.enabled .Values.networkPolicy.enabled }}
+{{- $release := dict "app.kubernetes.io/name" (include "parcelflow.name" .) "app.kubernetes.io/instance" .Release.Name }}
+{{- $backends := list (dict "component" "postgres" "ports" (list 5432)) (dict "component" "redis" "ports" (list 6379)) (dict "component" "rabbitmq" "ports" (list 5672 15672)) }}
+{{- range $backends }}
+{{- $ctx := dict "root" $ "component" .component }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml $release | nindent 14 }}
+      ports:
+        {{- range .ports }}
+        - protocol: TCP
+          port: {{ . }}
+        {{- end }}
+---
+{{- end }}
+{{- $ctx := dict "root" . "component" "keycloak" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- toYaml $release | nindent 14 }}
+        # Edge controllers (empty selector: any namespace).
+        - namespaceSelector:
+            {{- with .Values.networkPolicy.edgeNamespaceSelector }}
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+            {{- else }} {}
+            {{- end }}
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}

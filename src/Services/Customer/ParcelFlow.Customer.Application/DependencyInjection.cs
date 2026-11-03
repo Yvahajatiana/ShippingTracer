@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
 using ParcelFlow.BuildingBlocks.Application.Validation;
 
 namespace ParcelFlow.Customer.Application;
@@ -8,6 +9,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddCustomerApplication(this IServiceCollection services)
     {
+        services.AddParcelFlowCorrelation();
         services.AddMediatR(configuration =>
         {
             configuration.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly);

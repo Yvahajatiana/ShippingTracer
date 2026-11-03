@@ -1,5 +1,6 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Delivery.Domain;
 
@@ -99,7 +100,7 @@ public sealed class StartRouteHandler(IDeliveryStore store, IDeliveryActor actor
         foreach (var parcel in parcels)
         {
             var at = parcel.RecordEvent(now);
-            await publisher.Publish(new ParcelStatusRecorded(Guid.NewGuid(), parcel.ShipmentId, at, parcel.ShipmentId, parcel.TrackingNumber!, TrackingStatus.OutForDelivery, null), ct);
+            await publisher.Publish(new ParcelStatusRecorded(DeterministicGuid.Create("delivery:out-for-delivery:", route.Id, parcel.ShipmentId), parcel.ShipmentId, at, parcel.ShipmentId, parcel.TrackingNumber!, TrackingStatus.OutForDelivery, null), ct);
         }
         await store.SaveChangesAsync(ct); return route.ToDto();
     }
@@ -130,7 +131,9 @@ internal static class DeliveryCompletion
         parcel.Complete(routeId, outcome == DeliveryOutcome.Delivered);
         var attempt = new DeliveryAttempt(operationId, routeId, shipmentId, outcome, at, actor.Subject, recipient, reason, signature, photo, photo is null ? null : ProofImages.PhotoContentType(photo));
         store.AddAttempt(attempt);
-        await publisher.Publish(new ParcelStatusRecorded(operationId, shipmentId, at, shipmentId, parcel.TrackingNumber!, outcome == DeliveryOutcome.Delivered ? TrackingStatus.Delivered : TrackingStatus.Failed, null), ct);
+        // The client-supplied OperationId is scoped by outcome and shipment so it can never collide with another fact.
+        var eventId = DeterministicGuid.Create(outcome == DeliveryOutcome.Delivered ? "delivery:delivered:" : "delivery:failed:", shipmentId, operationId);
+        await publisher.Publish(new ParcelStatusRecorded(eventId, shipmentId, at, shipmentId, parcel.TrackingNumber!, outcome == DeliveryOutcome.Delivered ? TrackingStatus.Delivered : TrackingStatus.Failed, null), ct);
         await store.SaveChangesAsync(ct); return attempt.ToDto();
     }
 }

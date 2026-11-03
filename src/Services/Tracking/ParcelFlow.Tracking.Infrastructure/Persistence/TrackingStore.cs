@@ -1,6 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Logging;
 using ParcelFlow.Tracking.Application;
 using ParcelFlow.Tracking.Domain;
 using Polly;
@@ -8,17 +6,22 @@ using Polly;
 namespace ParcelFlow.Tracking.Infrastructure.Persistence;
 
 public sealed class TrackingStore(TrackingDbContext database, ResiliencePipeline databaseReadPipeline,
-    IDistributedCache cache, ILogger<TrackingStore> logger) : ITrackingStore
+    TrackingCacheInvalidator cacheInvalidator) : ITrackingStore
 {
     public async Task<TrackingRecord?> FindByShipmentAsync(Guid shipmentId, CancellationToken cancellationToken)
     {
         // The consumer outbox owns this transaction. Lock even an absent aggregate so concurrent
         // creation and updates across the three queues cannot exhaust optimistic retries.
         if (database.Database.CurrentTransaction is not null)
+        {
             await database.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(hashtextextended({shipmentId.ToString()}, 0))", cancellationToken);
-        return await databaseReadPipeline.ExecuteAsync(async token => await database.Records.Include(value => value.Entries)
-            .SingleOrDefaultAsync(value => value.ShipmentId == shipmentId, token), cancellationToken);
+            // PostgreSQL aborts the whole transaction on error, so an in-transaction retry cannot succeed:
+            // fail fast and let the MassTransit message retry replay the consumer in a fresh transaction.
+            return await LoadByShipmentAsync(shipmentId, cancellationToken);
+        }
+        return await databaseReadPipeline.ExecuteAsync(
+            async token => await LoadByShipmentAsync(shipmentId, token), cancellationToken);
     }
 
     public async Task<TrackingRecord?> FindByTrackingNumberAsync(string trackingNumber, CancellationToken cancellationToken) =>
@@ -32,19 +35,13 @@ public sealed class TrackingStore(TrackingDbContext database, ResiliencePipeline
         database.ChangeTracker.DetectChanges();
         var numbers = database.ChangeTracker.Entries<TrackingRecord>()
             .Where(value => value.State is EntityState.Added or EntityState.Modified)
-            .Select(value => value.Entity.TrackingNumber).Where(value => value is not null).Distinct().ToArray();
+            .Select(value => value.Entity.TrackingNumber).OfType<string>().Distinct().ToArray();
         await database.SaveChangesAsync(cancellationToken);
-        foreach (var number in numbers)
-        {
-            using var budget = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
-            try
-            {
-                await cache.RemoveAsync($"tracking:public:v1:{number}", budget.Token).WaitAsync(budget.Token);
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException)
-            {
-                logger.LogWarning(exception, "Tracking cache invalidation failed; cached data expires within 15 seconds");
-            }
-        }
+        // Inside the outbox transaction the removal waits for the commit; removing it now would let a concurrent
+        // read put the pre-commit projection back in Redis for the whole cache lifetime.
+        await cacheInvalidator.InvalidateAfterCommitAsync(database, numbers);
     }
+
+    private Task<TrackingRecord?> LoadByShipmentAsync(Guid shipmentId, CancellationToken cancellationToken) =>
+        database.Records.Include(value => value.Entries).SingleOrDefaultAsync(value => value.ShipmentId == shipmentId, cancellationToken);
 }

@@ -62,8 +62,9 @@ Les contrats existants de BuildingBlocks suffisent : aucune nouvelle version de 
 
 - `ShipmentReadyForPickup` est consommé sur la file durable préfixée `warehouse-*`, avec Inbox/Outbox MassTransit.
 - Le premier scan d’entrée publie `ParcelPickedUp`, qui termine la saga Shipment et alimente Tracking. Pour une première entrée en entrepôt normal, cet événement est l’unique fait publié, avec EventId égal à ScanId.
-- Une entrée en centre de tri publie `ParcelStatusRecorded` avec AtSortingCenter et le code du site. Si c’est aussi la première entrée du colis, ParcelPickedUp est publié avec un EventId distinct : la prise en charge et le passage au tri sont deux faits à la même date.
+- Une entrée en centre de tri publie `ParcelStatusRecorded` avec AtSortingCenter et le code du site. Si c’est aussi la première entrée du colis, ParcelPickedUp est publié avec un EventId distinct, dérivé du ScanId (`warehouse:parcel-picked-up:`) : la prise en charge et le passage au tri sont deux faits à la même date.
 - Une sortie ou une entrée ultérieure en entrepôt normal publie `ParcelStatusRecorded` avec InTransit. Son EventId est ScanId ; CorrelationId est ShipmentId.
+- `ParcelStatusRecorded` est aussi consommé (file `warehouse-parcel-delivery-started`) pour la sortie automatique au départ en livraison ([ADR 0001](adr/0001-warehouse-exit-on-delivery-start.md)). Seuls les statuts publiés par Delivery sont pris en compte : OutForDelivery au démarrage d’une tournée, puis Delivered et Failed comme filet de sécurité si le départ a été manqué (consommateur déployé en cours de tournée par exemple) ; les autres, dont ceux publiés par Warehouse, sont ignorés. Si le colis est encore en stock, un scan Exit est enregistré dans son site courant avec le sujet `system:delivery-start`, l’heure de l’événement source et un ScanId UUID v8 dérivé de son EventId : une redélivrance, même sous un nouvel identifiant de transport, ne produit qu’une sortie. Un colis hors stock, inconnu, ou ayant bougé après l’heure de l’événement (retour au dépôt après un échec par exemple) n’est pas modifié : une redélivrance de l’événement Failed ne retire donc pas un colis revenu au dépôt. Cette sortie ne publie aucun événement : Tracking affiche déjà En livraison, Livré ou Échec, et un InTransit tardif ferait régresser l’historique public.
 
 La base dédiée `parcelflow_warehouse` contient les sites, les colis éligibles et leur emplacement courant, les scans, ainsi que les tables Inbox/Outbox. Les scans ont des clés étrangères obligatoires vers le site et le colis. Les suppressions référencées sont interdites ; les identités et les codes uniques sont protégés par des contraintes PostgreSQL.
 
@@ -73,7 +74,7 @@ Une erreur annule les changements et les messages en attente dans la même trans
 
 ## Lancement à cette étape
 
-Prérequis : .NET 8, PostgreSQL, RabbitMQ et Redis accessibles. Les secrets sont fournis par variables d’environnement. Le lancement groupé Docker et le provisionnement Keycloak restent aux étapes prévues.
+Prérequis : SDK .NET 8.0.4xx, PostgreSQL, RabbitMQ et Redis accessibles. Les secrets sont fournis par variables d’environnement. Le lancement groupé Docker et le provisionnement Keycloak sont décrits dans [Docker](docker.md).
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
@@ -101,7 +102,7 @@ Configurer `Keycloak__Authority` avec l’URL du realm et `Keycloak__Audience=wa
 
 ## Vérification et organisation
 
-Trois agents ont travaillé sur des fichiers distincts après fixation des interfaces : Domain/Application/unitaires, Infrastructure/migrations/intégrations et API/tests HTTP. Les compilations et migrations ont été séquencées. Le parent a intégré la solution, les contrats de compatibilité et un test de workflow sur trois bases séparées : ShipmentCreated → paiement accepté → projection Warehouse → prise en charge → sortie → entrée au tri → saga terminée et historique Tracking. Le paiement est simulé par son contrat existant, conformément à l’étape Billing encore à venir.
+Trois agents ont travaillé sur des fichiers distincts après fixation des interfaces : Domain/Application/unitaires, Infrastructure/migrations/intégrations et API/tests HTTP. Les compilations et migrations ont été séquencées. Le parent a intégré la solution, les contrats de compatibilité et un test de workflow sur trois bases séparées : ShipmentCreated → paiement accepté → projection Warehouse → prise en charge → sortie → entrée au tri → saga terminée et historique Tracking. Le paiement est simulé par son contrat existant, Billing n’étant pas encore livré lors de cette étape.
 
 ```powershell
 dotnet test ParcelFlow.sln --configuration Release
@@ -109,4 +110,4 @@ dotnet ef migrations has-pending-model-changes --project src/Services/Warehouse/
 dotnet list ParcelFlow.sln package --vulnerable --include-transitive
 ```
 
-Résultats vérifiés : compilation Release du monorepo sans avertissement ni erreur ; 288 tests réussis, aucun échec ni test ignoré. Warehouse compte 29 tests unitaires, 41 intégrations et 2 contrats. Les 216 tests précédents restent réussis. La migration correspond au modèle EF et NuGet ne signale aucun package vulnérable connu, dépendances transitives incluses. Les intégrations couvrent notamment les 20 scans concurrents, l’entrée face à la désactivation, l’annulation stock/scan/Outbox après erreur SQL et le parcours sur trois bases distinctes. Swagger et les champs obligatoires sont vérifiés par HTTP réel.
+Résultats vérifiés : compilation Release du monorepo sans avertissement ni erreur ; 288 tests réussis à la livraison de l’étape, aucun échec ni test ignoré, dont les 216 tests précédents. Depuis la sortie automatique au départ en livraison (ADR 0001), Warehouse compte 34 tests unitaires, 46 intégrations et 2 contrats, tous réussis. La migration correspond au modèle EF et NuGet ne signale aucun package vulnérable connu, dépendances transitives incluses. Les intégrations couvrent notamment les 20 scans concurrents, l’entrée face à la désactivation, l’annulation stock/scan/Outbox après erreur SQL et le parcours sur trois bases distinctes. Swagger et les champs obligatoires sont vérifiés par HTTP réel.

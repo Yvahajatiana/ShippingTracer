@@ -1,0 +1,106 @@
+/*
+ * Corporate theme of the admin portal: navy sidebar, cool grey workspace, steel blue primary,
+ * IBM Plex Sans for text and IBM Plex Mono for references and amounts.
+ * Only tokens and slot-level typography are overridden, so the shared helm components stay untouched.
+ */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-400.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-500.css';
+@import '@fontsource/ibm-plex-sans/latin-ext-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+
+:root {
+  --font-sans:
+    'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius: 0.375rem;
+  --background: #f3f5f8;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #1b4db1;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2f7;
+  --secondary-foreground: #0f172a;
+  --muted: #eef1f5;
+  --muted-foreground: #556274;
+  --accent: #eaf0fb;
+  --accent-foreground: #143a86;
+  --destructive: #b42318;
+  --border: #dde3ea;
+  --input: #cbd3de;
+  --ring: #1b4db1;
+
+  --sidebar: #0e1c33;
+  --sidebar-foreground: #c3ccda;
+  --sidebar-primary: #2f6be0;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1f3760;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #22385a;
+  --sidebar-ring: #5b8def;
+  /* Muted text on the navy sidebar (section labels, role); 5.6:1 on --sidebar. */
+  --sidebar-muted: #8fa0b9;
+
+  --success: #0f6b45;
+  --warning: #8a4b00;
+  --info: #1b4db1;
+
+  --chart-1: #1b4db1;
+  --chart-2: #9db4e3;
+  --chart-3: #0f6b45;
+  --chart-4: #c27a12;
+  --chart-5: #556274;
+}
+
+@theme inline {
+  --color-sidebar-muted: var(--sidebar-muted);
+}
+
+/* Data tables: compact uppercase headers on a tinted band, roomier cells. */
+thead[data-slot='table-header'] {
+  background: #f7f9fb;
+}
+
+th[data-slot='table-head'] {
+  height: 2.5rem;
+  padding-inline: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+td[data-slot='table-cell'] {
+  padding: 0.8rem 1rem;
+}
+
+/* Outer columns line up with the 1.25rem toolbar and pager strips of list panels. */
+th[data-slot='table-head']:first-child,
+td[data-slot='table-cell']:first-child {
+  padding-inline-start: 1.25rem;
+}
+
+th[data-slot='table-head']:last-child,
+td[data-slot='table-cell']:last-child {
+  padding-inline-end: 1.25rem;
+}
+
+tr[data-slot='table-row'] {
+  border-color: #eef1f5;
+}
+
+/* Tabular figures everywhere numbers are aligned. */
+td[data-slot='table-cell'],
+[data-slot='card-title'] {
+  font-variant-numeric: tabular-nums;
+}

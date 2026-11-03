@@ -4,6 +4,7 @@ using Npgsql;
 using MassTransit.EntityFrameworkCoreIntegration;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
 using ParcelFlow.Notification.Application;
 using Microsoft.Extensions.DependencyInjection;
 using ParcelFlow.Notification.Domain;
@@ -62,7 +63,11 @@ public sealed class PersistenceTests(InfrastructureFixture infrastructure)
         var command = new RecordNotification(Guid.NewGuid(), Guid.NewGuid(), NotificationKind.ShipmentCreated, DateTimeOffset.UtcNow,
             FixedRecipientResolver.Owner, FixedRecipientResolver.Tracking, null, null, null, null, null);
         using (var scope = services.CreateScope())
+        {
+            // Ambient correlation as set by the consume filter, so the outbox rows of this flow can be found.
+            scope.ServiceProvider.GetRequiredService<CorrelationContext>().Set(command.ShipmentId);
             await FluentActions.Awaiting(() => scope.ServiceProvider.GetRequiredService<ISender>().Send(command)).Should().ThrowAsync<InvalidOperationException>().WithMessage("Injected save failure.");
+        }
         await using var read = CreateContext();
         (await read.Events.AnyAsync(x => x.EventId == command.EventId)).Should().BeFalse();
         (await read.Messages.AnyAsync(x => x.SourceEventId == command.EventId)).Should().BeFalse();

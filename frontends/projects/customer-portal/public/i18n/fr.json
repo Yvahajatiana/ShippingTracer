@@ -1,0 +1,214 @@
+{
+  "app": { "title": "Espace client" },
+  "nav": {
+    "home": "Accueil",
+    "shipments": "Mes envois",
+    "newShipment": "Nouvel envoi",
+    "invoices": "Factures",
+    "notifications": "Notifications",
+    "profile": "Mon profil"
+  },
+  "form": { "optional": "(facultatif)" },
+  "paging": {
+    "label": "Pagination",
+    "page": "Page {{page}}",
+    "pageWithTotal": "Page {{page}} · {{total}} résultat(s)"
+  },
+  "home": {
+    "hero": {
+      "title": "Où en est votre colis ?",
+      "subtitle": "Saisissez votre numéro de suivi pour connaître l'état de votre livraison, sans créer de compte."
+    },
+    "dashboard": {
+      "title": "Bonjour {{name}}",
+      "recent": "Envois récents",
+      "allShipments": "Tous mes envois",
+      "pendingInvoices": "Factures à régler",
+      "pendingHint": "Les envois sont pris en charge dès le paiement de leur facture.",
+      "partialCount": "Au moins {{count}} (comptage limité aux factures les plus récentes)",
+      "viewInvoices": "Voir mes factures"
+    },
+    "signIn": {
+      "title": "Expédiez avec ParcelFlow",
+      "message": "Connectez-vous pour créer des envois, imprimer vos étiquettes et régler vos factures."
+    }
+  },
+  "tracking": {
+    "title": "Suivi du colis {{number}}",
+    "subtitle": "Historique public des étapes d'acheminement.",
+    "number": "Numéro de suivi",
+    "history": "Historique de suivi",
+    "updatedAt": "Dernière mise à jour : {{date}}",
+    "facility": "Site : {{code}}",
+    "noEvents": "Aucun événement de suivi pour le moment.",
+    "notFound": {
+      "title": "Colis introuvable",
+      "message": "Aucun colis ne correspond au numéro {{number}}. Vérifiez votre saisie."
+    },
+    "invalid": {
+      "title": "Numéro de suivi invalide",
+      "message": "Un numéro de suivi comporte de 6 à 32 lettres ou chiffres, par exemple PF00240000FR."
+    },
+    "search": {
+      "label": "Numéro de suivi",
+      "placeholder": "ex. PF00240000FR",
+      "hint": "De 6 à 32 lettres ou chiffres, indiqués sur votre étiquette.",
+      "submit": "Suivre",
+      "another": "Suivre un autre colis"
+    }
+  },
+  "profile": {
+    "title": "Mon profil",
+    "subtitle": "Vos coordonnées et votre carnet d'adresses.",
+    "identity": "Coordonnées",
+    "memberSince": "Client depuis le {{date}}",
+    "fields": {
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "E-mail",
+      "phone": "Téléphone"
+    },
+    "onboarding": {
+      "title": "Créez votre profil client",
+      "description": "Quelques informations suffisent pour commencer à expédier.",
+      "submit": "Créer mon profil",
+      "created": "Votre profil est créé. Bienvenue !"
+    }
+  },
+  "address": {
+    "title": "Carnet d'adresses",
+    "description": "Adresses réutilisables comme expéditeur.",
+    "add": "Ajouter une adresse",
+    "addTitle": "Nouvelle adresse",
+    "editTitle": "Modifier l'adresse",
+    "dialogDescription": "Le code pays suit la norme ISO à 2 lettres (FR, DE, CA…).",
+    "editLabel": "Modifier l'adresse {{label}}",
+    "deleteLabel": "Supprimer l'adresse {{label}}",
+    "deleteConfirm": "Supprimer l'adresse « {{label}} » ?",
+    "added": "Adresse ajoutée.",
+    "deleted": "Adresse supprimée.",
+    "empty": "Aucune adresse enregistrée.",
+    "fields": {
+      "label": "Libellé",
+      "line1": "Adresse",
+      "line2": "Complément d'adresse",
+      "postalCode": "Code postal",
+      "city": "Ville",
+      "countryCode": "Pays"
+    }
+  },
+  "shipments": {
+    "title": "Mes envois",
+    "subtitle": "Suivez vos envois et retrouvez leurs étiquettes.",
+    "new": "Nouvel envoi",
+    "backToList": "Retour aux envois",
+    "columns": {
+      "trackingNumber": "N° de suivi",
+      "recipient": "Destination",
+      "zone": "Zone",
+      "price": "Prix"
+    },
+    "empty": {
+      "title": "Aucun envoi pour l'instant",
+      "message": "Créez votre premier envoi pour obtenir un devis et une étiquette."
+    }
+  },
+  "newShipment": {
+    "title": "Nouvel envoi",
+    "subtitle": "Le tarif est calculé en direct selon la destination et le poids facturable.",
+    "sender": "Expéditeur",
+    "senderHint": "Prérempli depuis votre profil ; modifiable si besoin.",
+    "savedAddress": "Adresse enregistrée",
+    "chooseAddress": "Choisir une adresse…",
+    "recipient": "Destinataire",
+    "parcel": "Colis",
+    "parcelHint": "Poids maximal {{maxWeightKg}} kg, chaque dimension jusqu'à {{maxDimensionCm}} cm.",
+    "volumetricTooHigh": "Colis trop volumineux : le poids volumétrique (longueur × largeur × hauteur ÷ {{volumetricDivisor}}) ne doit pas dépasser {{maxVolumetricWeightKg}} kg.",
+    "fields": {
+      "name": "Nom complet",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "weightKg": "Poids (kg)",
+      "lengthCm": "Longueur (cm)",
+      "widthCm": "Largeur (cm)",
+      "heightCm": "Hauteur (cm)"
+    },
+    "quote": {
+      "title": "Votre devis",
+      "hint": "Complétez le formulaire pour obtenir le tarif.",
+      "loading": "Calcul du tarif…",
+      "error": "Le tarif n'a pas pu être calculé. Vérifiez les informations saisies.",
+      "zone": "Zone",
+      "billableWeight": "Poids facturable",
+      "kg": "{{value}} kg"
+    },
+    "submit": "Créer l'envoi",
+    "paymentNotice": "Une facture est émise à la création ; le colis est pris en charge après paiement.",
+    "fixErrors": "Corrigez les champs signalés pour continuer.",
+    "created": "Envoi {{number}} créé."
+  },
+  "shipment": {
+    "title": "Envoi {{number}}",
+    "createdOn": "Créé le {{date}}",
+    "summary": "Résumé",
+    "dimensions": "Dimensions (cm)",
+    "downloadLabel": "Télécharger l'étiquette",
+    "invoice": "Facture",
+    "noInvoice": "Aucune facture associée pour le moment.",
+    "payInvoice": "Régler la facture",
+    "viewInvoice": "Voir la facture",
+    "publicTrackingLink": "Ouvrir la page de suivi public"
+  },
+  "invoices": {
+    "title": "Factures",
+    "subtitle": "Vos factures et leur statut de paiement.",
+    "backToList": "Retour aux factures",
+    "empty": "Aucune facture pour l'instant.",
+    "columns": {
+      "number": "N° de facture",
+      "issuedAt": "Émise le",
+      "amount": "Montant"
+    }
+  },
+  "invoice": {
+    "title": "Facture {{number}}",
+    "issuedOn": "Émise le {{date}}",
+    "summary": "Résumé",
+    "creditTotal": "Total remboursé",
+    "viewShipment": "Voir l'envoi"
+  },
+  "payment": {
+    "title": "Paiement",
+    "none": "Aucun paiement enregistré pour cette facture.",
+    "date": "Date",
+    "reference": "Référence",
+    "pendingTitle": "Facture en attente de paiement",
+    "pendingMessage": "Votre colis sera pris en charge dès la confirmation du paiement.",
+    "payNow": "Payer maintenant",
+    "dialogTitle": "Paiement simulé",
+    "dialogDescription": "Facture {{number}} · {{amount}}",
+    "outcomeLabel": "Résultat à simuler",
+    "outcomes": {
+      "Approved": "Paiement accepté",
+      "Declined": "Paiement refusé"
+    },
+    "mockNotice": "Environnement de démonstration : aucun moyen de paiement réel n'est débité.",
+    "confirmApproved": "Confirmer le paiement",
+    "confirmDeclined": "Simuler un refus",
+    "approved": "Paiement accepté. Merci !",
+    "declined": "Le paiement a été refusé."
+  },
+  "creditNotes": {
+    "title": "Avoirs",
+    "empty": "Aucun avoir sur cette facture.",
+    "number": "N° d'avoir",
+    "reason": "Motif"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "E-mails et SMS envoyés au sujet de vos colis.",
+    "empty": "Aucune notification pour l'instant.",
+    "emptyForShipment": "Aucune notification pour cet envoi.",
+    "shipmentLink": "Envoi {{number}}"
+  }
+}

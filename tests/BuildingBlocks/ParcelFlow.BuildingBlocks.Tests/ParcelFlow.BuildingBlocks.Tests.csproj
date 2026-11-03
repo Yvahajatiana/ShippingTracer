@@ -16,5 +16,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../../../src/BuildingBlocks/ParcelFlow.BuildingBlocks.Api/ParcelFlow.BuildingBlocks.Api.csproj" />
     <ProjectReference Include="../../../src/BuildingBlocks/ParcelFlow.BuildingBlocks.Application/ParcelFlow.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="../../../src/BuildingBlocks/ParcelFlow.BuildingBlocks.Contracts/ParcelFlow.BuildingBlocks.Contracts.csproj" />
+    <ProjectReference Include="../../../src/BuildingBlocks/ParcelFlow.BuildingBlocks.Messaging/ParcelFlow.BuildingBlocks.Messaging.csproj" />
   </ItemGroup>
 </Project>

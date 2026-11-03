@@ -9,6 +9,7 @@
     <PackageReference Include="Testcontainers.RabbitMq" Version="4.16.0" />
     <PackageReference Include="Testcontainers.Redis" Version="4.16.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.22" />
+    <Compile Include="../../../Shared/RabbitMqDelayedExchange.cs" Link="Shared/RabbitMqDelayedExchange.cs" />
     <ProjectReference Include="../../../../src/Services/Notification/ParcelFlow.Notification.Api/ParcelFlow.Notification.Api.csproj" />
     <ProjectReference Include="../../../../src/Services/Shipment/ParcelFlow.Shipment.Api/ParcelFlow.Shipment.Api.csproj" Aliases="ShipmentApi" />
     <ProjectReference Include="../../../../src/Services/Shipment/ParcelFlow.Shipment.Infrastructure/ParcelFlow.Shipment.Infrastructure.csproj" />

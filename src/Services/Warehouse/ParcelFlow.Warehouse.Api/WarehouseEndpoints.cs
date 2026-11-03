@@ -15,11 +15,6 @@ public static class WarehouseEndpoints
         var warehouses = app.MapGroup("/api/v{version:apiVersion}/warehouses")
             .WithApiVersionSet(versions).MapToApiVersion(1, 0).WithTags("Warehouses")
             .RequireAuthorization("operations");
-        warehouses.AddEndpointFilter(async (context, next) =>
-        {
-            context.HttpContext.Response.Headers.CacheControl = "no-store";
-            return await next(context);
-        });
         warehouses.MapPost("", async (CreateWarehouseBody body, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new CreateWarehouse(Guid.NewGuid(), body.Code, body.Name,

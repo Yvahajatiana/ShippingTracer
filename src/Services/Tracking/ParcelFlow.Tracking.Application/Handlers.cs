@@ -1,11 +1,13 @@
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Tracking.Domain;
 
 namespace ParcelFlow.Tracking.Application;
 
-public sealed class RecordTrackingEventHandler(ITrackingStore store, IPublishEndpoint publisher) : IRequestHandler<RecordTrackingEvent, bool>
+public sealed class RecordTrackingEventHandler(ITrackingStore store, IPublishEndpoint publisher, ICorrelationContext correlation) : IRequestHandler<RecordTrackingEvent, bool>
 {
     public async Task<bool> Handle(RecordTrackingEvent request, CancellationToken cancellationToken)
     {
@@ -25,7 +27,7 @@ public sealed class RecordTrackingEventHandler(ITrackingStore store, IPublishEnd
         {
             var publish = !wasRegistered ? record.Timeline : added ? record.Entries.Where(x => x.EventId == request.EventId) : [];
             foreach (var entry in publish)
-                await publisher.Publish(new TrackingStatusChanged(Guid.NewGuid(), record.ShipmentId, entry.OccurredAtUtc,
+                await publisher.Publish(new TrackingStatusChanged(DeterministicGuid.Create("tracking:status-changed:", entry.EventId), correlation.CorrelationId, entry.OccurredAtUtc,
                     record.ShipmentId, record.TrackingNumber, Map(entry.Status), entry.FacilityCode, entry.EventId), cancellationToken);
         }
         if (added || (!wasRegistered && record.TrackingNumber is not null)) await store.SaveChangesAsync(cancellationToken);

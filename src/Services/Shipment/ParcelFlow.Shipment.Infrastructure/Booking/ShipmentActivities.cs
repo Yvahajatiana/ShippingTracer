@@ -39,6 +39,13 @@ public sealed class PaymentFailedActivity(ShipmentDbContext database) : Shipment
     protected override void Apply(ParcelShipment shipment) => shipment.MarkPaymentFailed();
 }
 
+public sealed class PaymentTimeoutActivity(ShipmentDbContext database)
+    : ShipmentActivity<ShipmentPaymentTimeoutExpired>(database)
+{
+    // An unconfirmed payment closes the shipment: it must never become eligible for pickup.
+    protected override void Apply(ParcelShipment shipment) => shipment.MarkPaymentFailed();
+}
+
 public sealed class ParcelPickedUpActivity(ShipmentDbContext database) : ShipmentActivity<ParcelPickedUp>(database)
 {
     protected override void Apply(ParcelShipment shipment) => shipment.MarkPickedUp();

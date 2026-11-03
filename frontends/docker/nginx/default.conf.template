@@ -1,0 +1,98 @@
+# ParcelFlow portal: static Angular bundle + same-origin reverse proxy to the gateway.
+# Rendered by the image entrypoint (envsubst) into /etc/nginx/conf.d/default.conf.
+# Only GATEWAY_URL, KEYCLOAK_URL and NGINX_LOCAL_RESOLVERS are substituted (NGINX_ENVSUBST_FILTER),
+# so nginx variables such as $uri are left untouched.
+
+# Resolve the gateway host per request: the container starts even when the gateway is not up
+# yet (502 until it is), and a re-created gateway container gets picked up after `valid`.
+# The resolver does not apply DNS search domains: on Kubernetes use a FQDN in GATEWAY_URL.
+resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+resolver_timeout 5s;
+
+server {
+    listen 8080 default_server;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    server_tokens off;
+    absolute_redirect off;
+    charset utf-8;
+    charset_types application/json application/javascript text/css;
+
+    # Gateway request body limit is 12 MiB.
+    client_max_body_size 12m;
+
+    gzip on;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml application/javascript application/json
+               application/manifest+json application/xml image/svg+xml font/ttf font/otf;
+
+    # Security headers are included per location (not at server level) so that responses
+    # proxied from the gateway keep the gateway's own headers without duplicates.
+
+    # Liveness/readiness probe used by the image HEALTHCHECK and orchestrators.
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        add_header Cache-Control "no-store" always;
+        return 200 "ok\n";
+    }
+
+    # Same-origin API (apiBaseUrl ""): forward /api/... to the gateway, path kept as is.
+    # ^~ keeps the regex locations below (file extensions) from capturing API paths.
+    location ^~ /api/ {
+        set $parcelflow_gateway "${GATEWAY_URL}";
+        # A variable without URI part forwards the original request URI unchanged.
+        proxy_pass $parcelflow_gateway;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # Runtime configuration written at container start: never cached.
+    location = /config.json {
+        include /etc/nginx/conf.d/parcelflow/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+        try_files $uri =404;
+    }
+
+    # Application shell: never cached so a new release is picked up immediately.
+    location = /index.html {
+        include /etc/nginx/conf.d/parcelflow/security-headers.conf;
+        add_header Cache-Control "no-store" always;
+    }
+
+    # Content-hashed build output (outputHashing: all): cache for a year.
+    location ~* "^/(?:(?:main|chunk|polyfills|styles|scripts|worker)-[a-z0-9_-]{8}\.(?:js|css)|media/[^/]+-[a-z0-9_-]{8}\.(?:woff2?|ttf|otf|eot|svg|png|jpe?g|gif|webp|avif))$" {
+        include /etc/nginx/conf.d/parcelflow/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # Other static files (favicon, i18n JSON, ...): revalidate, and a missing file is a 404,
+    # not the application shell.
+    location ~* "\.(?:js|mjs|css|map|json|ico|png|svg|jpe?g|gif|webp|avif|woff2?|ttf|otf|eot|txt|xml|webmanifest)$" {
+        include /etc/nginx/conf.d/parcelflow/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
+    }
+
+    # SPA routes (deep links such as /billing/invoices) resolve to the application shell.
+    location / {
+        include /etc/nginx/conf.d/parcelflow/security-headers.conf;
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: parcelflow
+description: ParcelFlow parcel shipping platform - eight services, the API gateway and three portals.
+type: application
+version: 0.1.0
+appVersion: "develop"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/Yvahajatiana/ShippingTracer
+sources:
+  - https://github.com/Yvahajatiana/ShippingTracer
+keywords:
+  - parcelflow
+  - shipping
+  - dotnet
+  - angular

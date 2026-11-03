@@ -1,0 +1,131 @@
+name: Deploy
+
+# Deploys the ParcelFlow Helm chart with the images published by the CI.
+# - Called by ci.yml after a push on develop (staging) or main (production), with the commit tag.
+# - Run by hand to redeploy or roll back to an earlier commit tag (sha-xxxxxxx).
+# Per environment configuration (Settings > Environments):
+#   secret   KUBECONFIG     kubeconfig of a deployer account scoped to the release namespace
+#   secret   HELM_VALUES    values file of the environment (see deploy/kubernetes/values-production.example.yaml)
+#   variable KUBE_CONTEXT   optional kubeconfig context, its current context otherwise
+#   variable HELM_NAMESPACE optional, defaults to parcelflow (the namespace must already exist)
+#   variable HELM_RELEASE   optional, defaults to parcelflow
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Target environment (staging or production)
+        required: true
+        type: string
+      image-tag:
+        description: Image tag to deploy, defaults to the commit tag sha-<short sha>
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options: [staging, production]
+      image-tag:
+        description: Commit tag published by the CI (sha-xxxxxxx), defaults to the selected commit
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  HELM_VERSION: v4.3.1
+  CHART: deploy/helm/parcelflow
+
+jobs:
+  deploy:
+    name: Helm upgrade (${{ inputs.environment }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    # One deployment at a time per environment; a running deployment is never cancelled.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+      HELM_VALUES: ${{ secrets.HELM_VALUES }}
+      KUBE_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+      NAMESPACE: ${{ vars.HELM_NAMESPACE || 'parcelflow' }}
+      RELEASE: ${{ vars.HELM_RELEASE || 'parcelflow' }}
+      INPUT_TAG: ${{ inputs.image-tag }}
+      TARGET: ${{ inputs.environment }}
+    steps:
+      # Same short sha length as docker/metadata-action (type=sha,format=short) in ci.yml.
+      - name: Resolve image tag
+        id: tag
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-sha-${GITHUB_SHA::7}}"
+          # Production only runs immutable commit tags, never a branch tag or latest.
+          if [[ "$TARGET" == production && ! "$tag" =~ ^sha-[0-9a-f]{7,40}$ ]]; then
+            echo "::error::production only accepts commit tags (sha-xxxxxxx), got '$tag'"
+            exit 1
+          fi
+          if [[ ! "$tag" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "::error::invalid image tag '$tag'"
+            exit 1
+          fi
+          echo "value=$tag" >> "$GITHUB_OUTPUT"
+      - name: Check environment configuration
+        id: config
+        run: |
+          if [[ -z "$KUBECONFIG_DATA" || -z "$HELM_VALUES" ]]; then
+            echo "::notice::Environment '$TARGET' has no KUBECONFIG / HELM_VALUES secret: deployment skipped"
+            echo "Deployment to **$TARGET** skipped: the environment has no \`KUBECONFIG\` / \`HELM_VALUES\` secret." >> "$GITHUB_STEP_SUMMARY"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.configured == 'true'
+      - uses: azure/setup-helm@v5
+        if: steps.config.outputs.configured == 'true'
+        with:
+          version: ${{ env.HELM_VERSION }}
+      # Credentials and values are written to the runner temp directory, never echoed, and deleted
+      # by the last step.
+      - name: Write credentials
+        if: steps.config.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$KUBECONFIG_DATA" > "$RUNNER_TEMP/kubeconfig"
+          printf '%s\n' "$HELM_VALUES" > "$RUNNER_TEMP/values.yaml"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+      # The migration hook Jobs run before the workloads are updated. A failed upgrade is rolled
+      # back to the previous revision; applied migrations are not reverted (they must stay
+      # backward compatible with the previous images).
+      - name: Helm upgrade
+        if: steps.config.outputs.configured == 'true'
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+          context_args=()
+          if [[ -n "$KUBE_CONTEXT" ]]; then context_args=(--kube-context "$KUBE_CONTEXT"); fi
+          helm upgrade --install "$RELEASE" "$CHART" \
+            "${context_args[@]}" --namespace "$NAMESPACE" \
+            -f "$RUNNER_TEMP/values.yaml" \
+            --set-string "image.tag=$TAG" \
+            --rollback-on-failure --wait --timeout 15m --history-max 10
+          {
+            echo "Deployed **$TAG** to **$TARGET** (release \`$RELEASE\`, namespace \`$NAMESPACE\`)."
+            echo
+            echo '```'
+            helm status "$RELEASE" "${context_args[@]}" --namespace "$NAMESPACE"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove credentials
+        if: always() && steps.config.outputs.configured == 'true'
+        run: rm -f "$RUNNER_TEMP/kubeconfig" "$RUNNER_TEMP/values.yaml"

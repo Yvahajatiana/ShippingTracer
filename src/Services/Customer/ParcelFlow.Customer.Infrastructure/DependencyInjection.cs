@@ -1,4 +1,6 @@
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +48,7 @@ public static class DependencyInjection
                 BreakDuration = TimeSpan.FromSeconds(15)
             }).Build());
 
+        services.AddParcelFlowCorrelation();
         services.AddMassTransit(bus =>
         {
             bus.AddEntityFrameworkOutbox<CustomerDbContext>(outbox =>
@@ -66,6 +69,7 @@ public static class DependencyInjection
                         host.Password(settings["RabbitMq:Password"]
                             ?? throw new InvalidOperationException("RabbitMq:Password is required."));
                     });
+                rabbit.UseParcelFlowMessageConventions(context);
                 rabbit.ConfigureEndpoints(context);
             });
         });

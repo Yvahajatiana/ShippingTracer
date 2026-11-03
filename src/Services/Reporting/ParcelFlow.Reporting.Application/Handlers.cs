@@ -1,12 +1,15 @@
 using FluentValidation;
 using MassTransit;
 using MediatR;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Reporting.V1;
 using ParcelFlow.Reporting.Domain;
 
 namespace ParcelFlow.Reporting.Application;
 
-public sealed class RecordStatusFactHandler(IReportingStore store, IPublishEndpoint publisher, TimeProvider clock)
+public sealed class RecordStatusFactHandler(IReportingStore store, IPublishEndpoint publisher, TimeProvider clock,
+    ICorrelationContext correlation)
     : IRequestHandler<RecordStatusFact, bool>
 {
     public async Task<bool> Handle(RecordStatusFact request, CancellationToken ct)
@@ -39,7 +42,7 @@ public sealed class RecordStatusFactHandler(IReportingStore store, IPublishEndpo
         shipment.AddFact(new StatusFact(request.EventId, request.SourceEventId, request.ShipmentId,
             request.Status, request.OccurredAtUtc, request.FacilityCode));
         store.RememberEnvelope(request.EventId, request.SourceEventId);
-        await publisher.Publish(new ShipmentMetricsUpdated(Guid.NewGuid(), request.ShipmentId,
+        await publisher.Publish(new ShipmentMetricsUpdated(DeterministicGuid.Create("reporting:metrics-updated:", request.SourceEventId), correlation.CorrelationId,
             ReportingRules.NormalizeTimestamp(clock.GetUtcNow()), request.ShipmentId, request.SourceEventId), ct);
         await store.SaveChangesAsync(ct);
         return true;

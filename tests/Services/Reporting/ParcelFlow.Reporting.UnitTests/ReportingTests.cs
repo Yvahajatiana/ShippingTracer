@@ -2,6 +2,8 @@ using System.Reflection;
 using FluentAssertions;
 using FluentValidation;
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Reporting.V1;
 using ParcelFlow.Reporting.Application;
 using ParcelFlow.Reporting.Domain;
@@ -102,7 +104,9 @@ public sealed class ReportingTests
         f.Store.Saves.Should().Be(1);
         var published = f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<ShipmentMetricsUpdated>().Subject;
         published.ShipmentId.Should().Be(request.ShipmentId); published.SourceEventId.Should().Be(request.SourceEventId);
-        published.CorrelationId.Should().Be(request.ShipmentId); published.EventId.Should().NotBe(request.EventId);
+        // The incoming TrackingStatusChanged correlation is propagated, not replaced by the shipment identifier.
+        published.CorrelationId.Should().Be(f.Flow).And.NotBe(request.ShipmentId); published.EventId.Should().NotBe(request.EventId);
+        published.EventId.Should().Be(DeterministicGuid.Create("reporting:metrics-updated:", request.SourceEventId));
         published.OccurredAtUtc.Should().Be(Start.AddDays(1));
         f.Store.Shipments.Single().TrackingNumber.Should().Be(Tracking);
     }
@@ -210,10 +214,10 @@ public sealed class ReportingTests
     private static RecordStatusFact Command() => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Tracking, ParcelStatus.Created, Start, null);
     private static F Fixture()
     {
-        var publisher = DispatchProxy.Create<IPublishEndpoint, Publisher>(); var store = new Store();
-        return new F(store, (Publisher)publisher, new RecordStatusFactHandler(store, publisher, new Clock()));
+        var publisher = DispatchProxy.Create<IPublishEndpoint, Publisher>(); var store = new Store(); var flow = Guid.NewGuid();
+        return new F(store, (Publisher)publisher, new RecordStatusFactHandler(store, publisher, new Clock(), CorrelationContext.From(flow)), flow);
     }
-    private sealed record F(Store Store, Publisher Publisher, RecordStatusFactHandler Handler);
+    private sealed record F(Store Store, Publisher Publisher, RecordStatusFactHandler Handler, Guid Flow);
     private sealed class Clock : TimeProvider { public override DateTimeOffset GetUtcNow() => Start.AddDays(1).AddTicks(9); }
     public class Publisher : DispatchProxy
     {

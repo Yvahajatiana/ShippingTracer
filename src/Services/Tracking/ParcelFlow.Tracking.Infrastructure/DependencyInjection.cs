@@ -1,4 +1,6 @@
 using MassTransit;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,9 +19,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddTrackingInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // The interceptor flushes public cache invalidations only once the consumer outbox transaction commits.
+        services.AddSingleton<TrackingCacheInvalidator>();
         services.AddDbContext<TrackingDbContext>((provider, options) => options.UseNpgsql(
             provider.GetRequiredService<IConfiguration>().GetConnectionString("TrackingDatabase")
-                ?? throw new InvalidOperationException("ConnectionStrings:TrackingDatabase is required.")));
+                ?? throw new InvalidOperationException("ConnectionStrings:TrackingDatabase is required."))
+            .AddInterceptors(provider.GetRequiredService<TrackingCacheInvalidator>()));
         services.AddScoped<ITrackingStore, TrackingStore>();
         services.AddStackExchangeRedisCache(options => options.InstanceName = "parcelflow:");
         services.AddOptions<Microsoft.Extensions.Caching.StackExchangeRedis.RedisCacheOptions>()
@@ -49,6 +54,7 @@ public static class DependencyInjection
             }).Build());
 
         services.Configure<MassTransitHostOptions>(options => { options.WaitUntilStarted = true; options.StartTimeout = TimeSpan.FromSeconds(30); });
+        services.AddParcelFlowCorrelation();
         services.AddMassTransit(bus =>
         {
             bus.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("tracking", false));
@@ -79,6 +85,7 @@ public static class DependencyInjection
                         host.Password(settings["RabbitMq:Password"]
                             ?? throw new InvalidOperationException("RabbitMq:Password is required."));
                     });
+                rabbit.UseParcelFlowMessageConventions(context);
                 rabbit.ConfigureEndpoints(context);
             });
         });

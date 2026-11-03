@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.Tracking.Api;
 using ParcelFlow.Tracking.Application;
@@ -117,6 +118,7 @@ builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddSe
     });
 
 var app = builder.Build();
+app.UseParcelFlowCorrelation();
 app.UseParcelFlowProblemDetails();
 app.UseSerilogRequestLogging();
 app.UseAuthentication();

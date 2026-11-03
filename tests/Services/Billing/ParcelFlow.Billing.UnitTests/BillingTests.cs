@@ -3,6 +3,8 @@ using FluentAssertions;
 using MassTransit;
 using ParcelFlow.Billing.Application;
 using ParcelFlow.Billing.Domain;
+using ParcelFlow.BuildingBlocks.Application.Correlation;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Billing.V1;
 using Xunit;
 
@@ -62,11 +64,13 @@ public sealed class BillingTests
     [Fact]
     public async Task Registration_is_immutable_and_replay_does_not_reset_paid_or_credited_state()
     {
-        var f = Fixture(false); var handler = new RegisterInvoiceHandler(f.Store, f.Endpoint);
+        var f = Fixture(false); var flow = Guid.NewGuid(); var handler = new RegisterInvoiceHandler(f.Store, f.Endpoint, CorrelationContext.From(flow));
         var request = new RegisterInvoice(Guid.NewGuid(), "alice", 10m, "EUR", Issued.AddTicks(7));
         (await handler.Handle(request, default)).Should().BeTrue(); var invoice = f.Store.Invoices.Single(); invoice.RecordPayment(MockPaymentOutcome.Approved); invoice.IssueCredit(2m);
         (await handler.Handle(request with { OccurredAtUtc = Issued }, default)).Should().BeFalse(); invoice.Status.Should().Be(InvoiceStatus.PartiallyCredited);
-        f.Store.Saves.Should().Be(1); f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<InvoiceIssued>();
+        f.Store.Saves.Should().Be(1); var issued = f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<InvoiceIssued>().Subject;
+        // The invoice joins the flow of the consumed PaymentRequested and its EventId derives from the invoice.
+        issued.CorrelationId.Should().Be(flow); issued.EventId.Should().Be(DeterministicGuid.Create("billing:invoice-issued:", invoice.Id));
         await FluentActions.Awaiting(() => handler.Handle(request with { Amount = 11 }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => handler.Handle(request with { CustomerSubject = "mallory" }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => handler.Handle(request with { OccurredAtUtc = Issued.AddSeconds(1) }, default)).Should().ThrowAsync<BillingConflictException>();
@@ -78,7 +82,7 @@ public sealed class BillingTests
         var handler = new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock());
         var paid = await handler.Handle(request, default); f.Invoice.IssueCredit(1m);
         (await handler.Handle(request, default)).Should().Be(paid); f.Store.Saves.Should().Be(1); f.Publisher.Events.Should().ContainSingle();
-        var fact = f.Publisher.Events.OfType<PaymentCompleted>().Single(); fact.EventId.Should().Be(operation); fact.ShipmentId.Should().Be(f.Invoice.Id); fact.Amount.Should().Be(10); fact.Currency.Should().Be("EUR");
+        var fact = f.Publisher.Events.OfType<PaymentCompleted>().Single(); fact.EventId.Should().Be(DeterministicGuid.Create("billing:payment-completed:", f.Invoice.Id, operation)); fact.ShipmentId.Should().Be(f.Invoice.Id); fact.Amount.Should().Be(10); fact.Currency.Should().Be("EUR");
         await FluentActions.Awaiting(() => handler.Handle(request with { OperationId = Guid.NewGuid() }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => handler.Handle(request with { Outcome = MockPaymentOutcome.Declined }, default)).Should().ThrowAsync<BillingConflictException>();
         await FluentActions.Awaiting(() => new PayInvoiceHandler(f.Store, new Actor("admin", true), f.Endpoint, new Clock()).Handle(request, default)).Should().ThrowAsync<BillingConflictException>();
@@ -165,7 +169,7 @@ public sealed class BillingTests
         var f = Fixture(); f.Publisher.Failure = new InvalidOperationException("Outbox unavailable");
         Func<Task> action = command switch
         {
-            "register" => () => new RegisterInvoiceHandler(f.Store, f.Endpoint).Handle(new(Guid.NewGuid(), "alice", 10, "EUR", Issued), default),
+            "register" => () => new RegisterInvoiceHandler(f.Store, f.Endpoint, new CorrelationContext()).Handle(new(Guid.NewGuid(), "alice", 10, "EUR", Issued), default),
             "pay" => () => new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Guid.NewGuid(), MockPaymentOutcome.Approved), default),
             _ => () => new IssueCreditNoteHandler(f.Store, new Actor("admin", true), f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Guid.NewGuid(), 1, CreditReason.BillingCorrection), default)
         };
@@ -201,15 +205,36 @@ public sealed class BillingTests
         (await handler.Handle(request, default)).Should().Be(credit);
         var paymentEvent = f.Publisher.Events.OfType<PaymentCompleted>().Single();
         var creditEvent = f.Publisher.Events.OfType<CreditNoteIssued>().Single();
-        paymentEvent.EventId.Should().Be(operation);
+        paymentEvent.EventId.Should().Be(DeterministicGuid.Create("billing:payment-completed:", f.Invoice.Id, operation)).And.NotBe(operation);
         creditEvent.EventId.Should().NotBe(paymentEvent.EventId).And.NotBeEmpty();
         creditEvent.CreditNoteId.Should().Be(operation); credit.Id.Should().Be(operation);
         f.Store.Saves.Should().Be(2); f.Publisher.Events.Should().HaveCount(2);
     }
-    private static Invoice Invoice(decimal amount = 10m) => new(Guid.NewGuid(), "alice", amount, "EUR", Issued);
-    private static F Fixture(bool add = true)
+    [Theory]
+    [InlineData(MockPaymentOutcome.Approved)]
+    [InlineData(MockPaymentOutcome.Declined)]
+    public async Task Retried_payment_operation_keeps_its_event_id_while_another_invoice_gets_a_different_one(MockPaymentOutcome outcome)
     {
-        var store = new Store(); var invoice = Invoice(); if (add) store.Invoices.Add(invoice);
+        var operation = Guid.NewGuid(); var invoiceId = Guid.NewGuid();
+        // Each run starts from the committed state, as a retry does after the first transaction rolled back.
+        async Task<Guid> Pay(Guid invoice)
+        {
+            var f = Fixture(invoice);
+            await new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock()).Handle(new(invoice, operation, outcome), default);
+            return f.Publisher.Events.Cast<ParcelFlow.BuildingBlocks.Contracts.IntegrationEvent>().Single().EventId;
+        }
+        var first = await Pay(invoiceId);
+        var scope = outcome == MockPaymentOutcome.Approved ? "billing:payment-completed:" : "billing:payment-failed:";
+        first.Should().Be(DeterministicGuid.Create(scope, invoiceId, operation)).And.NotBe(operation);
+        (await Pay(invoiceId)).Should().Be(first);
+        // The same client key on another invoice never yields the same EventId (Inbox and consumer deduplication).
+        (await Pay(Guid.NewGuid())).Should().NotBe(first);
+    }
+    private static Invoice Invoice(decimal amount = 10m) => new(Guid.NewGuid(), "alice", amount, "EUR", Issued);
+    private static F Fixture(bool add = true) => Fixture(Guid.NewGuid(), add);
+    private static F Fixture(Guid invoiceId, bool add = true)
+    {
+        var store = new Store(); var invoice = new Invoice(invoiceId, "alice", 10m, "EUR", Issued); if (add) store.Invoices.Add(invoice);
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>(); return new(store, invoice, endpoint, (Publisher)endpoint);
     }
     private sealed record F(Store Store, Invoice Invoice, IPublishEndpoint Endpoint, Publisher Publisher);

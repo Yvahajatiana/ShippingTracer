@@ -8,7 +8,7 @@ Shipment calcule le montant de l’envoi. Sa saga envoie PaymentRequested à la 
 
 Le propriétaire, le montant et la devise EUR sont immuables. Un rejeu compatible de PaymentRequested ne change ni la facture, ni son paiement, ni ses avoirs ; une réutilisation contradictoire est rejetée. Les montants sont positifs, bornés à 1 000 000 EUR et ne comportent pas de fraction de centime. Les valeurs sont persistées en decimal PostgreSQL, précision18/échelle2.
 
-Le client choisit explicitement un résultat de simulation Approved ou Declined. Le paiement utilise toujours le montant intégral et la devise de la facture : aucun montant ni numéro de carte n’est attendu dans la requête. Approved publie PaymentCompleted ; Declined publie PaymentFailed avec un motif fixe sans donnée personnelle.
+Le client choisit explicitement un résultat de simulation Approved ou Declined. Le paiement utilise toujours le montant intégral et la devise de la facture : aucun montant ni numéro de carte n’est attendu dans la requête. Approved publie PaymentCompleted ; Declined publie PaymentFailed avec un motif fixe sans donnée personnelle. Leur EventId est dérivé du type d’événement, de la facture et d’OperationId (`billing:payment-completed:` ou `billing:payment-failed:`).
 
 Un seul paiement terminal est accepté par facture. Un rejeu exact restitue le reçu initial, même après émission d’avoirs ; une nouvelle opération ou un résultat différent retourne 409. Le refus est terminal pour rester cohérent avec la saga Shipment existante, dont l’état PaymentRejected ignore les succès ultérieurs. Un nouveau paiement après refus exige donc un nouvel envoi. Un reçu de paiement simulé refusé retourne HTTP200 avec Outcome=Declined : ce résultat métier n’est pas une panne HTTP.
 
@@ -58,7 +58,7 @@ Les erreurs utilisent les ProblemDetails communs : 400 pour une validation, 401/
 
 ## Transactions et événements
 
-La base dédiée parcelflow_billing contient les factures, les paiements, les avoirs et les tables Inbox/Outbox MassTransit. Les paiements ont une contrainte d’unicité sur InvoiceId et tous les documents enfants possèdent une clé étrangère obligatoire restrictive. La facture utilise xmin et Revision pour la concurrence.
+La base dédiée parcelflow_billing contient les factures, les paiements, les avoirs et les tables Inbox/Outbox MassTransit. Les paiements ont une contrainte d’unicité sur InvoiceId et tous les documents enfants possèdent une clé étrangère obligatoire restrictive. La facture utilise la colonne système xmin comme seul jeton de concurrence optimiste ; Revision est un simple compteur de modifications incrémenté par le domaine.
 
 Chaque commande s’exécute dans une transaction ReadCommitted et prend un verrou PostgreSQL sur l’identifiant de facture avant lecture, y compris si la ligne n’existe pas encore. Les consommateurs réutilisent la transaction de l’Outbox ; le pipeline des écritures HTTP englobe l’état de facture, les reçus et les messages Outbox. Ce verrou sérialise les paiements et avoirs d’une même facture, sans empêcher les autres factures de progresser. Une erreur annule l’écriture métier et la publication ensemble.
 
@@ -67,14 +67,14 @@ Le consommateur PaymentRequested est lié à `billing-payments`, sans modificati
 Contrats versionnés dans BuildingBlocks :
 
 - PaymentRequested, PaymentCompleted et PaymentFailed restent compatibles avec Shipment.
-- InvoiceIssued publie la création d’une nouvelle facture, une seule fois par identité métier.
-- CreditNoteIssued publie chaque nouvel avoir : CreditNoteId est OperationId, tandis qu’EventId est généré indépendamment pour distinguer ce fait d’un paiement qui utiliserait la même clé dans son propre périmètre.
+- InvoiceIssued publie la création d’une nouvelle facture, une seule fois par identité métier, avec un EventId dérivé de InvoiceId et la CorrelationId du PaymentRequested consommé.
+- CreditNoteIssued publie chaque nouvel avoir : CreditNoteId est OperationId, tandis qu’EventId en est dérivé de façon déterministe (`billing:credit-note-issued:`) pour distinguer ce fait d’un paiement qui utiliserait la même clé dans son propre périmètre.
 
-Tous les faits ont CorrelationId=ShipmentId. Aucun événement ne contient l’acteur ou un motif libre provenant du client. Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis reste configuré pour le socle et la readiness, sans cache de soldes.
+Tous les faits ont CorrelationId=ShipmentId, corrélation racine du flux d’envoi (propagée depuis le message consommé pour InvoiceIssued) ; MessageId est égal à EventId (voir [BuildingBlocks](building-blocks.md#identité-des-messages-et-corrélation-14)). Aucun événement ne contient l’acteur ou un motif libre provenant du client. Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires. Redis reste configuré pour le socle et la readiness, sans cache de soldes.
 
 ## Lancement à cette étape
 
-Prérequis : .NET 8, PostgreSQL, RabbitMQ et Redis accessibles. Fournir les secrets par variables d’environnement ; Docker et le provisionnement Keycloak seront livrés aux étapes prévues.
+Prérequis : SDK .NET 8.0.4xx, PostgreSQL, RabbitMQ et Redis accessibles. Fournir les secrets par variables d’environnement ; le lancement groupé Docker et le provisionnement Keycloak sont décrits dans [Docker](docker.md).
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'

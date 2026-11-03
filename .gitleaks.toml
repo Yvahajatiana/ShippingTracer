@@ -31,4 +31,6 @@ description = "Documented local-only placeholders and redacted history"
 regexes = [
   '''^local-password$''',
   '''^\*\*\*REMOVED\*\*\*$''',
+  # Kubernetes dependent environment variable references ($(VAR)), resolved from a Secret at runtime.
+  '''^\$\([A-Z][A-Z0-9_]*\)$''',
 ]

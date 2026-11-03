@@ -1,0 +1,27 @@
+# hadolint configuration shared by every Dockerfile of the repository.
+# CI runs it through hadolint/hadolint-action (see .github/workflows/ci.yml).
+
+# Any remaining finding, including info and style ones, fails the lint.
+failure-threshold: info
+
+ignored:
+  # DL3018 (pin versions in apk add): Alpine repositories only keep the latest
+  # revision of each package for a given release, so pinned versions such as
+  # icu-libs=74.2-r1 disappear at the next security update and break the build.
+  # Reproducibility comes from the pinned base image tags instead, and Trivy
+  # scans the resulting images for vulnerable OS packages.
+  - DL3018
+  # DL3025 (JSON notation for CMD and ENTRYPOINT): only reported for the
+  # HEALTHCHECK CMD lines, which use the shell form on purpose to chain
+  # `wget ... || exit 1`. Every ENTRYPOINT already uses the JSON form.
+  - DL3025
+  # DL3066 (non-numeric USER): the .NET images run as `USER $APP_UID`, the
+  # numeric non-root uid (1654) defined by the Microsoft base images, and the
+  # portal image switches to `USER root` only for build steps before ending on
+  # the numeric `USER 101` of nginx-unprivileged.
+  - DL3066
+
+# Base images may only come from these registries (DL3026).
+trustedRegistries:
+  - mcr.microsoft.com
+  - docker.io

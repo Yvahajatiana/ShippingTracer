@@ -1,6 +1,8 @@
 # ParcelFlow — arborescence du monorepo
 
-Cette étape livre les BuildingBlocks et leurs tests. Les chemins des étapes suivantes sont le plan du monorepo : leurs applications et configurations seront créées après validation de chaque étape. Aucun projet vide n'est ajouté à la solution.
+Le monorepo regroupe les BuildingBlocks, les huit services, la gateway, les trois portails Angular, les déploiements Docker et Kubernetes/Helm ainsi que la CI/CD. L'arborescence ci-dessous en donne une vue simplifiée. Aucun projet vide n'est ajouté à la solution.
+
+Prérequis de développement local : SDK .NET 8.0.4xx. `global.json` fixe la version 8.0.400 avec `rollForward: latestPatch` : seul un SDK de la bande 8.0.4xx est accepté.
 
 ```text
 ParcelFlow/
@@ -22,6 +24,7 @@ ParcelFlow/
 │   │       ├── ParcelFlow.BuildingBlocks.Api.csproj
 │   │       └── Errors/
 │   │           ├── ApiExceptionHandler.cs
+│   │           ├── ApiExceptionMapping.cs
 │   │           └── ProblemDetailsExtensions.cs
 │   ├── Services/
 │   │   ├── Customer/
@@ -56,9 +59,9 @@ ParcelFlow/
 └── README.md
 ```
 
-## Convention des services des prochaines étapes
+## Convention des services
 
-Chaque dossier `src/Services/<Service>/` contiendra quatre projets :
+Chaque dossier `src/Services/<Service>/` contient quatre projets :
 
 ```text
 ParcelFlow.<Service>.Domain/
@@ -70,6 +73,6 @@ ParcelFlow.<Service>.Api/
 
 Domain reste indépendant. Application référence Domain et BuildingBlocks.Application. Infrastructure référence Application, Domain et BuildingBlocks.Contracts. Api référence Application, Infrastructure et BuildingBlocks.Api. Aucun service ne référence le projet d'un autre service ; les échanges asynchrones utilisent BuildingBlocks.Contracts. Les migrations EF Core appartiennent à Infrastructure/Persistence/Migrations. Les tests propres au service résident dans `tests/Services/<Service>/` avec des projets `.UnitTests`, `.IntegrationTests` et `.ContractTests`.
 
-Les contrats métier versionnés seront placés dans `BuildingBlocks.Contracts/<Service>/V1/` au moment de leur définition. Customer désigne les profils, adresses et entreprises ; Keycloak conserve la responsabilité d'authentification.
+Les contrats métier versionnés sont placés dans `BuildingBlocks.Contracts/<Service>/V1/`. Customer désigne les profils, adresses et entreprises ; Keycloak conserve la responsabilité d'authentification.
 
-Les huit services seront implémentés dans l'ordre indiqué ci-dessus, puis gateway, frontends, Docker, Kubernetes/Helm, CI/CD et README. Chaque étape sera soumise à validation. Le README final, les déploiements, les seeds et les configurations de plateforme ne font pas partie de cette première livraison.
+Les huit services ont été implémentés dans l'ordre indiqué ci-dessus, puis gateway, frontends, Docker, Kubernetes/Helm, CI/CD et README, chaque étape étant soumise à validation.

@@ -5,6 +5,7 @@ using MassTransit.EntityFrameworkCoreIntegration;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ParcelFlow.BuildingBlocks.Application.Identity;
 using ParcelFlow.BuildingBlocks.Contracts.Reporting.V1;
 using ParcelFlow.BuildingBlocks.Contracts.Tracking.V1;
 using ParcelFlow.Reporting.Application;
@@ -43,6 +44,28 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             replayFact.Should().NotBeNull();
             replayFact!.SourceEventId.Should().Be(command.SourceEventId);
             outputs.Count(x => x.SourceEventId == command.SourceEventId).Should().Be(1);
+        }
+        finally { await bus.StopAsync(); await observer.StopAsync(); }
+    }
+    [Fact]
+    public async Task Projection_event_propagates_the_consumed_correlation_and_uses_its_event_id_as_message_id()
+    {
+        await using var provider = ConsumerTestHost.Create(infrastructure); await provider.InitializeReportingDatabaseAsync();
+        var outputs = new ConcurrentBag<ConsumeContext<ShipmentMetricsUpdated>>();
+        var observer = Observer(endpoint => endpoint.Handler<ShipmentMetricsUpdated>(context => { outputs.Add(context); return Task.CompletedTask; }));
+        var bus = provider.GetRequiredService<IBusControl>(); await observer.StartAsync(); await bus.StartAsync();
+        try
+        {
+            var shipment = Guid.NewGuid(); var flow = Guid.NewGuid(); var source = Guid.NewGuid();
+            var tracking = "PF" + shipment.ToString("N")[..24].ToUpperInvariant();
+            // The flow correlation differs from the shipment identifier: Reporting must keep it, not replace it.
+            await bus.Publish(new TrackingStatusChanged(Guid.NewGuid(), flow, DateTimeOffset.UtcNow, shipment, tracking, TrackingStatus.Created, null, source));
+            await ConsumerTestHost.Until(() => Task.FromResult(outputs.Any(x => x.Message.SourceEventId == source)));
+            var output = outputs.Single(x => x.Message.SourceEventId == source);
+            output.Message.CorrelationId.Should().Be(flow);
+            output.CorrelationId.Should().Be(flow);
+            output.Message.EventId.Should().Be(DeterministicGuid.Create("reporting:metrics-updated:", source));
+            output.MessageId.Should().Be(output.Message.EventId);
         }
         finally { await bus.StopAsync(); await observer.StopAsync(); }
     }

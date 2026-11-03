@@ -1,10 +1,11 @@
-using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
+using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.Customer.Application;
 
 namespace ParcelFlow.Customer.Api;
 
+// Maps Customer business exceptions only; malformed requests, domain guards and open circuits
+// fall through to the shared ApiExceptionHandler.
 public sealed class CustomerExceptionHandler(IProblemDetailsService problemDetailsService) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
@@ -14,20 +15,10 @@ public sealed class CustomerExceptionHandler(IProblemDetailsService problemDetai
             CustomerNotFoundException => (404, "Resource not found"),
             CustomerConflictException => (409, "Resource conflict"),
             CustomerForbiddenException => (403, "Access denied"),
-            JsonException or BadHttpRequestException => (400, "Invalid request"),
             _ => (0, string.Empty)
         };
         if (status == 0) return false;
-        context.Response.StatusCode = status;
-        await problemDetailsService.WriteAsync(new ProblemDetailsContext
-        {
-            HttpContext = context,
-            ProblemDetails = new ProblemDetails
-            {
-                Status = status, Title = title, Instance = context.Request.Path,
-                Type = $"https://httpstatuses.io/{status}"
-            }
-        });
+        await problemDetailsService.WriteProblemAsync(context, status, title);
         return true;
     }
 }

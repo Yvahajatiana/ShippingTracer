@@ -1,0 +1,25 @@
+{{- /*
+PodDisruptionBudget per workload (services, gateway, portals), only when it can run more than one
+replica: with a single replica, minAvailable 1 would block node drains forever.
+*/ -}}
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $root := . }}
+{{- range (include "parcelflow.workloads" . | fromYaml).items }}
+{{- $minReplicas := ternary $root.Values.autoscaling.minReplicas .settings.replicas $root.Values.autoscaling.enabled | int }}
+{{- if gt $minReplicas 1 }}
+{{- $ctx := dict "root" $root "component" .component }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "parcelflow.componentName" $ctx }}
+  labels:
+    {{- include "parcelflow.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: {{ $root.Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "parcelflow.selectorLabels" $ctx | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}
