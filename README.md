@@ -141,7 +141,7 @@ curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0.4xx
 export DOTNET_ROOT="$HOME/.dotnet" PATH="$HOME/.dotnet:$PATH"
 ```
 
-Vérifier avec `dotnet --version` à la racine du dépôt (attendu : `8.0.4xx`). Un SDK installé localement dans `.dotnet/` (ignoré par Git) peut aussi être utilisé via `./.dotnet/dotnet.exe`.
+Vérifier avec `dotnet --version` à la racine du dépôt (attendu : `8.0.4xx`). Un SDK installé localement dans `.dotnet/` (ignoré par Git) peut aussi être utilisé via `./.dotnet/dotnet.exe` (Windows) ou `./.dotnet/dotnet` (Linux / macOS).
 
 ## Démarrage rapide avec Docker Compose
 
