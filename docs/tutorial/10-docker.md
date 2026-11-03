@@ -133,7 +133,7 @@ Le realm `deploy/keycloak/parcelflow-realm.json` est versionné : rôles `custom
 ```powershell
 Copy-Item .env.example .env   # puis remplacer chaque valeur
 docker compose up --build -d
-docker compose ps             # tous les conteneurs "healthy"
+docker compose ps             # PostgreSQL, Redis, RabbitMQ et Keycloak "healthy", les autres "running"
 curl http://localhost:5100/health/ready
 ```
 
@@ -144,7 +144,7 @@ curl http://localhost:5100/health/ready
 | http://localhost:8080 | Keycloak (`KEYCLOAK_PORT`) |
 | http://localhost:15672 | Console RabbitMQ |
 
-Parcours vérifié à la livraison : seize conteneurs sains ; de vrais jetons Keycloak traversent nginx, la gateway et les services ; sans jeton 401 ; client sans accès aux rapports (403) ; un envoi créé par le portail client produit via RabbitMQ la facture `PendingPayment`, les notifications et le suivi public ; connexion réelle code + PKCE dans un Chrome sans interface.
+Parcours vérifié à la livraison : seize conteneurs démarrés et `/health/ready` à `Healthy` sur les services et la gateway ; de vrais jetons Keycloak traversent nginx, la gateway et les services ; sans jeton 401 ; client sans accès aux rapports (403) ; un envoi créé par le portail client produit via RabbitMQ la facture `PendingPayment`, les notifications et le suivi public ; connexion réelle code + PKCE dans un Chrome sans interface.
 
 Arrêter la plateforme pour libérer les ports : `docker compose down` (ou `down -v` pour supprimer aussi les volumes).
 
