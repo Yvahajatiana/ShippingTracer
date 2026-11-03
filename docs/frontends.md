@@ -63,7 +63,7 @@ Les origines sont validées : HTTPS obligatoire hors boucle locale, pas d'identi
 | `gateway` | `config/gateway` | Keycloak local et gateway `localhost:5100` via `proxy.conf.json` |
 | `production` | `config/production` | Valeurs remplacées au déploiement |
 
-Le proxy de développement place la gateway sur la même origine que le portail. Les origines CORS de la gateway restent donc vides tant que l'étape Docker n'a pas fixé les domaines publics.
+Le proxy de développement place la gateway sur la même origine que le portail. Les origines CORS de la gateway restent donc vides ; en Docker comme en Kubernetes, le nginx des portails relaie aussi `/api/` sur la même origine (voir [Docker](docker.md)).
 
 ## Sécurité
 

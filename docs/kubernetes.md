@@ -160,7 +160,7 @@ Prérequis du cluster :
 - un broker RabbitMQ avec le plugin `rabbitmq_delayed_message_exchange` (délai de paiement de la saga Shipment) ;
 - un Keycloak HTTPS dont le realm déclare les hôtes des portails.
 
-Les images de migration ne sont pas encore publiées par la CI : leur publication et le déploiement automatisé relèvent de l'étape CI/CD.
+Les images de migration `<service>-migrations` sont construites, scannées et publiées par la CI, qui déploie ensuite le chart avec Helm : voir [CI/CD](ci-cd.md#déploiement-continu).
 
 ## Vérifications effectuées
 

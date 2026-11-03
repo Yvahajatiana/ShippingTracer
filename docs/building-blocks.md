@@ -14,7 +14,7 @@ Sur cette machine, le SDK 8 a été installé dans `.dotnet/` (ignoré par Git).
 
 ## Responsabilités
 
-- Contracts : métadonnées techniques immuables des événements d'intégration. L'émetteur attribue EventId une seule fois et le conserve pour les nouvelles livraisons ; CorrelationId relie les messages d'un flux ; OccurredAtUtc utilise UTC. Aucun contrat métier n'est encore défini.
+- Contracts : métadonnées techniques immuables des événements d'intégration. L'émetteur attribue EventId une seule fois et le conserve pour les nouvelles livraisons ; CorrelationId relie les messages d'un flux ; OccurredAtUtc utilise UTC. Les contrats métier versionnés sont regroupés par domaine dans `Contracts/<Domaine>/V1/` : Billing, Customer, Notification, Reporting, Shipment et Tracking.
 - Application : ValidationBehavior exécute les validateurs FluentValidation asynchrones avant le handler MediatR, agrège les erreurs et propage l'annulation. L'exécution séquentielle permet l'utilisation de dépendances scoped communes.
 - Api : erreurs de validation en 400 via HttpValidationProblemDetails, erreurs inattendues en 500 via ProblemDetails. Les erreurs inattendues sont journalisées côté serveur sans exposition de leur message. traceId permet le rapprochement avec les traces. Les réponses de statut sans corps utilisent aussi ProblemDetails.
 
@@ -24,7 +24,7 @@ Dans chaque API, enregistrer MediatR avec l'assembly Application du service et a
 
 Appeler `builder.Services.AddParcelFlowProblemDetails()` avant la construction de l'application, puis `app.UseParcelFlowProblemDetails()` avant les middlewares et endpoints du service. Les API recevront leurs règles métier et mappings 404/409 lors de leur implémentation.
 
-L'Outbox EF Core et l'inbox MassTransit appartiendront à chaque base de service ; elles partageront la transaction métier. La saga sera persistée dans le service responsable du flux d'envoi. Ces mécanismes ne sont pas remplacés par une implémentation mémoire dans les BuildingBlocks. Les paramètres métier et contrats nécessaires seront précisés à l'étape du service concerné.
+L'Outbox EF Core et l'inbox MassTransit appartiennent à chaque base de service ; elles partagent la transaction métier. La saga est persistée dans le service responsable du flux d'envoi (Shipment). Ces mécanismes ne sont pas remplacés par une implémentation mémoire dans les BuildingBlocks. Les paramètres métier et contrats nécessaires sont précisés dans la documentation de chaque service.
 
 ## Corrections de review
 

@@ -1,6 +1,6 @@
 # Docker
 
-Chaque hôte déployable dispose d'une image, et `docker-compose.yml` assemble une plateforme locale complète : infrastructure, Keycloak, les huit services, la gateway et les trois portails. Le déploiement en production (TLS, migrations dédiées, secrets gérés) relève de l'étape Kubernetes.
+Chaque hôte déployable dispose d'une image, et `docker-compose.yml` assemble une plateforme locale complète : infrastructure, Keycloak, les huit services, la gateway et les trois portails. Le déploiement en production (TLS, migrations dédiées, secrets gérés) est décrit dans [Kubernetes](kubernetes.md).
 
 ## Images
 

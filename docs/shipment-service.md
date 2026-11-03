@@ -48,7 +48,7 @@ Toutes les routes métier exigent un JWT d'audience `shipment-api`, avec un suje
 
 Le corps de quote/create contient `sender`, `recipient`, `parcel`. Chaque adresse contient name, email, phone, line1, line2 facultative, postalCode, city, countryCode ISO alpha-2 majuscule. Le colis contient weightKg, lengthCm, widthCm, heightCm. Les contrôles rejettent les caractères de contrôle, adresses email invalides et précisions non représentables en base. Les propriétés ownerSubject/price non prévues dans ce corps ne déterminent jamais les données enregistrées.
 
-Les erreurs suivent ProblemDetails avec traceId : validation 400, accès anonyme/invalide 401, accès interdit 403, absent 404, conflit d'unicité/concurrence 409. Swagger est actif uniquement en Development. Les endpoints de supervision seront restreints au réseau de supervision lors du déploiement.
+Les erreurs suivent ProblemDetails avec traceId : validation 400, accès anonyme/invalide 401, accès interdit 403, absent 404, conflit d'unicité/concurrence 409. Swagger est actif uniquement en Development. En Kubernetes, la NetworkPolicy n'autorise vers les services que la gateway (et Notification vers Shipment) ; le scraping Prometheus reste hors périmètre (voir [Kubernetes](kubernetes.md#networkpolicy)).
 
 ## PDF et code-barres
 
@@ -69,7 +69,7 @@ stateDiagram-v2
     AwaitingPickup --> Completed: ParcelPickedUp
 ```
 
-La saga réside dans la base Shipment et corrèle les messages par ShipmentId. ShipmentCreated a CorrelationId=ShipmentId, corrélation racine du flux ; PaymentRequested, ShipmentReadyForPickup et ShipmentPaymentTimedOut reprennent la CorrelationId du message traité et ont un EventId dérivé de ShipmentId, donc stable si la transition est rejouée (voir [BuildingBlocks](building-blocks.md#identité-des-messages-et-corrélation-14)). PaymentRequested est une commande envoyée à la file durable `billing-payments` : elle attend Billing même si son consommateur est arrêté ou pas encore démarré. Billing devra utiliser ce nom de file. Les faits ShipmentCreated et ShipmentReadyForPickup restent publiés comme événements. Elle compare montant et devise attendus avant d'accepter le paiement : un PaymentCompleted incohérent est ignoré, journalisé en avertissement (ShipmentId, EventId, devises attendue/reçue, indicateur de concordance du montant, sans montant ni donnée client) et la saga reste en AwaitingPayment. Les activités modifient l'agrégat dans le même contexte/transaction EF que l'état de saga et l'Outbox. L'Inbox MassTransit déduplique les livraisons ; les états terminaux restent conservés pour qu'une création rejouée ne redemande pas de paiement. Les événements répétés et incompatibles avec l'état courant ne refont pas les transitions.
+La saga réside dans la base Shipment et corrèle les messages par ShipmentId. ShipmentCreated a CorrelationId=ShipmentId, corrélation racine du flux ; PaymentRequested, ShipmentReadyForPickup et ShipmentPaymentTimedOut reprennent la CorrelationId du message traité et ont un EventId dérivé de ShipmentId, donc stable si la transition est rejouée (voir [BuildingBlocks](building-blocks.md#identité-des-messages-et-corrélation-14)). PaymentRequested est une commande envoyée à la file durable `billing-payments` : elle attend Billing même si son consommateur est arrêté ou pas encore démarré. Billing consomme cette file sous ce nom. Les faits ShipmentCreated et ShipmentReadyForPickup restent publiés comme événements. Elle compare montant et devise attendus avant d'accepter le paiement : un PaymentCompleted incohérent est ignoré, journalisé en avertissement (ShipmentId, EventId, devises attendue/reçue, indicateur de concordance du montant, sans montant ni donnée client) et la saga reste en AwaitingPayment. Les activités modifient l'agrégat dans le même contexte/transaction EF que l'état de saga et l'Outbox. L'Inbox MassTransit déduplique les livraisons ; les états terminaux restent conservés pour qu'une création rejouée ne redemande pas de paiement. Les événements répétés et incompatibles avec l'état courant ne refont pas les transitions.
 
 Délai de paiement : à la création, la saga planifie un message interne `ShipmentPaymentTimeoutExpired` après `ShipmentBooking:PaymentTimeout` (30 minutes par défaut, format TimeSpan, strictement positif et au plus 2^32−1 ms, soit `49.17:02:47.295` environ 49,7 jours, limite du plugin RabbitMQ de livraison différée au-delà de laquelle le message serait routé immédiatement ; validé au démarrage). Sans paiement valide à l'échéance, la saga passe dans l'état terminal PaymentTimedOut, l'envoi passe en PaymentFailed et l'événement ShipmentPaymentTimedOut est publié via l'Outbox. Un paiement valide ou un PaymentFailed annule la planification : le jeton est effacé de la saga, ce qui neutralise le message différé encore livré par le broker. Un PaymentCompleted reçu après l'expiration ne rouvre pas l'envoi ; il est journalisé en avertissement pour revue manuelle ou remboursement. La planification utilise la livraison différée RabbitMQ : le broker doit activer le plugin `rabbitmq_delayed_message_exchange` (les tests d'intégration l'installent dans le conteneur après contrôle SHA-256). Les sagas déjà en AwaitingPayment avant la migration `AddPaymentTimeoutToken` n'ont pas de délai planifié.
 
@@ -80,7 +80,7 @@ Contrats partagés :
 - Shipment.V1 : ShipmentCreated, ShipmentReadyForPickup, ShipmentPaymentTimedOut, ParcelPickedUp.
 - Billing.V1 : PaymentRequested, PaymentCompleted, PaymentFailed.
 
-Billing produira les résultats de paiement et Warehouse produira la prise en charge à leurs étapes. Les tests de cette étape utilisent RabbitMQ réel pour exercer ces échanges sans ajouter de faux service à l'application.
+Billing produit les résultats de paiement et Warehouse la prise en charge. Les tests de cette étape utilisent RabbitMQ réel pour exercer ces échanges sans ajouter de faux service à l'application.
 
 ## Persistance et exploitation
 
@@ -106,7 +106,7 @@ dotnet ef database update --project src/Services/Shipment/ParcelFlow.Shipment.In
 dotnet run --project src/Services/Shipment/ParcelFlow.Shipment.Api
 ```
 
-La factory EF lit `ConnectionStrings__ShipmentDatabase`. Le flag SeedDemoData n'est pas nécessaire à l'installation des tarifs de référence. Aucun faux envoi n'est automatiquement injecté dans le flux de paiement. Keycloak et les dépendances partagées, ainsi que Dockerfiles/Compose, restent livrés à l'étape Docker prévue.
+La factory EF lit `ConnectionStrings__ShipmentDatabase`. Le flag SeedDemoData n'est pas nécessaire à l'installation des tarifs de référence. Aucun faux envoi n'est automatiquement injecté dans le flux de paiement. Keycloak et les dépendances partagées, ainsi que Dockerfiles/Compose, sont décrits dans [Docker](docker.md).
 
 ## Travail parallèle et validation
 

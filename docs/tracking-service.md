@@ -56,7 +56,7 @@ Aucun endpoint HTTP de modification n’est ajouté. Le paiement et ShipmentRead
 
 La base dédiée `parcelflow_tracking` contient les dossiers, les faits et les tables MassTransit Inbox/Outbox. La migration initiale définit une clé globale EventId, un numéro unique et une clé étrangère obligatoire pour chaque fait. Un rejeu identique ne modifie rien et ne republie rien ; une réutilisation contradictoire d’identifiant ou une réaffectation du numéro échoue.
 
-Les files durables préfixées `tracking-*` utilisent les consommateurs MassTransit avec Inbox/Outbox EF Core et retries. L’enregistrement métier et les publications sont atomiques. Un verrou transactionnel PostgreSQL par identifiant d’envoi sérialise les mises à jour du même colis, même lors de sa création, tandis que les autres colis restent parallélisables. L’isolation ReadCommitted permet de lire les changements après acquisition du verrou ; xmin et Revision protègent aussi les modifications concurrentes. Les événements invalides épuisent les retries puis suivent le mécanisme de fault/error de MassTransit.
+Les files durables préfixées `tracking-*` utilisent les consommateurs MassTransit avec Inbox/Outbox EF Core et retries. L’enregistrement métier et les publications sont atomiques. Un verrou transactionnel PostgreSQL par identifiant d’envoi sérialise les mises à jour du même colis, même lors de sa création, tandis que les autres colis restent parallélisables. L’isolation ReadCommitted permet de lire les changements après acquisition du verrou ; la colonne système xmin, seul jeton de concurrence optimiste configuré, protège aussi les modifications concurrentes ; Revision est un simple compteur de modifications. Les événements invalides épuisent les retries puis suivent le mécanisme de fault/error de MassTransit.
 
 Polly applique retry et circuit breaker aux lectures PostgreSQL transitoires hors transaction (API). Dans la transaction de l’Outbox consommateur, aucun retry Polly n’est appliqué : PostgreSQL annule la transaction à la première erreur, un nouvel essai y serait voué à l’échec ; c’est le retry de message MassTransit qui rejoue le consommateur dans une transaction neuve.
 
@@ -64,7 +64,7 @@ Redis conserve uniquement le DTO public pendant 15 secondes sous `parcelflow:tra
 
 ## Exécution du service
 
-Prérequis à ce stade : SDK .NET 8, PostgreSQL, RabbitMQ et Redis accessibles. Le lancement groupé Docker et le provisionnement Keycloak seront livrés aux étapes prévues. Les secrets sont fournis par variables d’environnement, jamais enregistrés dans appsettings.json.
+Prérequis : SDK .NET 8.0.4xx, PostgreSQL, RabbitMQ et Redis accessibles. Le lancement groupé Docker et le provisionnement Keycloak sont décrits dans [Docker](docker.md). Les secrets sont fournis par variables d’environnement, jamais enregistrés dans appsettings.json.
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'

@@ -74,7 +74,7 @@ Une erreur annule les changements et les messages en attente dans la même trans
 
 ## Lancement à cette étape
 
-Prérequis : .NET 8, PostgreSQL, RabbitMQ et Redis accessibles. Les secrets sont fournis par variables d’environnement. Le lancement groupé Docker et le provisionnement Keycloak restent aux étapes prévues.
+Prérequis : SDK .NET 8.0.4xx, PostgreSQL, RabbitMQ et Redis accessibles. Les secrets sont fournis par variables d’environnement. Le lancement groupé Docker et le provisionnement Keycloak sont décrits dans [Docker](docker.md).
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
@@ -102,7 +102,7 @@ Configurer `Keycloak__Authority` avec l’URL du realm et `Keycloak__Audience=wa
 
 ## Vérification et organisation
 
-Trois agents ont travaillé sur des fichiers distincts après fixation des interfaces : Domain/Application/unitaires, Infrastructure/migrations/intégrations et API/tests HTTP. Les compilations et migrations ont été séquencées. Le parent a intégré la solution, les contrats de compatibilité et un test de workflow sur trois bases séparées : ShipmentCreated → paiement accepté → projection Warehouse → prise en charge → sortie → entrée au tri → saga terminée et historique Tracking. Le paiement est simulé par son contrat existant, conformément à l’étape Billing encore à venir.
+Trois agents ont travaillé sur des fichiers distincts après fixation des interfaces : Domain/Application/unitaires, Infrastructure/migrations/intégrations et API/tests HTTP. Les compilations et migrations ont été séquencées. Le parent a intégré la solution, les contrats de compatibilité et un test de workflow sur trois bases séparées : ShipmentCreated → paiement accepté → projection Warehouse → prise en charge → sortie → entrée au tri → saga terminée et historique Tracking. Le paiement est simulé par son contrat existant, Billing n’étant pas encore livré lors de cette étape.
 
 ```powershell
 dotnet test ParcelFlow.sln --configuration Release
