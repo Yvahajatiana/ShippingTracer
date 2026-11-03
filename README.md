@@ -146,7 +146,7 @@ Vérifier avec `dotnet --version` à la racine du dépôt (attendu : `8.0.4xx`).
 ```bash
 cp .env.example .env          # puis remplacer chaque valeur
 docker compose up --build -d
-docker compose ps             # attendre que tous les conteneurs soient "healthy"
+docker compose ps             # PostgreSQL, Redis, RabbitMQ et Keycloak "healthy", les autres conteneurs "running"
 ```
 
 `.env` n'est pas versionné. Compose refuse de démarrer si `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `NOTIFICATION_CLIENT_SECRET` ou `DEMO_USER_PASSWORD` manque. `DEMO_USER_PASSWORD` doit respecter la politique du realm (12 caractères minimum, majuscule, minuscule, chiffre et caractère spécial), sinon Keycloak refuse l'import.
