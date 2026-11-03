@@ -25,7 +25,7 @@ Le même jeton est transmis au service, qui conserve le contrôle des rôles, du
 
 Les origines CORS sont explicites. Aucun joker ni cookie d’authentification interorigine n’est nécessaire : les clients transmettent le Bearer dans `Authorization`. `Location`, `Content-Disposition` et `Retry-After` sont exposés aux clients navigateur. CORS ne remplace pas la validation JWT.
 
-Les en-têtes de transfert fournis par le client ne définissent ni son identité ni son adresse de limitation. La gateway utilise la connexion reçue et produit elle-même les métadonnées de transfert. L’intégration d’un ingress de confiance sera configurée à l’étape Kubernetes ; aucun proxy arbitraire n’est implicitement approuvé.
+Les en-têtes de transfert fournis par le client ne définissent ni son identité ni son adresse de limitation. La gateway utilise la connexion reçue et produit elle-même les métadonnées de transfert. Aucun ingress de confiance n’est configuré, y compris dans le chart Kubernetes (voir [Kubernetes](kubernetes.md)) ; aucun proxy arbitraire n’est implicitement approuvé.
 
 ## Limites et erreurs
 
@@ -66,4 +66,4 @@ Les tests utilisent la gateway et de vrais serveurs HTTP amont factices, avec JW
 
 Le script `tests/Gateway/kestrel-smoke.mjs` complète ces tests sous Kestrel réel : erreurs JSON 400 pour un corps chunked mal formé, 408 pour un corps trop lent et 413 au-delà de la limite ; intégrité d’un flux binaire et propagation de l’annulation du client vers l’amont. Il se lance depuis la racine avec `node tests/Gateway/kestrel-smoke.mjs` après compilation Debug de la gateway. `PARCELFLOW_DOTNET` permet d’indiquer un exécutable .NET local. Les ports sont éphémères ; le processus et les connexions créés sont arrêtés en fin de vérification.
 
-Références techniques : [YARP et authentification](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/authn-authz), [transfert direct avec YARP](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/direct-forwarding). Le tutoriel de construction global reste réservé à l’étape finale avec le README.
+Références techniques : [YARP et authentification](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/authn-authz), [transfert direct avec YARP](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/servers/yarp/direct-forwarding). Le tutoriel de construction global est livré avec le README dans `docs/tutorial/`.

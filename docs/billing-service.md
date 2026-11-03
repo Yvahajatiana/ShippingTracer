@@ -58,7 +58,7 @@ Les erreurs utilisent les ProblemDetails communs : 400 pour une validation, 401/
 
 ## Transactions et événements
 
-La base dédiée parcelflow_billing contient les factures, les paiements, les avoirs et les tables Inbox/Outbox MassTransit. Les paiements ont une contrainte d’unicité sur InvoiceId et tous les documents enfants possèdent une clé étrangère obligatoire restrictive. La facture utilise xmin et Revision pour la concurrence.
+La base dédiée parcelflow_billing contient les factures, les paiements, les avoirs et les tables Inbox/Outbox MassTransit. Les paiements ont une contrainte d’unicité sur InvoiceId et tous les documents enfants possèdent une clé étrangère obligatoire restrictive. La facture utilise la colonne système xmin comme seul jeton de concurrence optimiste ; Revision est un simple compteur de modifications incrémenté par le domaine.
 
 Chaque commande s’exécute dans une transaction ReadCommitted et prend un verrou PostgreSQL sur l’identifiant de facture avant lecture, y compris si la ligne n’existe pas encore. Les consommateurs réutilisent la transaction de l’Outbox ; le pipeline des écritures HTTP englobe l’état de facture, les reçus et les messages Outbox. Ce verrou sérialise les paiements et avoirs d’une même facture, sans empêcher les autres factures de progresser. Une erreur annule l’écriture métier et la publication ensemble.
 
@@ -74,7 +74,7 @@ Tous les faits ont CorrelationId=ShipmentId, corrélation racine du flux d’env
 
 ## Lancement à cette étape
 
-Prérequis : .NET 8, PostgreSQL, RabbitMQ et Redis accessibles. Fournir les secrets par variables d’environnement ; Docker et le provisionnement Keycloak seront livrés aux étapes prévues.
+Prérequis : SDK .NET 8.0.4xx, PostgreSQL, RabbitMQ et Redis accessibles. Fournir les secrets par variables d’environnement ; le lancement groupé Docker et le provisionnement Keycloak sont décrits dans [Docker](docker.md).
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'

@@ -70,7 +70,7 @@ Une confirmation utilise OperationId, RecipientName et les champs optionnels Sig
 
 La base dédiée parcelflow_delivery contient les livreurs, les tournées, les colis connus, les arrêts, les tentatives et les tables MassTransit Inbox/Outbox. Les identités et le numéro de suivi sont uniques ; les arrêts référencent un colis, les tentatives référencent leur arrêt par clé composite et une contrainte garantit une issue par arrêt. Les preuves historiques sont protégées par des clés étrangères restrictives. Les arrêts retirés d’une tournée Planned peuvent être supprimés, avant toute tentative.
 
-Les commandes s’exécutent dans une transaction ReadCommitted. Les consommateurs réutilisent celle de leur Outbox ; les écritures HTTP englobent règles métier, modifications et publications Outbox dans une même transaction. Les verrous PostgreSQL suivent l’ordre tournée → livreur → colis, les colis multiples étant triés par identifiant. La modification d’un livreur ne verrouille que ce livreur et vérifie les tournées ouvertes par lecture. Les projections d’événements ne prennent que le verrou du colis. xmin et Revision protègent également les agrégats.
+Les commandes s’exécutent dans une transaction ReadCommitted. Les consommateurs réutilisent celle de leur Outbox ; les écritures HTTP englobent règles métier, modifications et publications Outbox dans une même transaction. Les verrous PostgreSQL suivent l’ordre tournée → livreur → colis, les colis multiples étant triés par identifiant. La modification d’un livreur ne verrouille que ce livreur et vérifie les tournées ouvertes par lecture. Les projections d’événements ne prennent que le verrou du colis. La colonne système xmin, seul jeton de concurrence optimiste configuré, protège également les agrégats ; Revision est un simple compteur de modifications incrémenté par le domaine.
 
 MassTransit utilise des files durables préfixées delivery-*, Inbox/Outbox EF Core, un démarrage attendu du bus et des retries bornés avant conservation en erreur. Les contrats existants de BuildingBlocks suffisent :
 
@@ -83,7 +83,7 @@ Les dates sont générées côté serveur en UTC, à la microseconde, et progres
 
 ## Lancement à cette étape
 
-Prérequis : .NET 8, PostgreSQL, RabbitMQ et Redis accessibles. Fournir les secrets par variables d’environnement ; le lancement groupé Docker et le provisionnement Keycloak restent aux étapes prévues.
+Prérequis : SDK .NET 8.0.4xx, PostgreSQL, RabbitMQ et Redis accessibles. Fournir les secrets par variables d’environnement ; le lancement groupé Docker et le provisionnement Keycloak sont décrits dans [Docker](docker.md).
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
