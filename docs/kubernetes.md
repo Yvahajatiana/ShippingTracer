@@ -59,6 +59,7 @@ Sécurité des pods :
 - **Services et gateway :** non root (uid 1654), racine en lecture seule avec `/tmp` en `emptyDir`, aucune capacité, seccomp `RuntimeDefault`, pas de jeton de compte de service.
 - **Portails :** uid 101. Leur racine reste inscriptible, car l'entrypoint écrit `config.json` dans le répertoire du bundle.
 - **Probes :** `startupProbe` et `livenessProbe` sur `/health/live`, `readinessProbe` sur `/health/ready`, `/healthz` pour les portails.
+- **Port de management :** les services et la gateway écoutent sur deux ports. L'API reste sur `http` (8080). `/health/*` et `/metrics` ne répondent que sur `management` (8081) et renvoient 404 sur 8080. Les images fixent `ASPNETCORE_HTTP_PORTS=8080;8081` et `Management__Port=8081`. Le chart ne les surcharge pas : `dotnetDefaults.managementPort` doit donc rester égal à la valeur des images. Il alimente le `containerPort` `management` et les probes. Les Services, l'Ingress et les HTTPRoute n'exposent que `http`.
 - **Secret rendu par le chart :** son empreinte est en annotation des services, si bien qu'une rotation redémarre les pods.
 
 ### Notification vers Shipment
@@ -106,7 +107,7 @@ Une évolution de la gateway reste possible : faire confiance aux en-têtes tran
 - les pods de la release vers PostgreSQL, Redis, RabbitMQ et Keycloak ;
 - l'edge vers Keycloak.
 
-Le trafic sortant n'est pas restreint : DNS, bases managées, Keycloak et URL publique de la gateway. Le scraping Prometheus est hors périmètre. Le plugin réseau par défaut de minikube n'applique pas les NetworkPolicy : il faut `PARCELFLOW_MINIKUBE_CNI=calico` pour les tester.
+Le trafic sortant n'est pas restreint : DNS, bases managées, Keycloak et URL publique de la gateway. Le port `management` n'est ouvert à personne : les probes du kubelet ne sont pas soumises aux NetworkPolicy. Le scraping Prometheus est hors périmètre (issue #58) : il devra cibler le port `management` des pods, et non les Services. Le plugin réseau par défaut de minikube n'applique pas les NetworkPolicy : il faut `PARCELFLOW_MINIKUBE_CNI=calico` pour les tester.
 
 ## Cluster local (minikube)
 
