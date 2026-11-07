@@ -1,13 +1,13 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Errors;
+using ParcelFlow.BuildingBlocks.Api.Operations;
 using ParcelFlow.Gateway;
 using Serilog;
 using Yarp.ReverseProxy.Forwarder;
@@ -131,10 +131,8 @@ app.UseCors();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
 // Readiness means valid loaded configuration and a running gateway, independently of downstream availability.
-app.MapHealthChecks("/health/ready");
-app.MapPrometheusScrapingEndpoint();
+app.MapParcelFlowOperationalEndpoints().MapPrometheusScrapingEndpoint();
 Map("Customer", "/api/v1/customers/{**remainder}");
 Map("Customer", "/api/v1/companies/{**remainder}");
 Map("Shipment", "/api/v1/shipments/{**remainder}");

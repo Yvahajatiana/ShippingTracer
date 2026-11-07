@@ -2,13 +2,13 @@ using System.Security.Claims;
 using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
+using ParcelFlow.BuildingBlocks.Api.Operations;
 using ParcelFlow.Customer.Api;
 using ParcelFlow.Customer.Application;
 using ParcelFlow.Customer.Infrastructure;
@@ -127,9 +127,7 @@ if (app.Environment.IsDevelopment())
         await app.Services.InitializeCustomerDatabaseAsync();
     }
 }
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-app.MapHealthChecks("/health/ready").AllowAnonymous();
-app.MapPrometheusScrapingEndpoint().AllowAnonymous();
+app.MapParcelFlowOperationalEndpoints().AllowAnonymous().MapPrometheusScrapingEndpoint();
 app.MapCustomerEndpoints();
 app.Run();
 
