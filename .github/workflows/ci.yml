@@ -197,6 +197,15 @@ jobs:
           NOTIFICATION_CLIENT_SECRET: ci-dummy
           DEMO_USER_PASSWORD: ci-dummy
         run: docker compose --file docker-compose.yml config --quiet
+      - name: Validate deploy/dokploy/docker-compose.yml
+        env:
+          DEMO_DOMAIN: demo.example.com
+          POSTGRES_PASSWORD: ci-dummy
+          RABBITMQ_PASSWORD: ci-dummy
+          KEYCLOAK_ADMIN_PASSWORD: ci-dummy
+          NOTIFICATION_CLIENT_SECRET: ci-dummy
+          DEMO_USER_PASSWORD: ci-dummy
+        run: docker compose --file deploy/dokploy/docker-compose.yml config --quiet
 
   helm:
     name: Helm chart lint and schema validation
@@ -408,3 +417,35 @@ jobs:
     with:
       environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     secrets: inherit
+
+  # Public demo (docs/demo.md): the Dokploy compose application is redeployed once the images of a
+  # push on main are published, and pulls them again (tag latest). Skipped with a notice while the
+  # repository secret DOKPLOY_DEMO_WEBHOOK_URL is not set.
+  demo:
+    name: Deploy public demo
+    needs: [images, integration, gateway-smoke]
+    if: github.event_name == 'push' && !github.event.repository.fork && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      # Dokploy webhooks expect a push payload: the branch must match the one of the application.
+      - name: Trigger the Dokploy deployment
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_DEMO_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$WEBHOOK_URL" ]]; then
+            echo "::notice::No DOKPLOY_DEMO_WEBHOOK_URL secret: demo deployment skipped"
+            echo "Demo deployment skipped: the repository has no \`DOKPLOY_DEMO_WEBHOOK_URL\` secret." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          payload=$(jq -cn --arg ref "$GITHUB_REF" --arg sha "$GITHUB_SHA" \
+            '{ref: $ref, after: $sha, head_commit: {id: $sha, message: ("CI images sha-" + $sha[0:7])}, commits: []}')
+          status=$(curl -sS --max-time 30 -o "$RUNNER_TEMP/dokploy.txt" -w '%{http_code}' -X POST "$WEBHOOK_URL" \
+            -H 'Content-Type: application/json' -H 'X-GitHub-Event: push' --data "$payload")
+          if [[ "$status" != 2* ]]; then
+            echo "::error::Dokploy webhook answered HTTP $status: $(head -c 300 "$RUNNER_TEMP/dokploy.txt")"
+            exit 1
+          fi
+          echo "Demo deployment of **sha-${GITHUB_SHA::7}** requested from Dokploy." >> "$GITHUB_STEP_SUMMARY"
