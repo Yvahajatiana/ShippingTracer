@@ -8,12 +8,16 @@
 #     default roles, and every required action except the locale one disabled, so that no visitor
 #     can change the password, the profile or add an OTP through an application-initiated action;
 #   - login page banner (realm displayNameHtml) listing the demo accounts and their password.
+#   - credentials re-applied from the environment (demo accounts password, Notification client
+#     secret): the realm is only imported when absent, so a rotation without reset would otherwise
+#     leave Keycloak on the old values; passwordHistory is dropped from the policy for that reason.
 #
 # Environment:
 #   KEYCLOAK_URL             internal Keycloak URL, e.g. http://keycloak:8080
 #   KEYCLOAK_ADMIN_PASSWORD  password of the bootstrap administrator `admin` (master realm)
 #   DEMO_DOMAIN              public domain, portals on app./ops./admin.<DEMO_DOMAIN>
 #   DEMO_USER_PASSWORD       shared password of the demo accounts, shown on the login page
+#   NOTIFICATION_CLIENT_SECRET  secret of the confidential notification-service client
 set -euo pipefail
 
 realm=parcelflow
@@ -30,6 +34,7 @@ fail() {
 : "${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}"
 : "${DEMO_DOMAIN:?DEMO_DOMAIN is required}"
 : "${DEMO_USER_PASSWORD:?DEMO_USER_PASSWORD is required}"
+: "${NOTIFICATION_CLIENT_SECRET:?NOTIFICATION_CLIENT_SECRET is required}"
 
 label='[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?'
 [[ "$DEMO_DOMAIN" =~ ^${label}(\.${label})+$ ]] || fail "DEMO_DOMAIN must be a domain name such as example.com, got '$DEMO_DOMAIN'."
@@ -93,5 +98,23 @@ while IFS=, read -r alias enabled; do
   kc update "authentication/required-actions/$alias" -r "$realm" -s enabled=false
   log "required action $alias disabled"
 done <<< "$actions"
+
+# The demo password is set again on every run: without passwordHistory the same value is accepted.
+policy=$(kc get "realms/$realm" --fields passwordPolicy --format csv --noquotes)
+demo_policy=$(printf '%s' "$policy" | sed -E 's/( and )?passwordHistory\([0-9]+\)//; s/^ and //')
+if [[ "$demo_policy" != "$policy" ]]; then
+  kc update "realms/$realm" -s "passwordPolicy=$demo_policy"
+  log "realm $realm: passwordHistory removed from the password policy"
+fi
+for username in emma.martin lucas.bernard camille.martin alex.durand chloe.leroy admin.parcelflow; do
+  kc set-password -r "$realm" --username "$username" --new-password "$DEMO_USER_PASSWORD"
+done
+log "demo accounts password applied"
+
+notification_id=$(kc get clients -r "$realm" -q clientId=notification-service --fields id --format csv --noquotes)
+[[ -n "$notification_id" ]] || fail "client notification-service not found in realm $realm."
+kc update "clients/$notification_id" -r "$realm" -s "secret=$NOTIFICATION_CLIENT_SECRET"
+log "client notification-service secret applied"
+
 
 log "done"
