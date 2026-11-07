@@ -295,6 +295,7 @@ Sans `KUBECONFIG` ni `HELM_VALUES`, le job réussit sans déployer. Les secrets 
 | [`docs/frontends.md`](docs/frontends.md) | Portails Angular |
 | [`docs/docker.md`](docs/docker.md) | Images et plateforme Docker Compose |
 | [`docs/kubernetes.md`](docs/kubernetes.md) | Chart Helm, profils, minikube, production |
+| [`docs/demo.md`](docs/demo.md) | Démo publique : VPS Hetzner, Dokploy, Cloudflare, réinitialisation nocturne |
 | [`docs/ci-cd.md`](docs/ci-cd.md) | Workflows CI/CD et déploiement |
 | [`docs/adr/`](docs/adr/) | Décisions d'architecture |
 | [`deploy/keycloak/README.md`](deploy/keycloak/README.md) | Realm Keycloak local et comptes de démonstration |
