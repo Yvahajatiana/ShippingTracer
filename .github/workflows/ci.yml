@@ -378,12 +378,21 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.image.name }}.sarif
           exit-code: '0'
+      # Code scanning on a private repository requires GitHub Advanced Security: there, the report
+      # is kept as a workflow artifact instead, so that a missing feature never blocks publishing.
       - name: Upload SARIF to code scanning
-        if: always() && steps.build.outcome == 'success' && github.event_name != 'pull_request'
+        if: always() && steps.build.outcome == 'success' && github.event_name != 'pull_request' && !github.event.repository.private
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-${{ matrix.image.name }}.sarif
           category: trivy-${{ matrix.image.name }}
+      - name: Keep the SARIF report as an artifact
+        if: always() && steps.build.outcome == 'success' && github.event_name != 'pull_request' && github.event.repository.private
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-${{ matrix.image.name }}
+          path: trivy-${{ matrix.image.name }}.sarif
+          if-no-files-found: ignore
       - name: Log in to GHCR
         if: env.PUBLISH == 'true'
         uses: docker/login-action@v4
