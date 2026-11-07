@@ -106,7 +106,7 @@ Décisions :
 - **Services en `Development`.** Migrations et seeds au démarrage, ainsi que l'autorité Keycloak en HTTP, ne sont acceptés **qu'en Development**. Compose le fixe explicitement, sans toucher au code ; les images restent en `Production` par défaut.
 - **Secrets obligatoires** : `${VAR:?message}` fait échouer `docker compose up` si `.env` est incomplet. C'est critique pour `NOTIFICATION_CLIENT_SECRET` : absent, Keycloak garderait le placeholder littéral comme secret, une valeur publique.
 - **Une base par service** sur une instance PostgreSQL 16 : `deploy/postgres/init-databases.sh`, monté dans `docker-entrypoint-initdb.d`, crée les huit bases au premier démarrage du volume.
-- **Dépendances par santé** (`condition: service_healthy`) ; Keycloak est sondé sur son port de management en bash, l'image n'ayant pas `curl`.
+- **Dépendances par santé** (`condition: service_healthy`) ; Keycloak est sondé sur son port de management en bash, l'image n'ayant pas `curl`, sur le statut HTTP 200 et non sur le corps (une réponse DOWN contient aussi `"status": "UP"` pour ses vérifications imbriquées).
 - **Ports publiés sur `127.0.0.1` uniquement.**
 - **Redis sans persistance** (`--save "" --appendonly no`) : il ne sert que de cache.
 
