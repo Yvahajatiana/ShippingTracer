@@ -100,6 +100,12 @@ dotnetDefaults:
   extraEnv: []
   # Spread replicas over nodes when the cluster has several.
   topologySpread: true
+  # Management port of the .NET images: /health/live, /health/ready and /metrics only answer
+  # there (404 on the API port 8080). The images set ASPNETCORE_HTTP_PORTS=8080;8081 and
+  # Management__Port=8081 and the chart does not override them, so keep this value equal to the
+  # image default. Used by the probes and the "management" containerPort; it is not exposed by
+  # the Services, Ingress or HTTPRoutes. Global only: per-service or gateway overrides are rejected.
+  managementPort: 8081
 
 # The eight services. Keys are the image names; "database" is the PostgreSQL database and
 # "connectionString" the ConnectionStrings entry read by the service.
