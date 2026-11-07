@@ -36,14 +36,15 @@ label='[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?'
 
 kc() { "$kcadm" "$@" --config "$config"; }
 
-# Escapes a value for an HTML text node or attribute.
+# Escapes a value for an HTML text node or attribute. Replacements are quoted: since bash 5.2
+# (patsub_replacement), an unquoted & in a replacement stands for the matched text.
 html_escape() {
   local value=$1
-  value=${value//&/&amp;}
-  value=${value//</&lt;}
-  value=${value//>/&gt;}
-  value=${value//\"/&quot;}
-  value=${value//\'/&#39;}
+  value=${value//&/"&amp;"}
+  value=${value//</"&lt;"}
+  value=${value//>/"&gt;"}
+  value=${value//\"/"&quot;"}
+  value=${value//\'/"&#39;"}
   printf '%s' "$value"
 }
 
