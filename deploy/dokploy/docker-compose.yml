@@ -1,0 +1,357 @@
+# ParcelFlow public demo, deployed by Dokploy on a dedicated VPS (see docs/demo.md).
+# Images are pulled from GHCR, never built. No host port is published: Traefik (run by Dokploy
+# on the server) routes the five public hosts through the labels below on `dokploy-network`.
+# Every variable comes from the Dokploy environment (template: deploy/dokploy/.env.example).
+#   app.<DEMO_DOMAIN>    customer portal          ops.<DEMO_DOMAIN>   operations portal
+#   admin.<DEMO_DOMAIN>  administration portal    api.<DEMO_DOMAIN>   gateway
+#   auth.<DEMO_DOMAIN>   Keycloak, realm `parcelflow` only (no admin console, no master realm)
+# Relative paths resolve from this directory: do not add Dokploy file mounts (they switch the
+# project directory to the repository root).
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+x-parcelflow-image: &parcelflow-image
+  restart: unless-stopped
+  pull_policy: always
+  logging: *logging
+
+x-dotnet-service: &dotnet-service
+  <<: *parcelflow-image
+  mem_limit: 320m
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    keycloak:
+      condition: service_healthy
+
+# Settings shared by the eight services. `Demo` behaves as Production (HTTPS towards Keycloak and
+# Shipment, no Swagger) but allows the startup migrations and the idempotent demo seeds.
+# The authority is the public URL: tokens issued to browsers and to Notification share its issuer.
+x-dotnet-environment: &dotnet-environment
+  ASPNETCORE_ENVIRONMENT: Demo
+  Database__Initialize: "true"
+  Database__SeedDemoData: "true"
+  Keycloak__Authority: https://auth.${DEMO_DOMAIN:?set DEMO_DOMAIN}/realms/parcelflow
+  ConnectionStrings__Redis: redis:6379,abortConnect=false,connectTimeout=2000,syncTimeout=2000
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  RabbitMq__VirtualHost: /
+  RabbitMq__Username: parcelflow
+  RabbitMq__Password: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+  # Workstation GC: a much smaller footprint than Server GC for a low-traffic demo.
+  DOTNET_gcServer: "0"
+
+x-portal: &portal
+  <<: *parcelflow-image
+  mem_limit: 64m
+  depends_on:
+    gateway:
+      condition: service_started
+    keycloak-demo-config:
+      condition: service_completed_successfully
+  networks: [default, dokploy-network]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 768m
+    environment:
+      POSTGRES_USER: parcelflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Run once, on the first start of an empty volume: the eight service databases, then Keycloak's.
+      - ../postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+      - ./init-keycloak-database.sh:/docker-entrypoint-initdb.d/20-init-keycloak-database.sh:ro
+    healthcheck:
+      # TCP probe: the temporary server used by the init scripts only listens on the Unix socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U parcelflow -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 128m
+    # Cache only: no persistence, bounded memory with LRU eviction.
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "96mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    <<: *parcelflow-image
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-rabbitmq:${PARCELFLOW_TAG:-latest}
+    mem_limit: 512m
+    environment:
+      RABBITMQ_DEFAULT_USER: parcelflow
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_TAG:-26.8.1}
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: 1g
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: parcelflow
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      # Single public issuer for browsers and services; TLS ends at Traefik (and Cloudflare).
+      KC_HOSTNAME: https://auth.${DEMO_DOMAIN:?set DEMO_DOMAIN}
+      # The admin console is not routed by Traefik: it is only reached through an SSH tunnel.
+      KC_HOSTNAME_ADMIN: http://localhost:${KEYCLOAK_ADMIN_TUNNEL_PORT:-8180}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      # Heap bounded below the container limit, leaving room for metaspace and native memory.
+      JAVA_OPTS_KC_HEAP: -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=20
+      NOTIFICATION_CLIENT_SECRET: ${NOTIFICATION_CLIENT_SECRET:?set NOTIFICATION_CLIENT_SECRET}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?set DEMO_USER_PASSWORD}
+    volumes:
+      # Imported only when the realm does not exist yet (first start, or after the nightly reset).
+      - ../keycloak/parcelflow-realm.json:/opt/keycloak/data/import/parcelflow-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [default, dokploy-network]
+    healthcheck:
+      # The image has no curl: probe the management port with bash. The HTTP status is checked,
+      # not the body: a DOWN response still contains `"status": "UP"` for its nested checks.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '^HTTP/1.1 200 ' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      # Only the parcelflow realm endpoints and the theme resources are public.
+      - traefik.http.routers.pf-demo-auth-web.rule=Host(`auth.${DEMO_DOMAIN}`) && (Path(`/realms/parcelflow`) || PathPrefix(`/realms/parcelflow/`) || PathPrefix(`/resources/`))
+      - traefik.http.routers.pf-demo-auth-web.entrypoints=web
+      - traefik.http.routers.pf-demo-auth-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.pf-demo-auth-web.service=pf-demo-auth
+      - traefik.http.routers.pf-demo-auth.rule=Host(`auth.${DEMO_DOMAIN}`) && (Path(`/realms/parcelflow`) || PathPrefix(`/realms/parcelflow/`) || PathPrefix(`/resources/`))
+      - traefik.http.routers.pf-demo-auth.entrypoints=websecure
+      - traefik.http.routers.pf-demo-auth.tls.certresolver=letsencrypt
+      - traefik.http.routers.pf-demo-auth.service=pf-demo-auth
+      - traefik.http.services.pf-demo-auth.loadbalancer.server.port=8080
+
+  # One-shot: adapts the imported realm to the public demo (origins, banner, lockout, self-service).
+  # Re-run on every deployment and by the nightly reset; idempotent.
+  keycloak-demo-config:
+    image: quay.io/keycloak/keycloak:${KEYCLOAK_TAG:-26.8.1}
+    restart: "no"
+    logging: *logging
+    mem_limit: 256m
+    entrypoint: ["/bin/bash", "/opt/parcelflow/keycloak-demo-config.sh"]
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      DEMO_DOMAIN: ${DEMO_DOMAIN:?set DEMO_DOMAIN}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?set DEMO_USER_PASSWORD}
+      JAVA_OPTS: -Xms32m -Xmx128m
+    volumes:
+      - ./keycloak-demo-config.sh:/opt/parcelflow/keycloak-demo-config.sh:ro
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  customer:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-customer:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__CustomerDatabase: Host=postgres;Port=5432;Database=parcelflow_customers;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  shipment:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-shipment:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__ShipmentDatabase: Host=postgres;Port=5432;Database=parcelflow_shipments;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  tracking:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-tracking:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__TrackingDatabase: Host=postgres;Port=5432;Database=parcelflow_tracking;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  warehouse:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-warehouse:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__WarehouseDatabase: Host=postgres;Port=5432;Database=parcelflow_warehouse;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  delivery:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-delivery:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__DeliveryDatabase: Host=postgres;Port=5432;Database=parcelflow_delivery;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  billing:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-billing:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__BillingDatabase: Host=postgres;Port=5432;Database=parcelflow_billing;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  notification:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-notification:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__NotificationDatabase: Host=postgres;Port=5432;Database=parcelflow_notification;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+      # HTTPS is required outside Development: Shipment is reached through the public gateway.
+      ShipmentService__BaseUrl: https://api.${DEMO_DOMAIN}/
+      ServiceAuthentication__ClientId: notification-service
+      ServiceAuthentication__ClientSecret: ${NOTIFICATION_CLIENT_SECRET:?set NOTIFICATION_CLIENT_SECRET}
+
+  reporting:
+    <<: *dotnet-service
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-reporting:${PARCELFLOW_TAG:-latest}
+    environment:
+      <<: *dotnet-environment
+      ConnectionStrings__ReportingDatabase: Host=postgres;Port=5432;Database=parcelflow_reporting;Username=parcelflow;Password=${POSTGRES_PASSWORD}
+
+  gateway:
+    <<: *parcelflow-image
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-gateway:${PARCELFLOW_TAG:-latest}
+    mem_limit: 256m
+    environment:
+      # No database: plain Production.
+      ASPNETCORE_ENVIRONMENT: Production
+      DOTNET_gcServer: "0"
+      Keycloak__Authority: https://auth.${DEMO_DOMAIN:?set DEMO_DOMAIN}/realms/parcelflow
+      Gateway__CorsOrigins__0: https://app.${DEMO_DOMAIN}
+      Gateway__CorsOrigins__1: https://ops.${DEMO_DOMAIN}
+      Gateway__CorsOrigins__2: https://admin.${DEMO_DOMAIN}
+      # Portal traffic reaches the gateway from each portal's nginx and every visitor shares the
+      # demo accounts: the per-address and per-user quotas are raised accordingly.
+      Gateway__PublicPermitLimit: ${GATEWAY_PUBLIC_PERMIT_LIMIT:-300}
+      Gateway__PrivatePermitLimit: ${GATEWAY_PRIVATE_PERMIT_LIMIT:-1200}
+      Gateway__IpPermitLimit: ${GATEWAY_IP_PERMIT_LIMIT:-3000}
+      Gateway__Destinations__Customer: http://customer:8080/
+      Gateway__Destinations__Shipment: http://shipment:8080/
+      Gateway__Destinations__Tracking: http://tracking:8080/
+      Gateway__Destinations__Warehouse: http://warehouse:8080/
+      Gateway__Destinations__Delivery: http://delivery:8080/
+      Gateway__Destinations__Billing: http://billing:8080/
+      Gateway__Destinations__Notification: http://notification:8080/
+      Gateway__Destinations__Reporting: http://reporting:8080/
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks: [default, dokploy-network]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.pf-demo-api-web.rule=Host(`api.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-api-web.entrypoints=web
+      - traefik.http.routers.pf-demo-api-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.pf-demo-api-web.service=pf-demo-api
+      - traefik.http.routers.pf-demo-api.rule=Host(`api.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-api.entrypoints=websecure
+      - traefik.http.routers.pf-demo-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.pf-demo-api.service=pf-demo-api
+      # API port only: the management port 8081 (/health, /metrics) is never routed.
+      - traefik.http.services.pf-demo-api.loadbalancer.server.port=8080
+
+  customer-portal:
+    <<: *portal
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-customer-portal:${PARCELFLOW_TAG:-latest}
+    environment:
+      KEYCLOAK_URL: https://auth.${DEMO_DOMAIN:?set DEMO_DOMAIN}
+      GATEWAY_URL: http://gateway:8080
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.pf-demo-app-web.rule=Host(`app.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-app-web.entrypoints=web
+      - traefik.http.routers.pf-demo-app-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.pf-demo-app-web.service=pf-demo-app
+      - traefik.http.routers.pf-demo-app.rule=Host(`app.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-app.entrypoints=websecure
+      - traefik.http.routers.pf-demo-app.tls.certresolver=letsencrypt
+      - traefik.http.routers.pf-demo-app.service=pf-demo-app
+      - traefik.http.services.pf-demo-app.loadbalancer.server.port=8080
+
+  operations-portal:
+    <<: *portal
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-operations-portal:${PARCELFLOW_TAG:-latest}
+    environment:
+      KEYCLOAK_URL: https://auth.${DEMO_DOMAIN:?set DEMO_DOMAIN}
+      GATEWAY_URL: http://gateway:8080
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.pf-demo-ops-web.rule=Host(`ops.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-ops-web.entrypoints=web
+      - traefik.http.routers.pf-demo-ops-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.pf-demo-ops-web.service=pf-demo-ops
+      - traefik.http.routers.pf-demo-ops.rule=Host(`ops.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-ops.entrypoints=websecure
+      - traefik.http.routers.pf-demo-ops.tls.certresolver=letsencrypt
+      - traefik.http.routers.pf-demo-ops.service=pf-demo-ops
+      - traefik.http.services.pf-demo-ops.loadbalancer.server.port=8080
+
+  admin-portal:
+    <<: *portal
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-admin-portal:${PARCELFLOW_TAG:-latest}
+    environment:
+      KEYCLOAK_URL: https://auth.${DEMO_DOMAIN:?set DEMO_DOMAIN}
+      GATEWAY_URL: http://gateway:8080
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.pf-demo-admin-web.rule=Host(`admin.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-admin-web.entrypoints=web
+      - traefik.http.routers.pf-demo-admin-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.pf-demo-admin-web.service=pf-demo-admin
+      - traefik.http.routers.pf-demo-admin.rule=Host(`admin.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-admin.entrypoints=websecure
+      - traefik.http.routers.pf-demo-admin.tls.certresolver=letsencrypt
+      - traefik.http.routers.pf-demo-admin.service=pf-demo-admin
+      - traefik.http.services.pf-demo-admin.loadbalancer.server.port=8080
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+
+# Created by Dokploy's "Setup Server"; Traefik watches the containers attached to it.
+networks:
+  dokploy-network:
+    external: true
