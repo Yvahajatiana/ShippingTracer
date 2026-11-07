@@ -94,13 +94,14 @@ services:
     volumes:
       - ./deploy/keycloak:/opt/keycloak/data/import:ro
     healthcheck:
-      # The image has no curl: probe the management port with bash.
+      # The image has no curl: probe the management port with bash. The HTTP status is checked,
+      # not the body: a DOWN response still contains `"status": "UP"` for its nested checks.
       test:
         - CMD-SHELL
         - >-
           exec 3<>/dev/tcp/127.0.0.1/9000 &&
           printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
-          grep -q '"status": "UP"' <&3
+          grep -q '^HTTP/1.1 200 ' <&3
       interval: 10s
       timeout: 5s
       retries: 30

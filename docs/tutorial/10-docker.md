@@ -23,11 +23,11 @@ RUN dotnet publish ... -c Release -r linux-musl-x64 --no-restore --self-containe
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
 RUN apk add --no-cache icu-libs tzdata
-ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false ASPNETCORE_HTTP_PORTS=8080
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false ASPNETCORE_HTTP_PORTS="8080;8081" Management__Port=8081
 COPY --from=build /app ./
 USER $APP_UID
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:8080/health/live || exit 1
+    CMD wget -qO- http://127.0.0.1:8081/health/live || exit 1
 ENTRYPOINT ["dotnet", "ParcelFlow.Shipment.Api.dll"]
 ```
 
@@ -36,7 +36,7 @@ Raisonnement couche par couche :
 - **Restauration séparée des sources** : tant qu'aucun `.csproj` ne change, `dotnet restore` reste en cache.
 - **`src/BuildingBlocks` copié en entier**, mais seulement les `.csproj` et sources **du service** : modifier Billing n'invalide pas le cache de Shipment, et ajouter un building block ne demande aucune modification des Dockerfiles.
 - **Alpine + ICU + tzdata** : image légère, mais formatage culturel et fuseaux horaires corrects.
-- **Non root** (`APP_UID`), port 8080, `HEALTHCHECK` sur `/health/live`, labels OCI alimentés par les arguments `VERSION` et `REVISION`.
+- **Non root** (`APP_UID`), API sur le port 8080, `/health/*` et `/metrics` sur le seul port de management 8081 (jamais publié ni routé), `HEALTHCHECK` sur ce port, labels OCI alimentés par les arguments `VERSION` et `REVISION`.
 - **`Production` par défaut** : l'image ne migre jamais seule.
 
 ## Étape 2 — L'image des portails
@@ -106,7 +106,7 @@ Décisions :
 - **Services en `Development`.** Migrations et seeds au démarrage, ainsi que l'autorité Keycloak en HTTP, ne sont acceptés **qu'en Development**. Compose le fixe explicitement, sans toucher au code ; les images restent en `Production` par défaut.
 - **Secrets obligatoires** : `${VAR:?message}` fait échouer `docker compose up` si `.env` est incomplet. C'est critique pour `NOTIFICATION_CLIENT_SECRET` : absent, Keycloak garderait le placeholder littéral comme secret, une valeur publique.
 - **Une base par service** sur une instance PostgreSQL 16 : `deploy/postgres/init-databases.sh`, monté dans `docker-entrypoint-initdb.d`, crée les huit bases au premier démarrage du volume.
-- **Dépendances par santé** (`condition: service_healthy`) ; Keycloak est sondé sur son port de management en bash, l'image n'ayant pas `curl`.
+- **Dépendances par santé** (`condition: service_healthy`) ; Keycloak est sondé sur son port de management en bash, l'image n'ayant pas `curl`, sur le statut HTTP 200 et non sur le corps (une réponse DOWN contient aussi `"status": "UP"` pour ses vérifications imbriquées).
 - **Ports publiés sur `127.0.0.1` uniquement.**
 - **Redis sans persistance** (`--save "" --appendonly no`) : il ne sert que de cache.
 

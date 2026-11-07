@@ -5,13 +5,14 @@ using Asp.Versioning;
 using MassTransit.Logging;
 using MassTransit.Monitoring;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
+using ParcelFlow.BuildingBlocks.Api.Hosting;
+using ParcelFlow.BuildingBlocks.Api.Operations;
 using ParcelFlow.Billing.Api;
 using ParcelFlow.Billing.Application;
 using ParcelFlow.Billing.Infrastructure;
@@ -143,14 +144,12 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    if (app.Configuration.GetValue<bool>("Database:Initialize"))
-    {
-        await app.Services.InitializeBillingDatabaseAsync();
-    }
 }
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-app.MapHealthChecks("/health/ready").AllowAnonymous();
-app.MapPrometheusScrapingEndpoint().AllowAnonymous();
+if (app.Environment.AllowsStartupDatabaseInitialization() && app.Configuration.GetValue<bool>("Database:Initialize"))
+{
+    await app.Services.InitializeBillingDatabaseAsync();
+}
+app.MapParcelFlowOperationalEndpoints().AllowAnonymous().MapPrometheusScrapingEndpoint();
 app.MapBillingEndpoints();
 app.Run();
 
