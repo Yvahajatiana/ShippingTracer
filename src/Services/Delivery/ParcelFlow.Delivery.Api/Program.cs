@@ -11,6 +11,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
+using ParcelFlow.BuildingBlocks.Api.Hosting;
 using ParcelFlow.BuildingBlocks.Api.Operations;
 using ParcelFlow.Delivery.Api;
 using ParcelFlow.Delivery.Application;
@@ -143,10 +144,10 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-    if (app.Configuration.GetValue<bool>("Database:Initialize"))
-    {
-        await app.Services.InitializeDeliveryDatabaseAsync();
-    }
+}
+if (app.Environment.AllowsStartupDatabaseInitialization() && app.Configuration.GetValue<bool>("Database:Initialize"))
+{
+    await app.Services.InitializeDeliveryDatabaseAsync();
 }
 app.MapParcelFlowOperationalEndpoints().AllowAnonymous().MapPrometheusScrapingEndpoint();
 app.MapDeliveryEndpoints();
