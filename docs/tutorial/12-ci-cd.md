@@ -69,7 +69,7 @@ La matrice `images` couvre 9 images .NET (gateway + 8 services), 3 portails, Rab
 Séquence par image :
 
 1. build Buildx avec cache GitHub Actions par image (`cache-from/to: type=gha,scope=<image>`), image chargée localement ;
-2. **Trivy** : vulnérabilités OS et bibliothèques `HIGH`/`CRITICAL` corrigeables, échec au moindre résultat ; hors PR, rapport SARIF publié dans Code scanning ;
+2. **Trivy** : vulnérabilités OS et bibliothèques `HIGH`/`CRITICAL` corrigeables, échec au moindre résultat ; hors PR, rapport SARIF publié dans Code scanning, ou en artefact du workflow si le dépôt est privé ;
 3. **publication GHCR** uniquement sur push vers `main`/`develop` du dépôt d'origine, jamais sur une PR ni depuis un fork.
 
 Nom : `ghcr.io/<owner>/parcelflow-<image>`. Tags : `sha-<sha court>` à chaque build, `develop`/`main` selon la branche, `latest` sur `main`. L'action Trivy est épinglée par **commit** (ses tags ont déjà été réécrits par le passé).
