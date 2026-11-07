@@ -13,8 +13,10 @@ Allowed flows:
 Egress is deliberately not restricted: the pods need DNS, the external PostgreSQL / Redis /
 RabbitMQ / Keycloak and the public gateway URL, whose addresses are outside the cluster and
 provider specific; an egress allow-list belongs to the platform (CNI FQDN policies).
-Prometheus scraping is out of scope: the chart exposes no metrics endpoint policy, add one next
-to the monitoring stack when it is installed. Kubelet probes are not affected (node traffic).
+The management port (dotnetDefaults.managementPort, health checks and /metrics) is not opened:
+kubelet probes are node traffic and not subject to these policies. Prometheus scraping is out of
+scope (issue #58): the policy added next to the monitoring stack must allow it to the pods'
+"management" port (/metrics answers 404 on the http port 8080), not to the Services.
 */ -}}
 {{- if .Values.networkPolicy.enabled }}
 {{- $root := . }}

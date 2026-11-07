@@ -60,7 +60,7 @@ La configuration est validée au démarrage. Les destinations sont des paramètr
 
 ## Exploitation et vérification
 
-`/health/live` vérifie la vivacité de la gateway. `/health/ready` porte sur sa capacité à accepter les requêtes avec sa configuration chargée ; il ne conditionne pas toute la gateway à la disponibilité simultanée des huit services. Une indisponibilité amont affecte le service concerné. `/metrics` expose ses métriques Prometheus ; traces OTLP et logs Serilog complètent l’observabilité.
+`/health/live` vérifie la vivacité de la gateway. `/health/ready` porte sur sa capacité à accepter les requêtes avec sa configuration chargée ; il ne conditionne pas toute la gateway à la disponibilité simultanée des huit services. Une indisponibilité amont affecte le service concerné. `/metrics` expose ses métriques Prometheus ; traces OTLP et logs Serilog complètent l’observabilité. Quand `Management:Port` est défini (8081 dans les images), ces trois endpoints ne répondent que sur ce port, vérifié sur le port local de la connexion et non sur l’en-tête `Host`, et renvoient 404 sur le port de l’API.
 
 Les tests utilisent la gateway et de vrais serveurs HTTP amont factices, avec JWT signés et validation cryptographique. Ils couvrent les frontières de routage et d’audience, le suivi public, le transfert des requêtes/réponses, CORS, quotas et pannes. Aucun Docker ni serveur Keycloak n’est nécessaire pour ces tests.
 

@@ -122,6 +122,16 @@ development Keycloak, it is the in-cluster address while tokens carry the public
 Application workload helpers (services, gateway, portals, migration jobs).
 --------------------------------------------------------------------------------------------- */}}
 
+{{/*
+Management port of the .NET images (health checks and metrics), declared once in
+dotnetDefaults.managementPort. The chart does not set ASPNETCORE_HTTP_PORTS nor Management__Port:
+it relies on the image defaults (8080 for the API, 8081 for management), so this value must
+match the images. Per-workload overrides are rejected by parcelflow.validate.
+*/}}
+{{- define "parcelflow.managementPort" -}}
+{{- int (default 8081 .Values.dotnetDefaults.managementPort) -}}
+{{- end -}}
+
 {{- define "parcelflow.isDevelopment" -}}
 {{- if eq (lower (toString .Values.environment)) "development" -}}true{{- end -}}
 {{- end -}}
@@ -157,6 +167,14 @@ expected configuration instead of letting the pods crash at runtime.
 {{- end -}}
 {{- if and .Values.httpRoute.enabled (empty .Values.httpRoute.parentRefs) -}}
 {{- fail "httpRoute.enabled=true requires httpRoute.parentRefs (the Gateway API Gateway the routes attach to)" -}}
+{{- end -}}
+{{- range $name, $svc := .Values.services -}}
+{{- if hasKey (default dict $svc) "managementPort" -}}
+{{- fail (printf "services.%s.managementPort is not supported: the management port is baked into the images (Management__Port), set dotnetDefaults.managementPort only if the images use another one" $name) -}}
+{{- end -}}
+{{- end -}}
+{{- if hasKey (default dict .Values.gateway) "managementPort" -}}
+{{- fail "gateway.managementPort is not supported: the management port is baked into the images (Management__Port), set dotnetDefaults.managementPort only if the images use another one" -}}
 {{- end -}}
 {{- end -}}
 
@@ -386,6 +404,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            # Health checks and metrics only answer on this port (404 on http). It is used by
+            # the kubelet probes and Prometheus scraping, never exposed by a Service or route.
+            - name: management
+              containerPort: {{ include "parcelflow.managementPort" $root }}
+              protocol: TCP
           env:
             {{- .env | nindent 12 }}
             # Read-only root filesystem: temporary files (diagnostics IPC socket, request body
@@ -399,21 +422,21 @@ spec:
           startupProbe:
             httpGet:
               path: /health/live
-              port: http
+              port: management
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /health/live
-              port: http
+              port: management
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: http
+              port: management
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3

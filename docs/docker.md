@@ -13,9 +13,9 @@ Chaque hôte déployable dispose d'une image, et `docker-compose.yml` assemble u
 
 Images .NET :
 
-- Construction multi-étapes `sdk:8.0-alpine`, exécution `aspnet:8.0-alpine` avec ICU et tzdata, utilisateur non root (`APP_UID`), port 8080.
+- Construction multi-étapes `sdk:8.0-alpine`, exécution `aspnet:8.0-alpine` avec ICU et tzdata, utilisateur non root (`APP_UID`), API sur le port 8080, port de management 8081 (`Management__Port`).
 - La restauration copie `src/BuildingBlocks` en entier, plus les seuls `csproj` du service : modifier un service n'invalide pas le cache des autres, et un nouveau building block ne demande aucune modification des Dockerfiles.
-- `HEALTHCHECK` sur `/health/live`. Les arguments `VERSION` et `REVISION` alimentent les labels OCI.
+- `/health/*` et `/metrics` ne répondent que sur le port 8081 (404 sur 8080) ; Compose ne le publie pas, il reste interne au réseau. `HEALTHCHECK` sur `http://127.0.0.1:8081/health/live`. Les arguments `VERSION` et `REVISION` alimentent les labels OCI.
 - L'environnement par défaut est `Production`.
 
 Images des portails :

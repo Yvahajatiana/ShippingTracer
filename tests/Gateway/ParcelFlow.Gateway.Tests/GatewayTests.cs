@@ -310,6 +310,51 @@ public sealed class GatewayTests
         upstream.Calls.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData("/health/live")]
+    [InlineData("/health/ready")]
+    [InlineData("/metrics")]
+    public async Task Operational_endpoints_only_answer_on_the_management_port(string path)
+    {
+        await using var upstream = await Upstream.StartAsync(context => context.Response.WriteAsync("unexpected"));
+        await using var factory = new GatewayFactory(upstream.Url, new() { ["Management:Port"] = "8081" });
+        // The Host header names the management port: only the connection's local port counts.
+        var onPublicPort = await SendOnPortAsync(factory, path, 8080, "gateway:8081");
+        var onManagementPort = await SendOnPortAsync(factory, path, 8081, "gateway:8081");
+        onPublicPort.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        onManagementPort.Response.StatusCode.Should().Be(StatusCodes.Status200OK);
+        upstream.Calls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Api_routes_stay_on_the_public_port_when_a_management_port_is_set()
+    {
+        await using var upstream = await Upstream.StartAsync(context => context.Response.WriteAsync("unexpected"));
+        await using var factory = new GatewayFactory(upstream.Url, new() { ["Management:Port"] = "8081" });
+        var response = await SendOnPortAsync(factory, "/api/v1/customers/me", 8080, "gateway:8080");
+        response.Response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("65536")]
+    public async Task An_invalid_management_port_is_rejected(string port)
+    {
+        await using var upstream = await Upstream.StartAsync(context => context.Response.WriteAsync("unexpected"));
+        await using var factory = new GatewayFactory(upstream.Url, new() { ["Management:Port"] = port });
+        var start = () => factory.CreateClient();
+        start.Should().Throw<InvalidOperationException>().WithMessage("*Management:Port*");
+    }
+
+    private static Task<HttpContext> SendOnPortAsync(GatewayFactory factory, string path, int localPort, string host) =>
+        factory.Server.SendAsync(context =>
+        {
+            context.Request.Method = HttpMethods.Get;
+            context.Request.Path = path;
+            context.Request.Host = new HostString(host);
+            context.Connection.LocalPort = localPort;
+        });
+
     private static HttpRequestMessage Request(HttpMethod method, string path, string? token)
     {
         var request = new HttpRequestMessage(method, path);
