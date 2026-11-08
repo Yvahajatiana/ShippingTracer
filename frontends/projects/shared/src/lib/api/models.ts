@@ -263,11 +263,13 @@ export const INVOICE_STATUSES = [
   'PaymentFailed',
   'PartiallyCredited',
   'Credited',
+  'Cancelled',
 ] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export type MockPaymentOutcome = 'Approved' | 'Declined';
 export const CREDIT_REASONS = ['BillingCorrection', 'ServiceIssue'] as const;
-export type CreditReason = (typeof CREDIT_REASONS)[number];
+// CREDIT_REASONS lists the reasons an admin can pick; PaymentTimeout is system-issued only.
+export type CreditReason = (typeof CREDIT_REASONS)[number] | 'PaymentTimeout';
 
 export interface Invoice {
   id: Guid;

@@ -138,7 +138,8 @@
       "Paid": "Paid",
       "PaymentFailed": "Payment failed",
       "PartiallyCredited": "Partially credited",
-      "Credited": "Credited"
+      "Credited": "Credited",
+      "Cancelled": "Cancelled"
     },
     "MockPaymentOutcome": {
       "Approved": "Approved",
@@ -146,7 +147,8 @@
     },
     "CreditReason": {
       "BillingCorrection": "Billing correction",
-      "ServiceIssue": "Service issue"
+      "ServiceIssue": "Service issue",
+      "PaymentTimeout": "Payment window expired"
     },
     "NotificationChannel": {
       "Email": "Email",
