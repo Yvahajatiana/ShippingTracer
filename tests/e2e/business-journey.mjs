@@ -415,7 +415,7 @@ async function run() {
       observe(value.status);
       return enumName(value.status, SHIPMENT_STATUSES) === 'ReadyForPickup' ? value : undefined;
     });
-    return `status ${JSON.stringify(shipment.status)}`;
+    return `status ${enumName(shipment.status, SHIPMENT_STATUSES)} (serialized as ${JSON.stringify(shipment.status)})`;
   });
 
   // 4. Operations: warehouse scans, route, assignment, proof of delivery --------------------------------
@@ -454,7 +454,7 @@ async function run() {
       observe(value.status);
       return enumName(value.status, SHIPMENT_STATUSES) === 'PickedUp' ? value : undefined;
     });
-    return `shipment ${JSON.stringify(shipment.status)}`;
+    return `shipment ${enumName(shipment.status, SHIPMENT_STATUSES)} (serialized as ${JSON.stringify(shipment.status)})`;
   });
   await step('Warehouse: exit scan at FR-LYON-01', async () => {
     await scan(lyon, 'Exit');
@@ -588,6 +588,7 @@ try {
 } catch (error) {
   exitCode = 1;
   console.error(`\n${error instanceof JourneyError ? error.message : error.stack}`);
+  if (error.cause) console.error(`Caused by: ${error.cause.message ?? error.cause}`);
   if (journey.shipment) console.error(`Shipment ${journey.shipment.id} / ${journey.shipment.trackingNumber}`);
   console.error(`Correlation id ${correlationId}`);
   console.error(`Journey failed at step ${stepNumber} after ${((Date.now() - started) / 1000).toFixed(1)}s`);
