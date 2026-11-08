@@ -1,8 +1,10 @@
 namespace ParcelFlow.Billing.Domain;
 
-public enum InvoiceStatus { PendingPayment, Paid, PaymentFailed, PartiallyCredited, Credited }
+public enum InvoiceStatus { PendingPayment, Paid, PaymentFailed, PartiallyCredited, Credited, Cancelled }
 public enum MockPaymentOutcome { Approved, Declined }
-public enum CreditReason { BillingCorrection, ServiceIssue }
+// PaymentTimeout is reserved for the automatic refund of a shipment abandoned by the booking saga.
+public enum CreditReason { BillingCorrection, ServiceIssue, PaymentTimeout }
+public enum PaymentTimeoutResolution { NoInvoice, InvoiceCancelled, Refunded, NothingToSettle }
 
 public static class BillingRules
 {
@@ -53,9 +55,29 @@ public sealed class Invoice
     public void RecordPayment(MockPaymentOutcome outcome)
     {
         if (!Enum.IsDefined(outcome)) throw new ArgumentOutOfRangeException(nameof(outcome));
+        if (Status == InvoiceStatus.Cancelled) throw new InvalidOperationException("This invoice was cancelled because the shipment payment window expired.");
         if (Status != InvoiceStatus.PendingPayment) throw new InvalidOperationException("An invoice accepts only one terminal payment attempt.");
         Status = outcome == MockPaymentOutcome.Approved ? InvoiceStatus.Paid : InvoiceStatus.PaymentFailed;
         Revision++;
+    }
+    public void Cancel()
+    {
+        if (Status != InvoiceStatus.PendingPayment) throw new InvalidOperationException("Only an invoice awaiting payment can be cancelled.");
+        Status = InvoiceStatus.Cancelled; Revision++;
+    }
+    /// <summary>
+    /// Applies the shipment payment timeout: an unpaid invoice is cancelled so it can never be charged, while a captured
+    /// payment returns the amount still to refund. Declined, cancelled or fully credited invoices need nothing.
+    /// </summary>
+    public PaymentTimeoutResolution ResolvePaymentTimeout(out decimal refundAmount)
+    {
+        refundAmount = 0m;
+        switch (Status)
+        {
+            case InvoiceStatus.PendingPayment: Cancel(); return PaymentTimeoutResolution.InvoiceCancelled;
+            case InvoiceStatus.Paid or InvoiceStatus.PartiallyCredited: refundAmount = RemainingCredit; return PaymentTimeoutResolution.Refunded;
+            default: return PaymentTimeoutResolution.NothingToSettle;
+        }
     }
     public void IssueCredit(decimal amount)
     {
@@ -103,4 +125,23 @@ public sealed class CreditNote
     public DateTimeOffset OccurredAtUtc { get; private set; }
     public string ActorSubject { get; private set; } = string.Empty;
     public bool Matches(Guid invoiceId, decimal amount, CreditReason reason, string actorSubject) => InvoiceId == invoiceId && Amount == amount && Reason == reason && ActorSubject == actorSubject;
+}
+
+/// <summary>
+/// Durable record of a Shipment payment timeout. It settles the invoice once and also covers a PaymentRequested that
+/// arrives after the timeout: such a late request must never open a payable invoice.
+/// </summary>
+public sealed class ShipmentPaymentTimeout
+{
+    private ShipmentPaymentTimeout() { }
+    public ShipmentPaymentTimeout(Guid shipmentId, DateTimeOffset timedOutAtUtc, DateTimeOffset recordedAtUtc, PaymentTimeoutResolution resolution)
+    {
+        BillingRules.RequireId(shipmentId);
+        if (!Enum.IsDefined(resolution)) throw new ArgumentOutOfRangeException(nameof(resolution));
+        ShipmentId = shipmentId; TimedOutAtUtc = BillingRules.NormalizeTimestamp(timedOutAtUtc); RecordedAtUtc = BillingRules.NormalizeTimestamp(recordedAtUtc); Resolution = resolution;
+    }
+    public Guid ShipmentId { get; private set; }
+    public DateTimeOffset TimedOutAtUtc { get; private set; }
+    public DateTimeOffset RecordedAtUtc { get; private set; }
+    public PaymentTimeoutResolution Resolution { get; private set; }
 }

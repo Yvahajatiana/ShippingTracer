@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IValidator<RegisterInvoice>, RegisterInvoiceValidator>();
         services.AddScoped<IValidator<PayInvoice>, PayInvoiceValidator>();
         services.AddScoped<IValidator<IssueCreditNote>, IssueCreditNoteValidator>();
+        services.AddScoped<IValidator<SettleShipmentPaymentTimeout>, SettleShipmentPaymentTimeoutValidator>();
         services.AddScoped<IValidator<GetInvoice>, GetInvoiceValidator>();
         services.AddScoped<IValidator<GetInvoicePayment>, GetInvoicePaymentValidator>();
         services.AddScoped<IValidator<GetCreditNote>, GetCreditNoteValidator>();

@@ -12,9 +12,11 @@ public interface IBillingStore
     Task<PaymentAttempt?> FindPaymentByOperationAsync(Guid operationId, CancellationToken cancellationToken);
     Task<PaymentAttempt?> FindInvoicePaymentAsync(Guid invoiceId, CancellationToken cancellationToken);
     Task<CreditNote?> FindCreditNoteAsync(Guid operationId, CancellationToken cancellationToken);
+    Task<ShipmentPaymentTimeout?> FindPaymentTimeoutAsync(Guid shipmentId, CancellationToken cancellationToken);
     void AddInvoice(Invoice invoice);
     void AddPayment(PaymentAttempt payment);
     void AddCreditNote(CreditNote creditNote);
+    void AddPaymentTimeout(ShipmentPaymentTimeout timeout);
     Task SaveChangesAsync(CancellationToken cancellationToken);
     Task<InvoicePageDto> ListInvoicesAsync(string? ownerSubject, int page, int pageSize, CancellationToken cancellationToken);
     Task<CreditNotePageDto> ListCreditNotesAsync(Guid invoiceId, int page, int pageSize, CancellationToken cancellationToken);
@@ -22,6 +24,8 @@ public interface IBillingStore
 public sealed record RegisterInvoice(Guid ShipmentId, string CustomerSubject, decimal Amount, string Currency, DateTimeOffset OccurredAtUtc) : IRequest<bool>, IBillingCommand;
 public sealed record PayInvoice(Guid InvoiceId, Guid OperationId, MockPaymentOutcome Outcome) : IRequest<PaymentDto>, IBillingCommand;
 public sealed record IssueCreditNote(Guid InvoiceId, Guid OperationId, decimal Amount, CreditReason Reason) : IRequest<CreditNoteDto>, IBillingCommand;
+// Raised by the Shipment booking saga when the payment window expired; Billing must never charge that shipment afterwards.
+public sealed record SettleShipmentPaymentTimeout(Guid ShipmentId, DateTimeOffset TimedOutAtUtc) : IRequest<bool>, IBillingCommand;
 public sealed record GetInvoice(Guid InvoiceId) : IRequest<InvoiceDto>;
 public sealed record ListInvoices(int Page = 1, int PageSize = 50) : IRequest<InvoicePageDto>;
 public sealed record GetInvoicePayment(Guid InvoiceId) : IRequest<PaymentDto>;
