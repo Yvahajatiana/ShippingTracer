@@ -315,6 +315,27 @@ namespace ParcelFlow.Billing.Infrastructure.Persistence.Migrations
                     b.ToTable("billing_payments", (string)null);
                 });
 
+            modelBuilder.Entity("ParcelFlow.Billing.Domain.ShipmentPaymentTimeout", b =>
+                {
+                    b.Property<Guid>("ShipmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Resolution")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset>("TimedOutAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ShipmentId");
+
+                    b.ToTable("billing_payment_timeouts", (string)null);
+                });
+
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
                 {
                     b.HasOne("MassTransit.EntityFrameworkCoreIntegration.OutboxState", null)

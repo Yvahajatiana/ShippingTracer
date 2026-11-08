@@ -20,9 +20,11 @@ public sealed class BillingStore(BillingDbContext database, ResiliencePipeline d
     public Task<PaymentAttempt?> FindPaymentByOperationAsync(Guid id, CancellationToken token) => Read(ct => database.Payments.AsNoTracking().SingleOrDefaultAsync(x => x.OperationId == id, ct), token);
     public Task<PaymentAttempt?> FindInvoicePaymentAsync(Guid id, CancellationToken token) => Read(ct => database.Payments.AsNoTracking().SingleOrDefaultAsync(x => x.InvoiceId == id, ct), token);
     public Task<CreditNote?> FindCreditNoteAsync(Guid id, CancellationToken token) => Read(ct => database.CreditNotes.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct), token);
+    public Task<ShipmentPaymentTimeout?> FindPaymentTimeoutAsync(Guid id, CancellationToken token) => Read(ct => database.PaymentTimeouts.AsNoTracking().SingleOrDefaultAsync(x => x.ShipmentId == id, ct), token);
     public void AddInvoice(Invoice invoice) => database.Invoices.Add(invoice);
     public void AddPayment(PaymentAttempt payment) => database.Payments.Add(payment);
     public void AddCreditNote(CreditNote creditNote) => database.CreditNotes.Add(creditNote);
+    public void AddPaymentTimeout(ShipmentPaymentTimeout timeout) => database.PaymentTimeouts.Add(timeout);
     public async Task SaveChangesAsync(CancellationToken token) => await database.SaveChangesAsync(token);
     public Task<InvoicePageDto> ListInvoicesAsync(string? ownerSubject, int page, int pageSize, CancellationToken token) => Read(async ct =>
     {
