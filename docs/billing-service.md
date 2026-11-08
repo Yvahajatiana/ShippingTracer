@@ -18,11 +18,24 @@ Les références sont techniques et ces documents ne modélisent pas une numéro
 
 Seul un administrateur peut émettre un avoir sur une facture payée. Les montants peuvent être partiels et leur somme ne dépasse jamais le montant payé. Les états évoluent de Paid vers PartiallyCredited puis Credited quand le solde créditable est nul. Une facture PendingPayment ou PaymentFailed ne peut pas être créditée.
 
-Chaque avoir conserve son identité, sa référence CRN- suivie de l’identifiant, son montant, sa date, son acteur et son motif BillingCorrection ou ServiceIssue. L’historique reste accessible au propriétaire et à l’administrateur. CreditNoteIssued publie les identifiants, le propriétaire technique, le montant et la devise ; il n’expose pas l’acteur ni le motif interne.
+Chaque avoir conserve son identité, sa référence CRN- suivie de l’identifiant, son montant, sa date, son acteur et son motif BillingCorrection ou ServiceIssue (PaymentTimeout pour le remboursement automatique décrit plus bas). L’historique reste accessible au propriétaire et à l’administrateur. CreditNoteIssued publie les identifiants, le propriétaire technique, le montant et la devise ; il n’expose pas l’acteur ni le motif interne.
 
 Un avoir est une écriture dans ce registre simulé. Il ne déclenche pas de transfert bancaire, ne remet pas la facture en attente de paiement et ne révoque pas la prise en charge du colis dans Shipment ou Warehouse.
 
 OperationId est un UUID fourni par le client. Son unicité et son idempotence sont vérifiées séparément pour les paiements et les avoirs. Un rejeu doit conserver la facture, le contenu et l’acteur initial ; une réutilisation contradictoire retourne 409. Les paiements et avoirs ont des tables distinctes. Les dates serveur sont en UTC, à la microseconde, strictement croissantes par facture grâce à LastActionAtUtc, y compris si l’horloge recule.
+
+## Expiration du délai de paiement (#39)
+
+Quand la saga Shipment publie `Shipment.V1.ShipmentPaymentTimedOut` (envoi passé en PaymentFailed), Billing le consomme sur la file `billing-shipment-payment-timeouts` et règle la facture une seule fois, sous le même verrou que l’enregistrement, le paiement et les avoirs :
+
+| État de la facture à réception | Effet |
+| --- | --- |
+| Absente (PaymentRequested pas encore traité) | Aucune facture ; un PaymentRequested tardif est ignoré et ne crée jamais de facture payable |
+| PendingPayment | Facture Cancelled ; tout paiement ultérieur retourne 409 |
+| Paid ou PartiallyCredited | Avoir automatique du solde créditable, motif PaymentTimeout, acteur `system:shipment-payment-timeout` ; la facture devient Credited |
+| PaymentFailed, Credited ou Cancelled | Rien à régler |
+
+La décision est conservée dans la table `billing_payment_timeouts` (clé ShipmentId, sans clé étrangère car le délai peut expirer avant la création de la facture). Cette trace rend le traitement idempotent au-delà de l’Inbox : une redélivrance ou un nouvel EventId ne crée ni second avoir ni nouvelle facture. L’avoir de remboursement a un identifiant déterministe (`billing:payment-timeout-credit-note:` + ShipmentId) et publie le CreditNoteIssued existant ; Notification informe donc le client sans nouveau contrat. Le motif PaymentTimeout est réservé à Billing : un avoir manuel portant ce motif est refusé (400).
 
 ## Accès et API v1
 
