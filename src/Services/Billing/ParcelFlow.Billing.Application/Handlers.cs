@@ -32,6 +32,8 @@ public sealed class RegisterInvoiceHandler(IBillingStore store, IPublishEndpoint
             if (!invoice.Matches(request.CustomerSubject, request.Amount, request.Currency, request.OccurredAtUtc)) throw new BillingConflictException("The invoice registration conflicts with its immutable shipment details.");
             return false;
         }
+        // A PaymentRequested still queued when the booking timed out must not open a payable invoice.
+        if (await store.FindPaymentTimeoutAsync(request.ShipmentId, ct) is not null) return false;
         invoice = new Invoice(request.ShipmentId, request.CustomerSubject, request.Amount, request.Currency, request.OccurredAtUtc);
         store.AddInvoice(invoice);
         await publisher.Publish(new InvoiceIssued(DeterministicGuid.Create("billing:invoice-issued:", invoice.Id), correlation.CorrelationId, invoice.IssuedAtUtc, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, invoice.Amount, invoice.Currency), ct);
@@ -84,6 +86,38 @@ public sealed class IssueCreditNoteHandler(IBillingStore store, IBillingActor ac
         HandlerRules.Apply(() => invoice.IssueCredit(request.Amount)); store.AddCreditNote(credit);
         await publisher.Publish(new CreditNoteIssued(DeterministicGuid.Create("billing:credit-note-issued:", credit.Id), invoice.ShipmentId, now, credit.Id, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, credit.Amount, credit.Currency), ct);
         await store.SaveChangesAsync(ct); return credit.ToDto();
+    }
+}
+public sealed class SettleShipmentPaymentTimeoutHandler(IBillingStore store, IPublishEndpoint publisher, TimeProvider clock) : IRequestHandler<SettleShipmentPaymentTimeout, bool>
+{
+    // System actor recorded on the automatic refund; it is never exposed in integration events.
+    public const string SystemActor = "system:shipment-payment-timeout";
+    public async Task<bool> Handle(SettleShipmentPaymentTimeout request, CancellationToken ct)
+    {
+        // The invoice lock serializes the timeout with registration, payment and credits of the same shipment.
+        await store.LockInvoiceAsync(request.ShipmentId, ct);
+        if (await store.FindPaymentTimeoutAsync(request.ShipmentId, ct) is not null) return false;
+        var invoice = await store.FindInvoiceAsync(request.ShipmentId, ct);
+        if (invoice is null)
+        {
+            store.AddPaymentTimeout(new ShipmentPaymentTimeout(request.ShipmentId, request.TimedOutAtUtc, clock.GetUtcNow(), PaymentTimeoutResolution.NoInvoice));
+            await store.SaveChangesAsync(ct); return true;
+        }
+        var resolution = invoice.ResolvePaymentTimeout(out var refund);
+        var now = resolution == PaymentTimeoutResolution.NothingToSettle ? BillingRules.NormalizeTimestamp(clock.GetUtcNow()) : invoice.RecordAction(clock.GetUtcNow());
+        if (resolution == PaymentTimeoutResolution.Refunded)
+        {
+            // One deterministic credit note per shipment: a redelivery after a rollback reuses the same identity and EventId.
+            // Manual credit identifiers are caller-chosen, so when one already occupies the reserved identity a random one
+            // is used instead; nothing of a rolled-back attempt is persisted, so the timeout marker still guarantees a single refund.
+            var creditId = DeterministicGuid.Create("billing:payment-timeout-credit-note:", invoice.Id);
+            if (await store.FindCreditNoteAsync(creditId, ct) is not null) creditId = Guid.NewGuid();
+            var credit = new CreditNote(creditId, invoice.Id, refund, invoice.Currency, CreditReason.PaymentTimeout, now, SystemActor);
+            HandlerRules.Apply(() => invoice.IssueCredit(refund)); store.AddCreditNote(credit);
+            await publisher.Publish(new CreditNoteIssued(DeterministicGuid.Create("billing:credit-note-issued:", credit.Id), invoice.ShipmentId, now, credit.Id, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, credit.Amount, credit.Currency), ct);
+        }
+        store.AddPaymentTimeout(new ShipmentPaymentTimeout(request.ShipmentId, request.TimedOutAtUtc, now, resolution));
+        await store.SaveChangesAsync(ct); return true;
     }
 }
 public sealed class GetInvoiceHandler(IBillingStore store, IBillingActor actor) : IRequestHandler<GetInvoice, InvoiceDto>

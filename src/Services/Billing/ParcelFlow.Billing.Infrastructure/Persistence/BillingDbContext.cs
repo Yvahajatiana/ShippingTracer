@@ -9,6 +9,7 @@ public sealed class BillingDbContext(DbContextOptions<BillingDbContext> options)
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<PaymentAttempt> Payments => Set<PaymentAttempt>();
     public DbSet<CreditNote> CreditNotes => Set<CreditNote>();
+    public DbSet<ShipmentPaymentTimeout> PaymentTimeouts => Set<ShipmentPaymentTimeout>();
     protected override void OnModelCreating(ModelBuilder builder)
     {
         builder.Entity<Invoice>(entity =>
@@ -47,6 +48,13 @@ public sealed class BillingDbContext(DbContextOptions<BillingDbContext> options)
             entity.Property(x => x.Reason).HasConversion<string>().HasMaxLength(30);
             entity.HasIndex(x => new { x.InvoiceId, x.OccurredAtUtc, x.Id });
             entity.HasOne<Invoice>().WithMany().HasForeignKey(x => x.InvoiceId).IsRequired().OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<ShipmentPaymentTimeout>(entity =>
+        {
+            // No foreign key: the timeout may be recorded before the PaymentRequested that would create the invoice.
+            entity.ToTable("billing_payment_timeouts");
+            entity.HasKey(x => x.ShipmentId); entity.Property(x => x.ShipmentId).ValueGeneratedNever();
+            entity.Property(x => x.Resolution).HasConversion<string>().HasMaxLength(30);
         });
         builder.AddInboxStateEntity(); builder.AddOutboxMessageEntity(); builder.AddOutboxStateEntity();
     }

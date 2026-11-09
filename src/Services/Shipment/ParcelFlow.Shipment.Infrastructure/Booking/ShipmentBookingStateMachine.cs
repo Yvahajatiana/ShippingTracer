@@ -80,7 +80,7 @@ public sealed partial class ShipmentBookingStateMachine : MassTransitStateMachin
         // Retain terminal rows: a repeated creation cannot initiate another payment.
         During(PaymentRejected, Ignore(Created), Ignore(Paid), Ignore(Rejected), Ignore(PickedUp), Ignore(PaymentTimeout.Received));
         During(PaymentTimedOut, Ignore(Created), Ignore(Rejected), Ignore(PickedUp), Ignore(PaymentTimeout.Received),
-            // A capture arriving after the deadline needs a manual refund or review; it never reopens the booking.
+            // A capture arriving after the deadline never reopens the booking; Billing refunds it automatically on ShipmentPaymentTimedOut.
             When(Paid).Then(context => LogLatePayment(logger, context.Saga.CorrelationId, context.Message.EventId)));
         During(Completed, Ignore(Created), Ignore(Paid), Ignore(Rejected), Ignore(PickedUp), Ignore(PaymentTimeout.Received));
     }
@@ -95,6 +95,6 @@ public sealed partial class ShipmentBookingStateMachine : MassTransitStateMachin
     private static partial void LogPaymentTimeout(ILogger logger, Guid shipmentId, TimeSpan paymentTimeout);
 
     [LoggerMessage(EventId = 3103, Level = LogLevel.Warning,
-        Message = "PaymentCompleted {EventId} arrived after the payment timeout of shipment {ShipmentId}; manual review is required")]
+        Message = "PaymentCompleted {EventId} arrived after the payment timeout of shipment {ShipmentId}; Billing refunds it automatically")]
     private static partial void LogLatePayment(ILogger logger, Guid shipmentId, Guid eventId);
 }
