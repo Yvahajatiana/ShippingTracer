@@ -537,7 +537,8 @@ async function run() {
   });
 
   // 6. Notifications and reporting ---------------------------------------------------------------------
-  // ShipmentCreated, InvoiceIssued, PaymentCompleted and the six tracking facts after Created.
+  // ShipmentCreated, InvoiceIssued, PaymentCompleted and the six tracking facts after Created: Notification
+  // deliberately skips the tracking Created fact, already notified through ShipmentCreated.
   const expectedSources = 3 + expectedHistory.length - 1;
   await step('Notification: Email and Sms receipts recorded for every fact', async () => {
     const page = await waitFor(`${expectedSources * 2} notification receipts`, async observe => {
