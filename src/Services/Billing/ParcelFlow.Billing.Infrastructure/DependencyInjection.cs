@@ -64,6 +64,7 @@ public static class DependencyInjection
                 outbox.IsolationLevel = System.Data.IsolationLevel.ReadCommitted;
             });
             bus.AddConsumer<PaymentRequestedConsumer>().Endpoint(endpoint => endpoint.Name = "billing-payments");
+            bus.AddConsumer<ShipmentPaymentTimedOutConsumer>().Endpoint(endpoint => endpoint.Name = "billing-shipment-payment-timeouts");
 
 
 

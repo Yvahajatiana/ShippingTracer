@@ -230,6 +230,104 @@ public sealed class BillingTests
         // The same client key on another invoice never yields the same EventId (Inbox and consumer deduplication).
         (await Pay(Guid.NewGuid())).Should().NotBe(first);
     }
+    [Fact]
+    public void Payment_timeout_cancels_an_unpaid_invoice_which_then_refuses_payment_and_credit()
+    {
+        var invoice = Invoice(); var revision = invoice.Revision;
+        invoice.ResolvePaymentTimeout(out var refund).Should().Be(PaymentTimeoutResolution.InvoiceCancelled);
+        refund.Should().Be(0m); invoice.Status.Should().Be(InvoiceStatus.Cancelled); invoice.Revision.Should().Be(revision + 1); invoice.RemainingCredit.Should().Be(0m);
+        FluentActions.Invoking(() => invoice.RecordPayment(MockPaymentOutcome.Approved)).Should().Throw<InvalidOperationException>().WithMessage("*payment window expired*");
+        FluentActions.Invoking(() => invoice.IssueCredit(1m)).Should().Throw<InvalidOperationException>();
+        FluentActions.Invoking(invoice.Cancel).Should().Throw<InvalidOperationException>();
+        invoice.ResolvePaymentTimeout(out refund).Should().Be(PaymentTimeoutResolution.NothingToSettle); refund.Should().Be(0m);
+    }
+    [Fact]
+    public void Payment_timeout_after_capture_refunds_the_remaining_balance_without_mutating_the_invoice()
+    {
+        var invoice = Invoice(); invoice.RecordPayment(MockPaymentOutcome.Approved);
+        invoice.ResolvePaymentTimeout(out var refund).Should().Be(PaymentTimeoutResolution.Refunded); refund.Should().Be(10m); invoice.Status.Should().Be(InvoiceStatus.Paid);
+        invoice.IssueCredit(2.5m);
+        invoice.ResolvePaymentTimeout(out refund).Should().Be(PaymentTimeoutResolution.Refunded); refund.Should().Be(7.5m);
+        invoice.IssueCredit(refund); invoice.Status.Should().Be(InvoiceStatus.Credited);
+        invoice.ResolvePaymentTimeout(out refund).Should().Be(PaymentTimeoutResolution.NothingToSettle); refund.Should().Be(0m);
+        FluentActions.Invoking(invoice.Cancel).Should().Throw<InvalidOperationException>();
+    }
+    [Fact]
+    public void Payment_timeout_after_decline_has_nothing_to_settle()
+    {
+        var invoice = Invoice(); invoice.RecordPayment(MockPaymentOutcome.Declined);
+        invoice.ResolvePaymentTimeout(out var refund).Should().Be(PaymentTimeoutResolution.NothingToSettle); refund.Should().Be(0m); invoice.Status.Should().Be(InvoiceStatus.PaymentFailed);
+        FluentActions.Invoking(() => new ShipmentPaymentTimeout(Guid.Empty, Issued, Issued, PaymentTimeoutResolution.NoInvoice)).Should().Throw<ArgumentException>();
+        FluentActions.Invoking(() => new ShipmentPaymentTimeout(Guid.NewGuid(), Issued, Issued, (PaymentTimeoutResolution)42)).Should().Throw<ArgumentOutOfRangeException>();
+    }
+    [Fact]
+    public async Task Timeout_before_payment_request_blocks_the_late_invoice_and_is_recorded_once()
+    {
+        var f = Fixture(false); var shipment = Guid.NewGuid();
+        var timeout = new SettleShipmentPaymentTimeoutHandler(f.Store, f.Endpoint, new Clock());
+        (await timeout.Handle(new(shipment, Issued), default)).Should().BeTrue();
+        (await timeout.Handle(new(shipment, Issued), default)).Should().BeFalse();
+        f.Store.Timeouts.Should().ContainSingle().Which.Resolution.Should().Be(PaymentTimeoutResolution.NoInvoice);
+        var register = new RegisterInvoiceHandler(f.Store, f.Endpoint, new CorrelationContext());
+        (await register.Handle(new(shipment, "alice", 10m, "EUR", Issued), default)).Should().BeFalse();
+        f.Store.Invoices.Should().BeEmpty(); f.Publisher.Events.Should().BeEmpty(); f.Store.Saves.Should().Be(1);
+        f.Store.Locked.Should().OnlyContain(x => x == shipment);
+    }
+    [Fact]
+    public async Task Timeout_cancels_a_pending_invoice_so_the_customer_payment_conflicts()
+    {
+        var f = Fixture(); var timeout = new SettleShipmentPaymentTimeoutHandler(f.Store, f.Endpoint, new Clock());
+        (await timeout.Handle(new(f.Invoice.Id, Issued.AddMinutes(30)), default)).Should().BeTrue();
+        f.Invoice.Status.Should().Be(InvoiceStatus.Cancelled); f.Publisher.Events.Should().BeEmpty();
+        var record = f.Store.Timeouts.Single(); record.Resolution.Should().Be(PaymentTimeoutResolution.InvoiceCancelled);
+        record.TimedOutAtUtc.Should().Be(Issued.AddMinutes(30)); record.RecordedAtUtc.Should().Be(f.Invoice.LastActionAtUtc);
+        await FluentActions.Awaiting(() => new PayInvoiceHandler(f.Store, new Actor("alice"), f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Guid.NewGuid(), MockPaymentOutcome.Approved), default))
+            .Should().ThrowAsync<BillingConflictException>();
+        f.Store.Payments.Should().BeEmpty(); f.Publisher.Events.Should().BeEmpty();
+    }
+    [Fact]
+    public async Task Timeout_after_capture_issues_one_deterministic_credit_note_for_the_remaining_balance()
+    {
+        var f = Fixture(); f.Invoice.RecordPayment(MockPaymentOutcome.Approved); f.Invoice.IssueCredit(4m);
+        var timeout = new SettleShipmentPaymentTimeoutHandler(f.Store, f.Endpoint, new Clock());
+        (await timeout.Handle(new(f.Invoice.Id, Issued), default)).Should().BeTrue();
+        (await timeout.Handle(new(f.Invoice.Id, Issued), default)).Should().BeFalse();
+        f.Invoice.Status.Should().Be(InvoiceStatus.Credited); f.Invoice.CreditTotal.Should().Be(10m);
+        var credit = f.Store.Credits.Single(); credit.Amount.Should().Be(6m); credit.Reason.Should().Be(CreditReason.PaymentTimeout);
+        credit.ActorSubject.Should().Be(SettleShipmentPaymentTimeoutHandler.SystemActor);
+        credit.Id.Should().Be(DeterministicGuid.Create("billing:payment-timeout-credit-note:", f.Invoice.Id));
+        var fact = f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<CreditNoteIssued>().Subject;
+        fact.EventId.Should().Be(DeterministicGuid.Create("billing:credit-note-issued:", credit.Id)); fact.CorrelationId.Should().Be(f.Invoice.Id);
+        fact.CreditNoteId.Should().Be(credit.Id); fact.Amount.Should().Be(6m); fact.CustomerSubject.Should().Be("alice");
+        f.Store.Timeouts.Single().Resolution.Should().Be(PaymentTimeoutResolution.Refunded); f.Store.Saves.Should().Be(1);
+    }
+    [Fact]
+    public async Task Timeout_refund_does_not_collide_with_a_manual_credit_using_the_reserved_identity()
+    {
+        var f = Fixture(); f.Invoice.RecordPayment(MockPaymentOutcome.Approved);
+        var reserved = DeterministicGuid.Create("billing:payment-timeout-credit-note:", f.Invoice.Id);
+        f.Store.Credits.Add(new CreditNote(reserved, Guid.NewGuid(), 1m, "EUR", CreditReason.ServiceIssue, Issued, "admin"));
+        (await new SettleShipmentPaymentTimeoutHandler(f.Store, f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Issued), default)).Should().BeTrue();
+        var refund = f.Store.Credits.Single(x => x.InvoiceId == f.Invoice.Id);
+        refund.Id.Should().NotBe(reserved); refund.Amount.Should().Be(10m); refund.Reason.Should().Be(CreditReason.PaymentTimeout);
+        f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<CreditNoteIssued>().Which.CreditNoteId.Should().Be(refund.Id);
+        f.Store.Timeouts.Single().Resolution.Should().Be(PaymentTimeoutResolution.Refunded);
+    }
+    [Fact]
+    public async Task Timeout_publish_failure_prevents_saving_the_refund()
+    {
+        var f = Fixture(); f.Invoice.RecordPayment(MockPaymentOutcome.Approved); f.Publisher.Failure = new InvalidOperationException("Outbox unavailable");
+        await FluentActions.Awaiting(() => new SettleShipmentPaymentTimeoutHandler(f.Store, f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Issued), default)).Should().ThrowAsync<InvalidOperationException>();
+        f.Store.Saves.Should().Be(0); f.Store.Timeouts.Should().BeEmpty();
+    }
+    [Fact]
+    public void Payment_timeout_reason_and_command_are_validated()
+    {
+        new IssueCreditNoteValidator().Validate(new IssueCreditNote(Guid.NewGuid(), Guid.NewGuid(), 1m, CreditReason.PaymentTimeout)).IsValid.Should().BeFalse();
+        new SettleShipmentPaymentTimeoutValidator().Validate(new SettleShipmentPaymentTimeout(Guid.Empty, Issued)).IsValid.Should().BeFalse();
+        new SettleShipmentPaymentTimeoutValidator().Validate(new SettleShipmentPaymentTimeout(Guid.NewGuid(), default)).IsValid.Should().BeFalse();
+        new SettleShipmentPaymentTimeoutValidator().Validate(new SettleShipmentPaymentTimeout(Guid.NewGuid(), Issued)).IsValid.Should().BeTrue();
+    }
     private static Invoice Invoice(decimal amount = 10m) => new(Guid.NewGuid(), "alice", amount, "EUR", Issued);
     private static F Fixture(bool add = true) => Fixture(Guid.NewGuid(), add);
     private static F Fixture(Guid invoiceId, bool add = true)
@@ -248,12 +346,15 @@ public sealed class BillingTests
     private sealed class Store : IBillingStore
     {
         public List<Invoice> Invoices { get; } = []; public List<PaymentAttempt> Payments { get; } = []; public List<CreditNote> Credits { get; } = [];
+        public List<ShipmentPaymentTimeout> Timeouts { get; } = [];
         public List<Guid> Locked { get; } = []; public int Saves { get; private set; } public int PaymentReads { get; private set; } public int CreditReads { get; private set; }
         public Task LockInvoiceAsync(Guid id, CancellationToken ct) { Locked.Add(id); return Task.CompletedTask; }
         public Task<Invoice?> FindInvoiceAsync(Guid id, CancellationToken ct) => Task.FromResult(Invoices.SingleOrDefault(x => x.Id == id));
         public Task<PaymentAttempt?> FindPaymentByOperationAsync(Guid id, CancellationToken ct) { PaymentReads++; return Task.FromResult(Payments.SingleOrDefault(x => x.OperationId == id)); }
         public Task<PaymentAttempt?> FindInvoicePaymentAsync(Guid id, CancellationToken ct) { PaymentReads++; return Task.FromResult(Payments.SingleOrDefault(x => x.InvoiceId == id)); }
         public Task<CreditNote?> FindCreditNoteAsync(Guid id, CancellationToken ct) { CreditReads++; return Task.FromResult(Credits.SingleOrDefault(x => x.Id == id)); }
+        public Task<ShipmentPaymentTimeout?> FindPaymentTimeoutAsync(Guid id, CancellationToken ct) => Task.FromResult(Timeouts.SingleOrDefault(x => x.ShipmentId == id));
+        public void AddPaymentTimeout(ShipmentPaymentTimeout value) => Timeouts.Add(value);
         public void AddInvoice(Invoice value) => Invoices.Add(value); public void AddPayment(PaymentAttempt value) => Payments.Add(value); public void AddCreditNote(CreditNote value) => Credits.Add(value);
         public Task SaveChangesAsync(CancellationToken ct) { Saves++; return Task.CompletedTask; }
         public Task<InvoicePageDto> ListInvoicesAsync(string? ownerSubject, int page, int pageSize, CancellationToken ct)

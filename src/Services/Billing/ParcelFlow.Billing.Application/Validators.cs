@@ -17,7 +17,11 @@ public sealed class PayInvoiceValidator : AbstractValidator<PayInvoice>
 }
 public sealed class IssueCreditNoteValidator : AbstractValidator<IssueCreditNote>
 {
-    public IssueCreditNoteValidator() { RuleFor(x => x.InvoiceId).NotEmpty(); RuleFor(x => x.OperationId).NotEmpty(); RuleFor(x => x.Amount).Must(BillingRules.IsAmount); RuleFor(x => x.Reason).IsInEnum(); }
+    public IssueCreditNoteValidator() { RuleFor(x => x.InvoiceId).NotEmpty(); RuleFor(x => x.OperationId).NotEmpty(); RuleFor(x => x.Amount).Must(BillingRules.IsAmount); RuleFor(x => x.Reason).IsInEnum().NotEqual(CreditReason.PaymentTimeout).WithMessage("PaymentTimeout credits are issued automatically by Billing."); }
+}
+public sealed class SettleShipmentPaymentTimeoutValidator : AbstractValidator<SettleShipmentPaymentTimeout>
+{
+    public SettleShipmentPaymentTimeoutValidator() { RuleFor(x => x.ShipmentId).NotEmpty(); RuleFor(x => x.TimedOutAtUtc).NotEqual(default(DateTimeOffset)); }
 }
 public sealed class GetInvoiceValidator : AbstractValidator<GetInvoice> { public GetInvoiceValidator() { RuleFor(x => x.InvoiceId).NotEmpty(); } }
 public sealed class GetInvoicePaymentValidator : AbstractValidator<GetInvoicePayment> { public GetInvoicePaymentValidator() { RuleFor(x => x.InvoiceId).NotEmpty(); } }
