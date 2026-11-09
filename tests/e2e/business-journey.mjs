@@ -44,6 +44,7 @@ const config = {
 };
 for (const [name, value] of [['KEYCLOAK_ADMIN_PASSWORD', config.adminPassword], ['DEMO_USER_PASSWORD', config.demoPassword]])
   if (!value) { console.error(`Missing ${name} (environment or .env)`); process.exit(2); }
+if (!(config.timeoutMs > 0)) { console.error('E2E_TIMEOUT_SECONDS must be a positive number of seconds'); process.exit(2); }
 
 // One correlation identifier for the whole run makes the service logs easy to filter.
 const correlationId = randomUUID();
@@ -106,7 +107,7 @@ class TokenSession {
     if (this.expiresAt - Date.now() < 30000) {
       const response = await postForm(`${config.keycloak}/realms/${config.realm}/protocol/openid-connect/token`,
         { grant_type: 'refresh_token', client_id: this.clientId, refresh_token: this.tokens.refresh_token });
-      check(response.status === 200, `${this.label}: token refresh failed with HTTP ${response.status}`, await response.text());
+      check(response.status === 200, `${this.label}: token refresh failed with HTTP ${response.status}`, await response.clone().text());
       this.update(await response.json());
     }
     return this.tokens.access_token;
@@ -167,7 +168,8 @@ async function keycloakAdmin(method, resource, body) {
   return { response, body: text ? JSON.parse(text) : undefined };
 }
 
-async function createCustomerAccount(suffix) {
+// `onCreated` exposes the account as soon as it exists, so cleanup can delete it if the role mapping fails.
+async function createCustomerAccount(suffix, onCreated) {
   const username = `e2e-${suffix}`;
   const email = `${username}@example.test`;
   // Satisfies the realm policy: length, upper, lower, digit, special, not the username or email.
@@ -176,10 +178,11 @@ async function createCustomerAccount(suffix) {
     username, email, firstName: 'Journey', lastName: `Tester ${suffix}`, enabled: true, emailVerified: true,
     requiredActions: [], credentials: [{ type: 'password', value: generatedPassword, temporary: false }],
   });
-  const id = response.headers.get('location').split('/').pop();
+  const created = { id: response.headers.get('location').split('/').pop(), username, email, password: generatedPassword };
+  onCreated(created);
   const { body: role } = await keycloakAdmin('GET', '/roles/customer');
-  await keycloakAdmin('POST', `/users/${id}/role-mappings/realm`, [role]);
-  return { id, username, email, password: generatedPassword };
+  await keycloakAdmin('POST', `/users/${created.id}/role-mappings/realm`, [role]);
+  return created;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -297,7 +300,7 @@ async function run() {
   // 1. Identities -------------------------------------------------------------------------------
   let customer, operator;
   await step('Keycloak: create a throwaway customer account (admin REST API)', async () => {
-    account = await createCustomerAccount(suffix);
+    account = await createCustomerAccount(suffix, created => { account = created; });
     return account.username;
   });
   await step('Keycloak: customer login on parcelflow-customer (code + PKCE)', async () => {
