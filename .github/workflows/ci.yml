@@ -147,6 +147,44 @@ jobs:
       - name: Run Kestrel smoke test
         run: node tests/Gateway/kestrel-smoke.mjs
 
+  # Business journey of tests/e2e against the compose stack, through the gateway with real
+  # Keycloak tokens. The portals are not started: the journey only calls the gateway and the
+  # frontends job already builds them.
+  e2e:
+    name: E2E business journey
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: parcelflow-e2e
+      E2E_SERVICES: gateway customer shipment tracking warehouse delivery billing notification reporting
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # The example values are throwaway secrets of a stack that lives for the job only.
+      - name: Local settings
+        run: cp .env.example .env
+      - name: Build and start the stack
+        run: docker compose up -d --build --wait --wait-timeout 600 $E2E_SERVICES
+      - name: Run the business journey
+        run: node tests/e2e/business-journey.mjs
+      - name: Dump the stack state and logs
+        if: failure()
+        run: |
+          docker compose ps --all
+          docker compose logs --no-color --timestamps > compose-logs.txt
+          docker compose logs --no-color --tail 200
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-compose-logs
+          path: compose-logs.txt
+          if-no-files-found: ignore
+      - name: Tear down the stack
+        if: always()
+        run: docker compose down -v --remove-orphans
+
   frontends:
     name: Frontends (lint, tests, build)
     runs-on: ubuntu-24.04
