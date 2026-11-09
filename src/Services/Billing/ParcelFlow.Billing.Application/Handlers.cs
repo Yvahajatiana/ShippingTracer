@@ -108,7 +108,11 @@ public sealed class SettleShipmentPaymentTimeoutHandler(IBillingStore store, IPu
         if (resolution == PaymentTimeoutResolution.Refunded)
         {
             // One deterministic credit note per shipment: a redelivery after a rollback reuses the same identity and EventId.
-            var credit = new CreditNote(DeterministicGuid.Create("billing:payment-timeout-credit-note:", invoice.Id), invoice.Id, refund, invoice.Currency, CreditReason.PaymentTimeout, now, SystemActor);
+            // Manual credit identifiers are caller-chosen, so when one already occupies the reserved identity a random one
+            // is used instead; nothing of a rolled-back attempt is persisted, so the timeout marker still guarantees a single refund.
+            var creditId = DeterministicGuid.Create("billing:payment-timeout-credit-note:", invoice.Id);
+            if (await store.FindCreditNoteAsync(creditId, ct) is not null) creditId = Guid.NewGuid();
+            var credit = new CreditNote(creditId, invoice.Id, refund, invoice.Currency, CreditReason.PaymentTimeout, now, SystemActor);
             HandlerRules.Apply(() => invoice.IssueCredit(refund)); store.AddCreditNote(credit);
             await publisher.Publish(new CreditNoteIssued(DeterministicGuid.Create("billing:credit-note-issued:", credit.Id), invoice.ShipmentId, now, credit.Id, invoice.Id, invoice.ShipmentId, invoice.CustomerSubject, credit.Amount, credit.Currency), ct);
         }

@@ -302,6 +302,18 @@ public sealed class BillingTests
         f.Store.Timeouts.Single().Resolution.Should().Be(PaymentTimeoutResolution.Refunded); f.Store.Saves.Should().Be(1);
     }
     [Fact]
+    public async Task Timeout_refund_does_not_collide_with_a_manual_credit_using_the_reserved_identity()
+    {
+        var f = Fixture(); f.Invoice.RecordPayment(MockPaymentOutcome.Approved);
+        var reserved = DeterministicGuid.Create("billing:payment-timeout-credit-note:", f.Invoice.Id);
+        f.Store.Credits.Add(new CreditNote(reserved, Guid.NewGuid(), 1m, "EUR", CreditReason.ServiceIssue, Issued, "admin"));
+        (await new SettleShipmentPaymentTimeoutHandler(f.Store, f.Endpoint, new Clock()).Handle(new(f.Invoice.Id, Issued), default)).Should().BeTrue();
+        var refund = f.Store.Credits.Single(x => x.InvoiceId == f.Invoice.Id);
+        refund.Id.Should().NotBe(reserved); refund.Amount.Should().Be(10m); refund.Reason.Should().Be(CreditReason.PaymentTimeout);
+        f.Publisher.Events.Should().ContainSingle().Which.Should().BeOfType<CreditNoteIssued>().Which.CreditNoteId.Should().Be(refund.Id);
+        f.Store.Timeouts.Single().Resolution.Should().Be(PaymentTimeoutResolution.Refunded);
+    }
+    [Fact]
     public async Task Timeout_publish_failure_prevents_saving_the_refund()
     {
         var f = Fixture(); f.Invoice.RecordPayment(MockPaymentOutcome.Approved); f.Publisher.Failure = new InvalidOperationException("Outbox unavailable");
