@@ -1,6 +1,6 @@
 # Démo publique
 
-La démo publique fait tourner toute la plateforme ParcelFlow sur un VPS Hetzner dédié (8 Go de RAM). Le déploiement est piloté par l'instance Dokploy existante, qui gère ce VPS comme *Remote Server*, et le DNS passe par Cloudflare. Les fichiers sont dans `deploy/dokploy/`.
+La démo publique fait tourner toute la plateforme ParcelFlow sur un VPS Hetzner dédié (8 Go de RAM). Le déploiement est piloté par l'instance Dokploy existante, qui gère ce VPS comme *Remote Server*, et le DNS passe par Cloudflare. Les fichiers sont dans `deploy/dokploy/`. Un autre VPS (IONOS, Hostinger) ou un serveur maison convient aussi : voir [Variantes d'hébergement](#variantes-dhébergement).
 
 ## Architecture
 
@@ -91,7 +91,7 @@ free -m && df -h / && docker system df
 
 À faire une fois par le propriétaire, dans l'ordre :
 
-1. **VPS Hetzner.** Choisir un type x86 (Intel ou AMD), pas Ampere (ARM), car les images ne sont publiées qu'en `linux/amd64`. Prévoir 8 Go de RAM et Ubuntu LTS. Installer à la création la clé SSH publique générée par Dokploy (Settings, SSH Keys). Activer les sauvegardes ou des snapshots Hetzner. Ajouter un Cloud Firewall Hetzner : 80 et 443 ouverts (idéalement limités aux plages IP Cloudflare), 22 limité à l'IP du serveur Dokploy et à l'IP d'administration. Les ports publiés par Docker contournent `ufw`.
+1. **VPS Hetzner.** Choisir un type x86 (Intel ou AMD), pas Ampere (ARM), car les images ne sont publiées qu'en `linux/amd64`. Prévoir 8 Go de RAM et Ubuntu LTS. Installer à la création la clé SSH publique générée par Dokploy (Settings, SSH Keys). Activer les sauvegardes ou des snapshots Hetzner. Ajouter un Cloud Firewall Hetzner : 80 et 443 ouverts (idéalement limités aux plages IP Cloudflare), 22 limité à l'IP du serveur Dokploy et à l'IP d'administration. Les ports publiés par Docker contournent `ufw`. Pour un autre hébergeur ou un serveur maison, les étapes 1 à 3 changent : voir [Variantes d'hébergement](#variantes-dhébergement).
 2. **Dokploy, Remote Server.** Dans Servers, ajouter le serveur (IP, port 22, utilisateur `root`, clé SSH), puis lancer *Setup Server* et *Validate*. Le setup installe Docker, crée `dokploy-network` et démarre Traefik. Activer le nettoyage Docker du serveur : chaque déploiement tire de nouvelles images `latest`.
 3. **Cloudflare.**
    - Créer 5 enregistrements A **proxifiés** (`app`, `ops`, `admin`, `api`, `auth`) vers l'IP du VPS.
@@ -122,6 +122,48 @@ free -m && df -h / && docker system df
     - `https://app.<DEMO_DOMAIN>/api/v1/tracking/PF400000000000000000000001` : colis seedé, suivi anonyme, mot-clé `trackingNumber`. Il traverse nginx du portail, la gateway, Tracking et PostgreSQL.
     - `https://auth.<DEMO_DOMAIN>/realms/parcelflow/.well-known/openid-configuration` : Keycloak et sa base.
 11. **Mesure.** Après une journée, relever `docker stats` et `df -h` (voir [Mémoire](#mémoire)) et les noter dans ce document.
+
+## Variantes d'hébergement
+
+Le compose, les scripts et la CI ne dépendent pas de l'hébergeur. Seules les étapes 1 à 3 de la [mise en place](#mise-en-place) changent. Prérequis communs : x86_64 (les images ne sont publiées qu'en `linux/amd64`), 8 Go de RAM, environ 40 Go de disque, Ubuntu LTS nu, sans panneau d'hébergement (Plesk, cPanel, etc.) qui occuperait les ports 80 et 443.
+
+### VPS IONOS ou Hostinger
+
+Même schéma que Hetzner : Cloudflare proxifie vers l'IP publique du VPS, et Traefik obtient ses certificats Let's Encrypt.
+
+1. **VPS.** Choisir une offre x86 de 8 Go avec l'image Ubuntu LTS standard, sans application préinstallée. Ajouter à la création la clé SSH publique générée par Dokploy, sinon la copier ensuite dans `/root/.ssh/authorized_keys`. Activer les sauvegardes ou les snapshots si l'offre en propose.
+2. **Pare-feu.** Utiliser le pare-feu du panneau de l'hébergeur (IONOS et Hostinger en proposent un pour leurs VPS) avec les mêmes règles que le Cloud Firewall Hetzner : 80 et 443 ouverts (idéalement limités aux [plages IP Cloudflare](https://www.cloudflare.com/ips/)), 22 limité à l'IP du serveur Dokploy et à l'IP d'administration. Si le panneau ne sait pas filtrer par IP source :
+   - `ufw` suffit pour le port 22, qui n'est pas publié par Docker ;
+   - pour 80 et 443, publiés par le Traefik de Dokploy, `ufw` est contourné : il faudrait filtrer dans la chaîne `DOCKER-USER` d'iptables. À défaut, laisser 80 et 443 ouverts à tous : seul Traefik écoute, et les routes de la démo sont de toute façon publiques. Le [tunnel Cloudflare](#serveur-maison) supprime ce besoin, et fonctionne aussi sur un VPS.
+3. **Dokploy et Cloudflare.** Étapes 2 et 3 inchangées. Si l'IP publique du VPS change (rare, mais possible après une migration chez certains hébergeurs), mettre à jour les 5 enregistrements A.
+
+### Serveur maison
+
+Une machine à domicile n'a en général ni IP fixe, ni ports ouverts (box, parfois CGNAT), et son IP ne doit pas être exposée. Le schéma change donc :
+
+- **Cloudflare Tunnel** au lieu d'enregistrements A : `cloudflared` ouvre une connexion sortante vers Cloudflare, aucun port n'est ouvert sur la box et l'IP du domicile reste cachée.
+- **Tailscale** (ou WireGuard) pour que l'instance Dokploy, et l'administrateur, joignent le SSH du serveur sans l'exposer.
+
+```mermaid
+flowchart LR
+    V[Visiteur] -- HTTPS --> CF[Cloudflare]
+    CF -- tunnel sortant --> CD[cloudflared<br/>hôte maison]
+    CD -- "https://localhost:443" --> TR[Traefik<br/>Dokploy]
+    D[Instance Dokploy] -- "SSH par Tailscale" --> H[Hôte maison]
+```
+
+1. **Machine.** PC ou mini-PC x86_64, 8 Go de RAM minimum, Ubuntu Server LTS, de préférence en Ethernet. Dans le BIOS, activer le redémarrage automatique après une coupure de courant. Désactiver la mise en veille. Vérifier que les conditions de l'abonnement Internet autorisent l'hébergement.
+2. **Accès SSH par Tailscale.** Installer Tailscale sur l'hôte maison et sur le serveur Dokploy, et les joindre au même tailnet. N'ouvrir aucun port sur la box. Dans Dokploy (étape 2), déclarer le serveur avec son **IP Tailscale** (`100.x.y.z`). Les commandes SSH de la section [Exploitation](#exploitation) passent aussi par cette IP.
+3. **Dokploy.** Étape 2 inchangée : *Setup Server* installe Docker et Traefik, qui publie 80 et 443 sur l'hôte. Ces ports ne sont joignables que depuis le réseau local, puisque la box ne les redirige pas.
+4. **Cloudflare Tunnel**, à la place de l'étape 3 :
+   - Dans Cloudflare Zero Trust (Networks, Tunnels), créer un tunnel géré à distance, puis installer `cloudflared` sur l'hôte comme service systemd, avec la commande fournie (`cloudflared service install <token>`). Il tourne sur l'hôte, hors du compose, et survit aux redéploiements.
+   - Ajouter 5 *Public Hostnames* (`app`, `ops`, `admin`, `api`, `auth`), tous vers le service `https://localhost:443`, avec l'option **No TLS Verify** activée. Cloudflare crée lui-même les enregistrements CNAME : ne pas créer d'enregistrements A.
+   - Ne pas viser `http://localhost:80` : le routeur `web` de Traefik redirige vers HTTPS, ce qui ferait boucler les requêtes venues du tunnel.
+   - Le challenge HTTP-01 de Let's Encrypt n'aboutit pas derrière le tunnel : Traefik sert son certificat par défaut, accepté grâce à *No TLS Verify*, et journalise des échecs ACME sans conséquence. Le lien entre Cloudflare et `cloudflared` reste chiffré et authentifié. Pour un certificat d'origine valide, charger un certificat Cloudflare Origin CA dans Traefik.
+   - Le mode SSL/TLS de la zone ne s'applique pas au tunnel. Désactiver le Bot Fight Mode : les appels des services vers `auth.` et `api.` sortent par l'IP publique du domicile, qui peut changer, et une règle WAF *Skip* par IP ne tiendrait pas.
+5. **Suite.** Étapes 4 à 11 inchangées. Les moniteurs UptimeRobot détectent aussi les coupures de courant ou d'Internet au domicile.
+
+Vérifications propres à cette variante : `ss -tlnp` ne montre que Traefik (80, 443), SSH et Tailscale ; depuis un réseau extérieur, l'IP publique du domicile ne répond sur aucun port ; après une coupure de courant, la machine redémarre et `cloudflared`, Tailscale et les conteneurs reviennent seuls.
 
 ## Exploitation
 
