@@ -1,6 +1,6 @@
 # Démo publique
 
-La démo publique fait tourner toute la plateforme ParcelFlow sur un VPS Hetzner dédié (8 Go de RAM). Le déploiement est piloté par l'instance Dokploy existante, qui gère ce VPS comme *Remote Server*, et le DNS passe par Cloudflare. Les fichiers sont dans `deploy/dokploy/`. Un autre VPS (IONOS, Hostinger) ou un serveur maison convient aussi : voir [Variantes d'hébergement](#variantes-dhébergement).
+La démo publique fait tourner toute la plateforme ParcelFlow sur un VPS Hetzner dédié (8 Go de RAM). Le déploiement est piloté par l'instance Dokploy existante, qui gère ce VPS comme *Remote Server*, et le DNS passe par Cloudflare. Les fichiers sont dans `deploy/dokploy/`. Un autre VPS (OVH, IONOS, Hostinger) ou un serveur maison convient aussi : voir [Variantes d'hébergement](#variantes-dhébergement). La démo tourne aujourd'hui sur un [VPS OVH](#vps-ovh).
 
 ## Architecture
 
@@ -101,7 +101,7 @@ free -m && df -h / && docker system df
 4. **GHCR.** Le dépôt et ses packages sont privés. Dans Dokploy (Registry), ajouter `ghcr.io` avec le nom d'utilisateur GitHub et un PAT classic limité à `read:packages`, puis tester. À défaut, exécuter `docker login ghcr.io` une fois sur le VPS.
 5. **Application Compose.**
    - Créer un projet, puis un service *Compose* de type Docker Compose, sur le serveur de la démo.
-   - Source **Git** : `git@github.com:Yvahajatiana/ShippingTracer.git`, branche `main`, clé SSH Dokploy ajoutée comme *deploy key* en lecture seule sur le dépôt.
+   - Source **Git** : `git@github.com:Yvahajatiana/ShippingTracer.git`, branche `main`. Générer dans Dokploy (Settings, SSH Keys) une clé **dédiée au dépôt**, distincte de celle qui pilote le serveur, et l'ajouter comme *deploy key* en lecture seule sur le dépôt. Une fuite de l'une ne donne ainsi pas accès à l'autre.
    - Compose Path : `./deploy/dokploy/docker-compose.yml`.
    - Ne rien déclarer dans Domains, ne pas activer *Isolated Deployments*, n'ajouter aucun File Mount, laisser les Watch Paths vides.
 6. **Variables.** Dans l'onglet Environment, saisir toutes les variables de `deploy/dokploy/.env.example` avec de vraies valeurs. `DEMO_USER_PASSWORD` est public, mais doit respecter la politique du realm et ne contenir ni `"` ni `\` : Keycloak le substitue tel quel dans le JSON du realm. Les autres secrets doivent être longs et aléatoires.
@@ -117,7 +117,7 @@ free -m && df -h / && docker system df
    0 3 * * * sh /etc/dokploy/compose/<appName>/code/deploy/dokploy/reset-demo.sh <appName> >> /var/log/parcelflow-reset.log 2>&1
    ```
 
-   `<appName>` est le nom d'application Dokploy, aussi nom du projet Compose (`docker compose ls`).
+   `<appName>` est le nom d'application Dokploy, aussi nom du projet Compose (`docker compose ls`). Le script n'a besoin que de l'accès à Docker et n'écrit que son verrou dans `${TMPDIR:-/tmp}` : un utilisateur non root du groupe `docker` suffit, mais sa crontab doit journaliser dans un fichier qu'il peut écrire, par exemple `$HOME/parcelflow-reset.log`, et non `/var/log` (voir [VPS OVH](#vps-ovh)).
 10. **Supervision externe.** Le monitoring Dokploy ne couvre pas les remote servers, et `/health/ready` n'est plus public (port de management). Créer deux moniteurs HTTP(S) UptimeRobot, toutes les 5 minutes :
     - `https://app.<DEMO_DOMAIN>/api/v1/tracking/PF400000000000000000000001` : colis seedé, suivi anonyme, mot-clé `trackingNumber`. Il traverse nginx du portail, la gateway, Tracking et PostgreSQL.
     - `https://auth.<DEMO_DOMAIN>/realms/parcelflow/.well-known/openid-configuration` : Keycloak et sa base.
@@ -136,6 +136,29 @@ Même schéma que Hetzner : Cloudflare proxifie vers l'IP publique du VPS, et Tr
    - `ufw` suffit pour le port 22, qui n'est pas publié par Docker ;
    - pour 80 et 443, publiés par le Traefik de Dokploy, `ufw` est contourné : il faudrait filtrer dans la chaîne `DOCKER-USER` d'iptables. À défaut, laisser 80 et 443 ouverts à tous : seul Traefik écoute, et les routes de la démo sont de toute façon publiques. Le [tunnel Cloudflare](#serveur-maison) supprime ce besoin, et fonctionne aussi sur un VPS.
 3. **Dokploy et Cloudflare.** Étapes 2 et 3 inchangées. Si l'IP publique du VPS change (rare, mais possible après une migration chez certains hébergeurs), mettre à jour les 5 enregistrements A.
+
+### VPS OVH
+
+Variante retenue pour la démo : un VPS-3 OVH (x86_64, 6 vCores, 12 Go de RAM, Ubuntu 26.04), ajouté comme *Remote Server* à l'instance Dokploy, qui tourne sur un autre serveur. Cloudflare proxifie toujours vers l'IP publique du VPS. Contrairement au schéma Hetzner, le pare-feu est sur l'hôte (UFW), et non chez l'hébergeur : l'Edge Network Firewall d'OVH n'est pas utilisé. Les 12 Go laissent une marge confortable au-dessus des plafonds cumulés (environ 5,4 Go), puisque seul Traefik s'y ajoute.
+
+1. **Utilisateur SSH.** Le login `root` est désactivé. Dokploy se connecte avec l'utilisateur `ubuntu` de l'image OVH (sudo sans mot de passe, membre du groupe `docker`) : le déclarer ainsi à l'étape 2. Dans la section [Exploitation](#exploitation), remplacer `root@<vps>` par `ubuntu@<vps>` ; `docker` s'utilise sans `sudo`.
+2. **Pare-feu UFW.**
+   - `ufw-docker` est appliqué : un port publié par Docker reste bloqué sans règle `ufw route allow`. Le compose ne publie aucun port (`ports:`) et ne doit pas en publier : seuls les conteneurs routés par les labels Traefik sont joignables.
+   - 80 et 443 (TCP, plus 443/UDP pour HTTP/3) ne sont ouverts qu'aux [plages IP Cloudflare](https://www.cloudflare.com/ips/), rafraîchies chaque semaine par un timer systemd. Les 5 enregistrements DNS **doivent donc être proxifiés** (nuage orange) : un enregistrement non proxifié pointerait vers un hôte injoignable. Le challenge HTTP-01 de Let's Encrypt passe lui aussi par Cloudflare sur le port 80, d'où « Always Use HTTPS » désactivé (étape 3).
+   - 22 : authentification par clé uniquement, limitation de débit UFW et fail2ban. L'IP du serveur Dokploy est en liste blanche, pour que fail2ban ne la bannisse pas. Le port n'est pas limité à l'IP d'administration, qui est dynamique.
+3. **Traefik et certificats.** *Setup Server* initialise Docker Swarm et Traefik, crée `dokploy-network`, le middleware `redirect-to-https@file` et le resolver `letsencrypt` (challenge HTTP sur l'entrypoint `web`).
+   - Avant le premier déploiement, remplacer l'adresse ACME par défaut (`test@localhost.com`) par une vraie adresse dans la configuration Traefik du serveur (`certificatesResolvers.letsencrypt.acme.email`), depuis Dokploy ou dans `/etc/dokploy/traefik/traefik.yml`, puis redémarrer Traefik.
+   - Au premier déploiement, Cloudflare peut répondre **526** quelques minutes : tant que Let's Encrypt n'a pas émis les certificats, Traefik sert son certificat auto-signé par défaut, refusé en Full (strict). Si l'erreur persiste, lire les logs du conteneur Traefik (échecs ACME).
+4. **Clé de déploiement.** Une clé SSH Dokploy dédiée sert de *deploy key* GitHub, distincte de celle qui pilote le serveur (étape 5).
+5. **Réinitialisation.** La tâche planifiée *Server* s'exécute en `ubuntu`. Le groupe `docker` suffit à `reset-demo.sh`, sans `sudo`. En crontab, utiliser celle de `ubuntu` (`crontab -e`, pas `sudo crontab -e`) avec un journal dans son répertoire :
+
+   ```cron
+   0 3 * * * sh /etc/dokploy/compose/<appName>/code/deploy/dokploy/reset-demo.sh <appName> >> /home/ubuntu/parcelflow-reset.log 2>&1
+   ```
+
+6. **Suite.** Étapes 4 à 11 inchangées. Le Bot Fight Mode doit rester désactivé, ou l'IP du VPS exclue des challenges, comme pour Hetzner.
+
+Vérifications propres à cette variante : `sudo ufw status verbose` n'autorise 80 et 443 que depuis les plages Cloudflare ; `ss -tlnp` ne montre que Traefik (80, 443) et SSH ; une requête directe vers l'IP du VPS, depuis un réseau extérieur, expire ; le certificat d'origine vu par `curl -vk --resolve app.<DEMO_DOMAIN>:443:127.0.0.1 https://app.<DEMO_DOMAIN>/` sur l'hôte est émis par Let's Encrypt.
 
 ### Serveur maison
 
