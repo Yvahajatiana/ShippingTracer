@@ -29,6 +29,123 @@ env:
   KUBERNETES_MAX_VERSION: 1.33.0
 
 jobs:
+  # Decides what the other jobs do. On a pull request, only the images whose inputs changed are
+  # built and scanned, and a documentation-only change skips compilation, tests and images.
+  # Pushes and manual runs build, scan and publish every image.
+  # The 8 <service>-migrations images are only needed by the Helm hooks: they are built when the
+  # repository variable KUBERNETES_DEPLOY is 'true' (docs/ci-cd.md).
+  changes:
+    name: Changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+      images: ${{ steps.scope.outputs.images }}
+    steps:
+      # The pull request file list comes from the GitHub API: no checkout needed.
+      # With some-with-excludes, a filter matches a file that matches one of its rules and none of
+      # its negated rules. Each image filter lists the files its Dockerfile copies, plus this workflow.
+      - name: Changed paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+              - '!.github/dependabot.yml'
+            dotnet: &dotnet
+              - .github/workflows/ci.yml
+              - .dockerignore
+              - global.json
+              - Directory.Build.props
+              - src/BuildingBlocks/**
+            migrations: &migrations
+              - *dotnet
+              - deploy/migrations/**
+            gateway: [*dotnet, 'src/Gateway/**']
+            customer: [*dotnet, 'src/Services/Customer/**']
+            shipment: [*dotnet, 'src/Services/Shipment/**']
+            tracking: [*dotnet, 'src/Services/Tracking/**']
+            warehouse: [*dotnet, 'src/Services/Warehouse/**']
+            delivery: [*dotnet, 'src/Services/Delivery/**']
+            billing: [*dotnet, 'src/Services/Billing/**']
+            notification: [*dotnet, 'src/Services/Notification/**']
+            reporting: [*dotnet, 'src/Services/Reporting/**']
+            portals: &portals
+              - .github/workflows/ci.yml
+              - frontends/**
+            customer-portal: *portals
+            operations-portal: *portals
+            admin-portal: *portals
+            rabbitmq: [.github/workflows/ci.yml, 'deploy/rabbitmq/**']
+            customer-migrations: [*migrations, 'src/Services/Customer/**']
+            shipment-migrations: [*migrations, 'src/Services/Shipment/**']
+            tracking-migrations: [*migrations, 'src/Services/Tracking/**']
+            warehouse-migrations: [*migrations, 'src/Services/Warehouse/**']
+            delivery-migrations: [*migrations, 'src/Services/Delivery/**']
+            billing-migrations: [*migrations, 'src/Services/Billing/**']
+            notification-migrations: [*migrations, 'src/Services/Notification/**']
+            reporting-migrations: [*migrations, 'src/Services/Reporting/**']
+      - name: Jobs and image matrix
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          CHANGED: ${{ steps.filter.outputs.changes || '[]' }}
+          CODE_CHANGED: ${{ steps.filter.outputs.code || 'false' }}
+          KUBERNETES_DEPLOY: ${{ vars.KUBERNETES_DEPLOY }}
+          IMAGES: |
+            [
+              { "name": "gateway", "context": ".", "dockerfile": "src/Gateway/ParcelFlow.Gateway/Dockerfile", "build-arg": "" },
+              { "name": "customer", "context": ".", "dockerfile": "src/Services/Customer/ParcelFlow.Customer.Api/Dockerfile", "build-arg": "" },
+              { "name": "shipment", "context": ".", "dockerfile": "src/Services/Shipment/ParcelFlow.Shipment.Api/Dockerfile", "build-arg": "" },
+              { "name": "tracking", "context": ".", "dockerfile": "src/Services/Tracking/ParcelFlow.Tracking.Api/Dockerfile", "build-arg": "" },
+              { "name": "warehouse", "context": ".", "dockerfile": "src/Services/Warehouse/ParcelFlow.Warehouse.Api/Dockerfile", "build-arg": "" },
+              { "name": "delivery", "context": ".", "dockerfile": "src/Services/Delivery/ParcelFlow.Delivery.Api/Dockerfile", "build-arg": "" },
+              { "name": "billing", "context": ".", "dockerfile": "src/Services/Billing/ParcelFlow.Billing.Api/Dockerfile", "build-arg": "" },
+              { "name": "notification", "context": ".", "dockerfile": "src/Services/Notification/ParcelFlow.Notification.Api/Dockerfile", "build-arg": "" },
+              { "name": "reporting", "context": ".", "dockerfile": "src/Services/Reporting/ParcelFlow.Reporting.Api/Dockerfile", "build-arg": "" },
+              { "name": "customer-portal", "context": "frontends", "dockerfile": "frontends/Dockerfile", "build-arg": "PORTAL=customer-portal" },
+              { "name": "operations-portal", "context": "frontends", "dockerfile": "frontends/Dockerfile", "build-arg": "PORTAL=operations-portal" },
+              { "name": "admin-portal", "context": "frontends", "dockerfile": "frontends/Dockerfile", "build-arg": "PORTAL=admin-portal" },
+              { "name": "rabbitmq", "context": "deploy/rabbitmq", "dockerfile": "deploy/rabbitmq/Dockerfile", "build-arg": "" },
+              { "name": "customer-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Customer" },
+              { "name": "shipment-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Shipment" },
+              { "name": "tracking-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Tracking" },
+              { "name": "warehouse-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Warehouse" },
+              { "name": "delivery-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Delivery" },
+              { "name": "billing-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Billing" },
+              { "name": "notification-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Notification" },
+              { "name": "reporting-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Reporting" }
+            ]
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == pull_request ]]; then
+            code="$CODE_CHANGED"
+            changed="$CHANGED"
+            # A documentation file under an image directory (frontends/README.md) builds nothing.
+            if [[ "$code" != true ]]; then changed='[]'; fi
+          else
+            code=true
+            changed=$(jq -c '[.[].name]' <<< "$IMAGES")
+          fi
+          images=$(jq -c --argjson changed "$changed" --arg k8s "$KUBERNETES_DEPLOY" '
+            [ .[] | select(.name as $name | $changed | index($name))
+                  | select(($k8s == "true") or (.name | endswith("-migrations") | not)) ]' <<< "$IMAGES")
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          {
+            echo "Code jobs: **$code**. Kubernetes migration images: **${KUBERNETES_DEPLOY:-false}**."
+            echo
+            echo "Images: $(jq -r 'if length == 0 then "none" else map("`" + .name + "`") | join(", ") end' <<< "$images")"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-24.04
@@ -44,6 +161,8 @@ jobs:
 
   build:
     name: Build, unit and contract tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -93,14 +212,20 @@ jobs:
           path: TestResults/*.trx
           if-no-files-found: ignore
 
+  # Two jobs of four services, balanced on their test durations: each job pays the .NET setup,
+  # the restore and the rounding to the minute once for about four minutes of tests.
   integration:
-    name: Integration tests (${{ matrix.service }})
+    name: Integration tests (${{ matrix.services }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        service: [Customer, Shipment, Tracking, Warehouse, Delivery, Billing, Notification, Reporting]
+        include:
+          - { group: 1, services: Notification Reporting Delivery Customer }
+          - { group: 2, services: Shipment Billing Tracking Warehouse }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -111,21 +236,36 @@ jobs:
           path: ${{ env.NUGET_PACKAGES }}
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
+      # Every service runs even when an earlier one fails; one TRX report per service.
       - name: Run Testcontainers integration tests
-        run: >
-          dotnet test tests/Services/${{ matrix.service }}/ParcelFlow.${{ matrix.service }}.IntegrationTests
-          --configuration Release
-          --logger "trx;LogFilePrefix=${{ matrix.service }}"
-          --results-directory TestResults
+        env:
+          SERVICES: ${{ matrix.services }}
+        run: |
+          set -uo pipefail
+          failed=""
+          for service in $SERVICES; do
+            echo "::group::$service"
+            dotnet test "tests/Services/$service/ParcelFlow.$service.IntegrationTests" \
+              --configuration Release \
+              --logger "trx;LogFilePrefix=$service" \
+              --results-directory TestResults || failed="$failed $service"
+            echo "::endgroup::"
+          done
+          if [[ -n "$failed" ]]; then
+            echo "::error::Integration tests failed:$failed"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: test-results-integration-${{ matrix.service }}
+          name: test-results-integration-${{ matrix.group }}
           path: TestResults/*.trx
           if-no-files-found: ignore
 
   gateway-smoke:
     name: Gateway Kestrel smoke test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -152,6 +292,8 @@ jobs:
   # frontends job already builds them.
   e2e:
     name: E2E business journey
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -187,6 +329,8 @@ jobs:
 
   frontends:
     name: Frontends (lint, tests, build)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
@@ -214,6 +358,8 @@ jobs:
 
   docker-lint:
     name: Dockerfile lint and compose validation
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -247,6 +393,8 @@ jobs:
 
   helm:
     name: Helm chart lint and schema validation
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -318,11 +466,43 @@ jobs:
             echo "::endgroup::"
           done
 
+  # Downloads the Trivy vulnerability database once, into the cache restored by trivy-action in
+  # every image job (same key and directory as trivy-action v0.36.0). Runs while the build job
+  # does; an image job that starts first downloads the database itself, as before.
+  trivy-db:
+    name: Trivy database
+    needs: changes
+    if: needs.changes.outputs.images != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Cache key
+        id: day
+        run: echo "day=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+      - name: Trivy cache
+        id: cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.cache/trivy
+          key: cache-trivy-${{ steps.day.outputs.day }}
+      # Same commit and Trivy version as the ones trivy-action v0.36.0 installs.
+      - name: Install Trivy
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        with:
+          version: v0.70.0
+          cache: true
+      - name: Download the vulnerability database
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: trivy image --download-db-only --cache-dir "$GITHUB_WORKSPACE/.cache/trivy"
+
   images:
     name: Image (${{ matrix.image.name }})
     # Publication also requires a clean secret scan and Dockerfile lint. Integration and smoke
-    # tests are enforced before the merge by branch protection, so they do not delay the builds.
-    needs: [secret-scan, build, frontends, docker-lint]
+    # tests are enforced before the merge by the CI OK check, so they do not delay the builds.
+    # The matrix comes from the changes job: every image on a push, the changed ones on a pull request.
+    needs: [changes, secret-scan, build, frontends, docker-lint]
+    if: needs.changes.outputs.images != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     # Permissions cannot depend on the event: packages:write is only used by the push steps,
@@ -335,29 +515,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - { name: gateway, context: ., dockerfile: src/Gateway/ParcelFlow.Gateway/Dockerfile, build-arg: '' }
-          - { name: customer, context: ., dockerfile: src/Services/Customer/ParcelFlow.Customer.Api/Dockerfile, build-arg: '' }
-          - { name: shipment, context: ., dockerfile: src/Services/Shipment/ParcelFlow.Shipment.Api/Dockerfile, build-arg: '' }
-          - { name: tracking, context: ., dockerfile: src/Services/Tracking/ParcelFlow.Tracking.Api/Dockerfile, build-arg: '' }
-          - { name: warehouse, context: ., dockerfile: src/Services/Warehouse/ParcelFlow.Warehouse.Api/Dockerfile, build-arg: '' }
-          - { name: delivery, context: ., dockerfile: src/Services/Delivery/ParcelFlow.Delivery.Api/Dockerfile, build-arg: '' }
-          - { name: billing, context: ., dockerfile: src/Services/Billing/ParcelFlow.Billing.Api/Dockerfile, build-arg: '' }
-          - { name: notification, context: ., dockerfile: src/Services/Notification/ParcelFlow.Notification.Api/Dockerfile, build-arg: '' }
-          - { name: reporting, context: ., dockerfile: src/Services/Reporting/ParcelFlow.Reporting.Api/Dockerfile, build-arg: '' }
-          - { name: customer-portal, context: frontends, dockerfile: frontends/Dockerfile, build-arg: PORTAL=customer-portal }
-          - { name: operations-portal, context: frontends, dockerfile: frontends/Dockerfile, build-arg: PORTAL=operations-portal }
-          - { name: admin-portal, context: frontends, dockerfile: frontends/Dockerfile, build-arg: PORTAL=admin-portal }
-          - { name: rabbitmq, context: deploy/rabbitmq, dockerfile: deploy/rabbitmq/Dockerfile, build-arg: '' }
-          # EF Core migration bundles run by the Helm hook Jobs (<prefix><service>-migrations).
-          - { name: customer-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Customer }
-          - { name: shipment-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Shipment }
-          - { name: tracking-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Tracking }
-          - { name: warehouse-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Warehouse }
-          - { name: delivery-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Delivery }
-          - { name: billing-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Billing }
-          - { name: notification-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Notification }
-          - { name: reporting-migrations, context: ., dockerfile: deploy/migrations/Dockerfile, build-arg: SERVICE=Reporting }
+        image: ${{ fromJSON(needs.changes.outputs.images) }}
     env:
       # Only branch pushes to this repository publish; pull requests and forks build and scan only.
       PUBLISH: ${{ github.event_name == 'push' && !github.event.repository.fork && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') }}
@@ -455,6 +613,28 @@ jobs:
       - name: Push to GHCR
         if: env.PUBLISH == 'true'
         run: docker push --all-tags "${{ steps.image.outputs.name }}"
+
+  # Single check to require in branch protection: it always reports, whatever the jobs skipped
+  # by the changes job (a skipped matrix never reports its Image (...) checks). It fails when a
+  # job it needs failed or was cancelled; skipped jobs are expected.
+  ci-ok:
+    name: CI OK
+    if: always()
+    needs: [changes, secret-scan, build, integration, gateway-smoke, e2e, frontends, docker-lint, helm, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check the needed jobs
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$RESULTS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<< "$RESULTS" > /dev/null; then
+            echo "::error::At least one CI job failed or was cancelled"
+            exit 1
+          fi
 
   # Continuous deployment of the images just published: develop to staging, main to production.
   # The environments carry the cluster credentials and the protection rules (reviewers on
