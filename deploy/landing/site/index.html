@@ -29,21 +29,21 @@
         <a class="card" href="https://app.__DEMO_DOMAIN__/">
           <span class="tag">Client</span>
           <h3>Portail client</h3>
-          <p>Créer un envoi, obtenir un devis, payer, télécharger l'étiquette et suivre ses colis.</p>
+          <p>Créer un envoi avec devis instantané, télécharger l'étiquette PDF, régler la facture, suivre ses colis et ses notifications.</p>
           <p class="login">Compte : <code>emma.martin</code></p>
           <span class="url">app.__DEMO_DOMAIN__ →</span>
         </a>
         <a class="card" href="https://ops.__DEMO_DOMAIN__/">
           <span class="tag">Opérateur</span>
           <h3>Portail opérations</h3>
-          <p>Scans d'entrée et de sortie en entrepôt, stock des centres de tri, tournées de livraison.</p>
+          <p>Scans d'entrée et de sortie, stock des entrepôts et centres de tri, tournées de livraison avec preuve (signature ou photo), indicateurs.</p>
           <p class="login">Compte : <code>chloe.leroy</code></p>
           <span class="url">ops.__DEMO_DOMAIN__ →</span>
         </a>
         <a class="card" href="https://admin.__DEMO_DOMAIN__/">
           <span class="tag">Administrateur</span>
           <h3>Portail administration</h3>
-          <p>Entreprises, tarifs, factures et avoirs, indicateurs de l'activité.</p>
+          <p>Entreprises et clients, tarifs, entrepôts et livreurs, factures et avoirs, notifications, indicateurs de l'activité.</p>
           <p class="login">Compte : <code>admin.parcelflow</code></p>
           <span class="url">admin.__DEMO_DOMAIN__ →</span>
         </a>
@@ -56,14 +56,16 @@
     <section aria-labelledby="scenario">
       <h2 id="scenario">Scénario conseillé</h2>
       <ol class="steps">
-        <li><strong>Client</strong> : connectez-vous avec <code>emma.martin</code>, créez un envoi, acceptez le devis et payez.</li>
-        <li><strong>Opérations</strong> : avec <code>chloe.leroy</code>, faites entrer le colis en entrepôt puis lancez la livraison.</li>
-        <li><strong>Suivi</strong> : revenez sur le portail client et suivez l'historique du colis en temps réel.</li>
-        <li><strong>Administration</strong> : avec <code>admin.parcelflow</code>, consultez la facture générée et les indicateurs.</li>
+        <li><strong>Client</strong> : connectez-vous avec <code>emma.martin</code>, créez un envoi (le devis s'affiche en direct), puis réglez sa facture dans les 30&nbsp;minutes.</li>
+        <li><strong>Entrepôt</strong> : sur le portail opérations, avec <code>chloe.leroy</code>, scannez le colis en entrée d'entrepôt, puis créez une tournée, affectez-lui un livreur et ajoutez le colis.</li>
+        <li><strong>Livraison</strong> : démarrer la tournée et livrer sont réservés au livreur affecté ou à l'administrateur. Reconnectez-vous au portail opérations avec <code>admin.parcelflow</code>, démarrez la tournée et confirmez la livraison.</li>
+        <li><strong>Suivi</strong> : revenez sur le portail client et consultez l'historique de suivi du colis (rechargez la page pour voir les nouvelles étapes).</li>
+        <li><strong>Administration</strong> : avec <code>admin.parcelflow</code>, consultez la facture de l'envoi (émise dès sa création), émettez si besoin un avoir, et suivez les indicateurs.</li>
       </ol>
       <p class="note">
-        Suivi public sans connexion, sur un colis de démonstration :
-        <a href="https://app.__DEMO_DOMAIN__/api/v1/tracking/PF400000000000000000000001"><code>PF400000000000000000000001</code></a>
+        Suivi public sans connexion, sur un colis de démonstration en transit :
+        <a href="https://app.__DEMO_DOMAIN__/track/PF400000000000000000000001"><code>PF400000000000000000000001</code></a>
+        (<a href="https://app.__DEMO_DOMAIN__/api/v1/tracking/PF400000000000000000000001">JSON</a>)
       </p>
     </section>
 
@@ -72,8 +74,8 @@
       <div class="grid compact">
         <div class="tile"><h3>8 services .NET 8</h3><p>Customer, Shipment, Tracking, Warehouse, Delivery, Billing, Notification, Reporting. Une base PostgreSQL par service.</p></div>
         <div class="tile"><h3>Messagerie</h3><p>RabbitMQ et MassTransit, saga de réservation et délai de paiement côté Shipment.</p></div>
-        <div class="tile"><h3>Gateway</h3><p>ASP.NET Core et YARP, validation JWT avec une audience par service, quotas.</p></div>
-        <div class="tile"><h3>Identité</h3><p>Keycloak, realm <code>parcelflow</code>, code + PKCE pour les portails, <code>client_credentials</code> entre services.</p></div>
+        <div class="tile"><h3>Gateway</h3><p>ASP.NET Core et YARP, validation JWT avec une audience par service, limitation de débit par IP et par utilisateur.</p></div>
+        <div class="tile"><h3>Identité</h3><p>Keycloak, realm <code>parcelflow</code>, code + PKCE pour les portails, <code>client_credentials</code> pour l'appel de Notification vers Shipment.</p></div>
         <div class="tile"><h3>Frontends</h3><p>Trois portails Angular servis par nginx, même origine que l'API (<code>/api/</code>).</p></div>
         <div class="tile"><h3>Hébergement</h3><p>Docker Compose déployé par Dokploy derrière Traefik et Cloudflare. Images publiées par la CI GitHub Actions.</p></div>
       </div>
@@ -88,7 +90,7 @@
       <ul>
         <li>Les comptes sont <strong>partagés</strong> entre tous les visiteurs : n'y saisissez aucune donnée réelle.</li>
         <li>La démo est <strong>remise à zéro chaque nuit</strong> (vers 3 h, heure de Paris).</li>
-        <li>Les paiements sont simulés : aucune carte n'est demandée ni débitée.</li>
+        <li>Les paiements sont simulés : aucune carte n'est demandée ni débitée, vous choisissez seulement si le paiement est accepté ou refusé.</li>
       </ul>
     </section>
   </main>
