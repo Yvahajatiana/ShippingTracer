@@ -468,7 +468,8 @@ jobs:
 
   # Downloads the Trivy vulnerability database once, into the cache restored by trivy-action in
   # every image job (same key and directory as trivy-action v0.36.0). Runs while the build job
-  # does; an image job that starts first downloads the database itself, as before.
+  # does, and the image jobs wait for it. It never fails: if the download fails, nothing is cached
+  # and every image job downloads the database itself, as before, so the scans still run.
   trivy-db:
     name: Trivy database
     needs: changes
@@ -487,21 +488,32 @@ jobs:
           key: cache-trivy-${{ steps.day.outputs.day }}
       # Same commit and Trivy version as the ones trivy-action v0.36.0 installs.
       - name: Install Trivy
+        id: install
         if: steps.cache.outputs.cache-hit != 'true'
+        continue-on-error: true
         uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
           version: v0.70.0
           cache: true
       - name: Download the vulnerability database
-        if: steps.cache.outputs.cache-hit != 'true'
+        id: download
+        if: steps.cache.outputs.cache-hit != 'true' && steps.install.outcome == 'success'
+        continue-on-error: true
         run: trivy image --download-db-only --cache-dir "$GITHUB_WORKSPACE/.cache/trivy"
+      # A partial database must not be saved under the daily key: without the directory, the cache
+      # post step saves nothing.
+      - name: Discard a failed download
+        if: steps.cache.outputs.cache-hit != 'true' && steps.download.outcome != 'success'
+        run: |
+          rm -rf "$GITHUB_WORKSPACE/.cache/trivy"
+          echo "::warning::Trivy database not prewarmed: each image job downloads it"
 
   images:
     name: Image (${{ matrix.image.name }})
     # Publication also requires a clean secret scan and Dockerfile lint. Integration and smoke
     # tests are enforced before the merge by the CI OK check, so they do not delay the builds.
     # The matrix comes from the changes job: every image on a push, the changed ones on a pull request.
-    needs: [changes, secret-scan, build, frontends, docker-lint]
+    needs: [changes, secret-scan, build, frontends, docker-lint, trivy-db]
     if: needs.changes.outputs.images != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -620,7 +632,7 @@ jobs:
   ci-ok:
     name: CI OK
     if: always()
-    needs: [changes, secret-scan, build, integration, gateway-smoke, e2e, frontends, docker-lint, helm, images]
+    needs: [changes, secret-scan, build, integration, gateway-smoke, e2e, frontends, docker-lint, helm, trivy-db, images]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
