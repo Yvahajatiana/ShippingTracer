@@ -1,7 +1,9 @@
 # ParcelFlow public demo, deployed by Dokploy on a dedicated VPS (see docs/demo.md).
-# Images are pulled from GHCR, never built. No host port is published: Traefik (run by Dokploy
-# on the server) routes the five public hosts through the labels below on `dokploy-network`.
+# Images are pulled from GHCR, never built (the landing page uses the stock nginx image). No host
+# port is published: Traefik (run by Dokploy on the server) routes the six public hosts through
+# the labels below on `dokploy-network`.
 # Every variable comes from the Dokploy environment (template: deploy/dokploy/.env.example).
+#   parcelflow.<DEMO_DOMAIN>  static landing page (deploy/landing)
 #   app.<DEMO_DOMAIN>    customer portal          ops.<DEMO_DOMAIN>   operations portal
 #   admin.<DEMO_DOMAIN>  administration portal    api.<DEMO_DOMAIN>   gateway
 #   auth.<DEMO_DOMAIN>   Keycloak, realm `parcelflow` only (no admin console, no master realm)
@@ -347,6 +349,36 @@ services:
       - traefik.http.routers.pf-demo-admin.tls.certresolver=letsencrypt
       - traefik.http.routers.pf-demo-admin.service=pf-demo-admin
       - traefik.http.services.pf-demo-admin.loadbalancer.server.port=8080
+
+  # Static landing page. No depends_on: it stays online during a redeployment or a reset.
+  # nginx renders the template (envsubst) and injects DEMO_DOMAIN into the HTML (sub_filter).
+  landing:
+    <<: *parcelflow-image
+    image: nginxinc/nginx-unprivileged:1.28-alpine
+    mem_limit: 32m
+    environment:
+      DEMO_DOMAIN: ${DEMO_DOMAIN:?set DEMO_DOMAIN}
+    volumes:
+      - ../landing/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ../landing/site:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [default, dokploy-network]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.routers.pf-demo-landing-web.rule=Host(`parcelflow.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-landing-web.entrypoints=web
+      - traefik.http.routers.pf-demo-landing-web.middlewares=redirect-to-https@file
+      - traefik.http.routers.pf-demo-landing-web.service=pf-demo-landing
+      - traefik.http.routers.pf-demo-landing.rule=Host(`parcelflow.${DEMO_DOMAIN}`)
+      - traefik.http.routers.pf-demo-landing.entrypoints=websecure
+      - traefik.http.routers.pf-demo-landing.tls.certresolver=letsencrypt
+      - traefik.http.routers.pf-demo-landing.service=pf-demo-landing
+      - traefik.http.services.pf-demo-landing.loadbalancer.server.port=8080
 
 volumes:
   postgres-data:
