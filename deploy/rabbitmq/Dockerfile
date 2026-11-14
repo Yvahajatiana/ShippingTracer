@@ -15,5 +15,9 @@ ADD --chown=rabbitmq:rabbitmq --chmod=0644 \
     /opt/rabbitmq/plugins/rabbitmq_delayed_message_exchange-3.13.0.ez
 
 # Alpine security updates not yet picked up by the upstream image, then the plugins.
-RUN apk upgrade --no-cache \
+# The CI passes the build day: a new value invalidates this cached layer at least once a day,
+# so fixes published after the last cache write are picked up.
+ARG SECURITY_UPDATES_DATE=unset
+RUN echo "Alpine security updates of ${SECURITY_UPDATES_DATE}" \
+ && apk upgrade --no-cache \
  && rabbitmq-plugins enable --offline rabbitmq_delayed_message_exchange rabbitmq_prometheus

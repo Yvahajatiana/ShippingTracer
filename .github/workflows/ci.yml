@@ -383,6 +383,10 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
       # Loaded into the local Docker engine so that Trivy scans, and docker push publishes, the
       # very same image. OCI labels come from the Dockerfile and the VERSION/REVISION build args.
+      # Build day: busts the cached `apk upgrade` layers of the Alpine images (Dockerfile ARG).
+      - name: Security updates date
+        id: date
+        run: echo "day=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Build
         id: build
         uses: docker/build-push-action@v7
@@ -397,6 +401,7 @@ jobs:
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
             REVISION=${{ github.sha }}
+            SECURITY_UPDATES_DATE=${{ steps.date.outputs.day }}
             ${{ matrix.image.build-arg }}
           cache-from: type=gha,scope=${{ matrix.image.name }}
           cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
