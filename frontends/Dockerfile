@@ -49,7 +49,11 @@ USER root
 
 # Apply Alpine security updates the upstream nginx image has not picked up yet (e.g. brotli-libs),
 # then drop the stock site and welcome page; the portal ships its own configuration.
-RUN apk upgrade --no-cache \
+# The CI passes the build day: a new value invalidates this cached layer at least once a day,
+# so fixes published after the last cache write are picked up.
+ARG SECURITY_UPDATES_DATE=unset
+RUN echo "Alpine security updates of ${SECURITY_UPDATES_DATE}" \
+ && apk upgrade --no-cache \
  && rm -f /etc/nginx/conf.d/default.conf \
  && rm -rf /usr/share/nginx/html/*
 
