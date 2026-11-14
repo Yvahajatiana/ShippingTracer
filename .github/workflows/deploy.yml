@@ -9,6 +9,8 @@ name: Deploy
 #   variable KUBE_CONTEXT   optional kubeconfig context, its current context otherwise
 #   variable HELM_NAMESPACE optional, defaults to parcelflow (the namespace must already exist)
 #   variable HELM_RELEASE   optional, defaults to parcelflow
+# Repository variable KUBERNETES_DEPLOY=true: ci.yml then publishes the <service>-migrations
+# images run by the Helm hooks. A configured environment without it fails instead of deploying.
 
 on:
   workflow_call:
@@ -56,6 +58,7 @@ jobs:
       KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
       HELM_VALUES: ${{ secrets.HELM_VALUES }}
       KUBE_CONTEXT: ${{ vars.KUBE_CONTEXT }}
+      KUBERNETES_DEPLOY: ${{ vars.KUBERNETES_DEPLOY }}
       NAMESPACE: ${{ vars.HELM_NAMESPACE || 'parcelflow' }}
       RELEASE: ${{ vars.HELM_RELEASE || 'parcelflow' }}
       INPUT_TAG: ${{ inputs.image-tag }}
@@ -84,6 +87,11 @@ jobs:
             echo "::notice::Environment '$TARGET' has no KUBECONFIG / HELM_VALUES secret: deployment skipped"
             echo "Deployment to **$TARGET** skipped: the environment has no \`KUBECONFIG\` / \`HELM_VALUES\` secret." >> "$GITHUB_STEP_SUMMARY"
             echo "configured=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$KUBERNETES_DEPLOY" != true ]]; then
+            # The Helm migration hooks pull <service>-migrations images, which ci.yml only publishes
+            # when the repository variable KUBERNETES_DEPLOY is 'true'.
+            echo "::error::Environment '$TARGET' is configured but the repository variable KUBERNETES_DEPLOY is not 'true': the migration images are not published"
+            exit 1
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
