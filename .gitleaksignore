@@ -1,0 +1,4 @@
+# Reviewed false positives, by gitleaks fingerprint (commit:file:rule:line). Keep each entry justified.
+# replay-error-queue.sh: the broker password read from the container into a shell variable, not a
+# literal secret; the variable was renamed in the next commit.
+ca1d6b0ca1345c73554952a4471d22768f7f5d2b:deploy/rabbitmq/replay-error-queue.sh:connection-string-password:68

@@ -14,10 +14,12 @@ ADD --chown=rabbitmq:rabbitmq --chmod=0644 \
     https://github.com/rabbitmq/rabbitmq-delayed-message-exchange/releases/download/v3.13.0/rabbitmq_delayed_message_exchange-3.13.0.ez \
     /opt/rabbitmq/plugins/rabbitmq_delayed_message_exchange-3.13.0.ez
 
-# Alpine security updates not yet picked up by the upstream image, then the plugins.
+# Alpine security updates not yet picked up by the upstream image, then the plugins. The shovel
+# plugins let deploy/rabbitmq/replay-error-queue.sh move failed messages back to their queue.
 # The CI passes the build day: a new value invalidates this cached layer at least once a day,
 # so fixes published after the last cache write are picked up.
 ARG SECURITY_UPDATES_DATE=unset
 RUN echo "Alpine security updates of ${SECURITY_UPDATES_DATE}" \
  && apk upgrade --no-cache \
- && rabbitmq-plugins enable --offline rabbitmq_delayed_message_exchange rabbitmq_prometheus
+ && rabbitmq-plugins enable --offline rabbitmq_delayed_message_exchange rabbitmq_prometheus \
+    rabbitmq_shovel rabbitmq_shovel_management
