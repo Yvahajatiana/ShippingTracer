@@ -161,6 +161,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
         var resolver = new FixedRecipientResolver(); await using var provider = ConsumerTestHost.Create(infrastructure, resolver); await provider.InitializeNotificationDatabaseAsync();
         var conflictFaults = new ConcurrentBag<Fault<ShipmentCreated>>();
         var statusFaults = new ConcurrentBag<Fault<TrackingStatusChanged>>();
+        var paymentFaults = new ConcurrentBag<Fault<PaymentCompleted>>();
         var observer = Bus.Factory.CreateUsingRabbitMq(rabbit =>
         {
             rabbit.Host(infrastructure.RabbitMq.Hostname, infrastructure.RabbitMq.GetMappedPublicPort(5672), "/", host => { host.Username("rabbitmq"); host.Password("rabbitmq"); });
@@ -169,6 +170,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
                 endpoint.AutoDelete = true;
                 endpoint.Handler<Fault<ShipmentCreated>>(context => { conflictFaults.Add(context.Message); return Task.CompletedTask; });
                 endpoint.Handler<Fault<TrackingStatusChanged>>(context => { statusFaults.Add(context.Message); return Task.CompletedTask; });
+                endpoint.Handler<Fault<PaymentCompleted>>(context => { paymentFaults.Add(context.Message); return Task.CompletedTask; });
             });
         });
         var bus = provider.GetRequiredService<IBusControl>(); await observer.StartAsync(); await bus.StartAsync();
@@ -182,7 +184,11 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             var invalidStatusId = Guid.NewGuid();
             await bus.Publish(new TrackingStatusChanged(invalidStatusId, original.ShipmentId, original.OccurredAtUtc, original.ShipmentId,
                 FixedRecipientResolver.Tracking, (TrackingStatus)999, null, Guid.NewGuid()));
-            await ConsumerTestHost.Until(() => Task.FromResult(conflictFaults.Any(x => x.Message.EventId == original.EventId) && statusFaults.Any(x => x.Message.EventId == invalidStatusId)));
+            // Invalid metadata: rejected by the validator, with no contact lookup on any of the retries.
+            var invalidPaymentId = Guid.NewGuid();
+            await bus.Publish(new PaymentCompleted(invalidPaymentId, original.ShipmentId, original.OccurredAtUtc, original.ShipmentId, 10m, "XXX"));
+            await ConsumerTestHost.Until(() => Task.FromResult(conflictFaults.Any(x => x.Message.EventId == original.EventId) && statusFaults.Any(x => x.Message.EventId == invalidStatusId)
+                && paymentFaults.Any(x => x.Message.EventId == invalidPaymentId)));
             using var read = provider.CreateScope(); var db = read.ServiceProvider.GetRequiredService<NotificationDbContext>();
             (await db.Messages.CountAsync(x => x.SourceEventId == original.EventId)).Should().Be(2);
             (await db.Events.AnyAsync(x => x.EventId == invalidStatusId)).Should().BeFalse(); resolver.Calls.Should().Be(1);
