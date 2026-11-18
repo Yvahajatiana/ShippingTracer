@@ -312,6 +312,26 @@ Usage: include "parcelflow.serviceEnv" (dict "root" $ "name" "notification" "ser
 - name: ShipmentService__BaseUrl
   value: {{ include "parcelflow.shipmentBaseUrl" (dict "root" $root "service" $svc) | quote }}
 {{- end }}
+{{- if $svc.proofEncryption }}
+{{ include "parcelflow.secretEnv" (dict "root" $root "name" "DeliveryProofs__EncryptionKey" "key" "delivery-proof-key") }}
+{{- if $svc.proofPreviousKeys }}
+{{ include "parcelflow.secretEnv" (dict "root" $root "name" "DeliveryProofs__PreviousEncryptionKeys" "key" "delivery-proof-previous-keys") }}
+{{- end }}
+{{- end }}
+{{- if $svc.proofRetentionDays }}
+- name: DeliveryProofs__RetentionDays
+  value: {{ $svc.proofRetentionDays | toString | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+True when a service reads the delivery-proof-previous-keys secret key (key rotation in progress).
+Usage: include "parcelflow.proofPreviousKeys" $
+*/}}
+{{- define "parcelflow.proofPreviousKeys" -}}
+{{- range $_, $svc := .Values.services -}}
+{{- if and $svc.proofEncryption $svc.proofPreviousKeys -}}true{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

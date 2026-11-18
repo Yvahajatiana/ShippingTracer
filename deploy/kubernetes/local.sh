@@ -43,8 +43,10 @@ delete_namespace=false
 stop_cluster=false
 
 # Chart secret key -> docker compose .env variable.
-secret_keys=(postgres-password rabbitmq-password keycloak-admin-password notification-client-secret demo-user-password)
-secret_vars=(POSTGRES_PASSWORD RABBITMQ_PASSWORD KEYCLOAK_ADMIN_PASSWORD NOTIFICATION_CLIENT_SECRET DEMO_USER_PASSWORD)
+secret_keys=(postgres-password rabbitmq-password keycloak-admin-password notification-client-secret
+  delivery-proof-key demo-user-password)
+secret_vars=(POSTGRES_PASSWORD RABBITMQ_PASSWORD KEYCLOAK_ADMIN_PASSWORD NOTIFICATION_CLIENT_SECRET
+  DELIVERY_PROOF_KEY DEMO_USER_PASSWORD)
 
 # The 13 images built by docker compose (parcelflow/<name>:<tag>).
 images=(customer shipment tracking warehouse delivery billing notification reporting

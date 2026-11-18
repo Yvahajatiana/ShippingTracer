@@ -54,6 +54,11 @@ rabbitmq:
 #   postgres-password            PostgreSQL password of database.username
 #   rabbitmq-password            RabbitMQ password of rabbitmq.username
 #   notification-client-secret   secret of the confidential Keycloak client notification-service
+#   delivery-proof-key           AES-256-GCM key of the delivery proofs: base64 of exactly 32 random
+#                                bytes (openssl rand -base64 32); the Delivery service refuses to start
+#                                without it, and changing it makes stored proofs unreadable
+#   delivery-proof-previous-keys optional, comma-separated former keys still accepted for decryption
+#                                during a rotation; read only when services.delivery.proofPreviousKeys
 #   redis-password               optional, see redis.passwordFromSecret
 #   keycloak-admin-password      bundled development Keycloak only
 #   demo-user-password           bundled development Keycloak only (realm demo accounts)
@@ -67,6 +72,7 @@ secrets:
   #  postgres-password: ""
   #  rabbitmq-password: ""
   #  notification-client-secret: ""
+  #  delivery-proof-key: ""
 
 # External Secrets Operator: renders an ExternalSecret that materialises the Secret above
 # (named after parcelflow.secretName) from an external store. Requires the ESO CRDs.
@@ -81,6 +87,7 @@ externalSecrets:
   #  postgres-password: { key: parcelflow/postgres, property: password }
   #  rabbitmq-password: { key: parcelflow/rabbitmq, property: password }
   #  notification-client-secret: { key: parcelflow/keycloak, property: notification-client-secret }
+  #  delivery-proof-key: { key: parcelflow/delivery, property: proof-key }
 
 serviceAccount:
   create: true
@@ -125,6 +132,16 @@ services:
   delivery:
     database: parcelflow_delivery
     connectionString: DeliveryDatabase
+    # Encryption at rest of the delivery proofs (recipient name, signature, photo): renders
+    # DeliveryProofs__EncryptionKey from the required "delivery-proof-key" secret key.
+    proofEncryption: true
+    # Key rotation: when true, also renders DeliveryProofs__PreviousEncryptionKeys from the
+    # "delivery-proof-previous-keys" secret key (then required). Keep the former key there until
+    # no stored proof uses it anymore.
+    proofPreviousKeys: false
+    # Optional retention of the delivery proofs in days (DeliveryProofs__RetentionDays). Empty: the
+    # service default (90 days).
+    proofRetentionDays: ""
   billing:
     database: parcelflow_billing
     connectionString: BillingDatabase
