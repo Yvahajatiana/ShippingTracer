@@ -1,0 +1,48 @@
+#!/bin/sh
+# Restores databases from a snapshot written by parcelflow-backup. Called by
+# deploy/dokploy/restore-demo.sh once the applications are stopped; do not run it on a live stack.
+#
+# Usage: parcelflow-restore <snapshot | latest> [database...]
+#   Without databases, every dump of the snapshot is restored. Each database is dropped,
+#   recreated and restored in one go; the checksums are verified first.
+set -eu
+
+root=/backups
+log() { printf '%s parcelflow-restore: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+fail() {
+  log "ERROR: $*" >&2
+  exit 1
+}
+
+[ $# -ge 1 ] || { echo "Usage: $0 <snapshot | latest> [database...]" >&2; exit 2; }
+snapshot=$1
+shift
+if [ "$snapshot" = latest ]; then
+  snapshot=$(find "$root" -mindepth 1 -maxdepth 1 -type d -name '????-??-??T??????Z' -exec basename {} \; | sort | tail -n 1)
+  [ -n "$snapshot" ] || fail "no snapshot in $root."
+fi
+case "$snapshot" in
+  ????-??-??T??????Z) ;;
+  *) fail "invalid snapshot name '$snapshot'." ;;
+esac
+dir="$root/$snapshot"
+[ -d "$dir" ] || fail "snapshot $snapshot does not exist."
+(cd "$dir" && sha256sum -c -s SHA256SUMS) || fail "checksums of $snapshot do not match."
+
+if [ $# -eq 0 ]; then
+  set -- $(cd "$dir" && ls ./*.dump | sed 's|^\./||; s|\.dump$||')
+fi
+for database in "$@"; do
+  case "$database" in
+    *[!a-z0-9_]* | '') fail "invalid database name '$database'." ;;
+  esac
+  [ -f "$dir/$database.dump" ] || fail "no dump of $database in $snapshot."
+done
+
+log "restoring $# database(s) from $snapshot"
+for database in "$@"; do
+  psql -q -v ON_ERROR_STOP=1 --dbname postgres \
+    -c "DROP DATABASE IF EXISTS \"$database\" WITH (FORCE);" -c "CREATE DATABASE \"$database\" OWNER \"$PGUSER\";"
+  pg_restore --exit-on-error --no-owner --no-privileges --role "$PGUSER" --dbname "$database" "$dir/$database.dump"
+  log "restored $database"
+done

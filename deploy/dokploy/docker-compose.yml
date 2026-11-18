@@ -111,6 +111,26 @@ services:
       timeout: 10s
       retries: 30
 
+  # Daily logical backups (deploy/pg-backup): pg_dump of the eight service databases and Keycloak to
+  # the backups volume, kept BACKUP_RETENTION_DAYS days. BACKUP_TIME is UTC and must come before the
+  # nightly reset (03:00, server time) so that a snapshot holds the day's data.
+  # Restore: deploy/dokploy/restore-demo.sh.
+  backup:
+    <<: *parcelflow-image
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-backup:${PARCELFLOW_TAG:-latest}
+    mem_limit: 128m
+    environment:
+      PGHOST: postgres
+      PGUSER: parcelflow
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      BACKUP_TIME: ${BACKUP_TIME:-01:30}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   keycloak:
     image: quay.io/keycloak/keycloak:${KEYCLOAK_TAG:-26.8.1}
     restart: unless-stopped
@@ -385,6 +405,7 @@ services:
 volumes:
   postgres-data:
   rabbitmq-data:
+  backups:
 
 # Created by Dokploy's "Setup Server"; Traefik watches the containers attached to it.
 networks:

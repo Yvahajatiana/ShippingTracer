@@ -7,6 +7,7 @@
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.template text eol=lf
+deploy/pg-backup/parcelflow-* text eol=lf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
