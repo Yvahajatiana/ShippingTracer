@@ -237,7 +237,8 @@
       "signatureAlt": "Signature du réceptionnaire",
       "photoAlt": "Photo de livraison",
       "imageError": "Une image de preuve n'a pas pu être chargée.",
-      "noImage": "Aucune image enregistrée pour cette livraison."
+      "noImage": "Aucune image enregistrée pour cette livraison.",
+      "purged": "Nom du destinataire et images supprimés le {{date}}, au terme de la durée de conservation."
     }
   },
   "drivers": {

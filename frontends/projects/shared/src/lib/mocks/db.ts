@@ -454,6 +454,7 @@ export function createDb(): MockDb {
       failureReason: null,
       hasSignature: false,
       hasPhoto: false,
+      proofsPurgedAtUtc: null,
     },
     {
       operationId: id(),
@@ -466,6 +467,7 @@ export function createDb(): MockDb {
       failureReason: 'RecipientAbsent',
       hasSignature: false,
       hasPhoto: false,
+      proofsPurgedAtUtc: null,
     },
   ];
 
