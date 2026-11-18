@@ -264,7 +264,51 @@ public sealed class GatewayTests
             .SelectMany(value => value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
         exposed.Should().Contain(value => value.Equals("Location", StringComparison.OrdinalIgnoreCase))
             .And.Contain(value => value.Equals("Content-Disposition", StringComparison.OrdinalIgnoreCase))
-            .And.Contain(value => value.Equals("Retry-After", StringComparison.OrdinalIgnoreCase));
+            .And.Contain(value => value.Equals("Retry-After", StringComparison.OrdinalIgnoreCase))
+            .And.Contain(value => value.Equals("X-Correlation-Id", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("1f0a2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", true)]
+    [InlineData("not-a-guid", false)]
+    [InlineData("00000000-0000-0000-0000-000000000000", false)]
+    [InlineData("1f0a2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b,2f0a2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b", false)]
+    public async Task Correlation_id_is_generated_when_missing_or_invalid_and_shared_with_the_service(string? incoming, bool kept)
+    {
+        var forwarded = new List<string>();
+        await using var upstream = await Upstream.StartAsync(context =>
+        {
+            lock (forwarded) forwarded.AddRange(context.Request.Headers["X-Correlation-Id"].Select(value => value!));
+            return context.Response.WriteAsync("ok");
+        });
+        await using var factory = new GatewayFactory(upstream.Url);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/tracking/PF123");
+        if (incoming is not null) request.Headers.TryAddWithoutValidation("X-Correlation-Id", incoming);
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var returned = response.Headers.GetValues("X-Correlation-Id").Should().ContainSingle().Subject;
+        Guid.TryParse(returned, out var id).Should().BeTrue(); id.Should().NotBe(Guid.Empty);
+        forwarded.Should().Equal(returned);
+        if (kept) returned.Should().Be(incoming);
+    }
+
+    [Fact]
+    public async Task Correlation_id_is_returned_on_gateway_errors_and_rate_limits()
+    {
+        await using var factory = new GatewayFactory("http://127.0.0.1:1", new() { ["Gateway:PublicPermitLimit"] = "1" });
+        using var client = factory.CreateClient();
+        using var unauthorized = await client.GetAsync("/api/v1/customers");
+        unauthorized.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        unauthorized.Headers.Contains("X-Correlation-Id").Should().BeTrue();
+        using var unavailable = await client.GetAsync("/api/v1/tracking/PF123");
+        unavailable.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        unavailable.Headers.Contains("X-Correlation-Id").Should().BeTrue();
+        using var limited = await client.GetAsync("/api/v1/tracking/PF123");
+        limited.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+        limited.Headers.Contains("X-Correlation-Id").Should().BeTrue();
     }
 
     [Fact]

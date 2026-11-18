@@ -5,6 +5,7 @@ import { once } from 'node:events';
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 let cancelledUpstream = false;
+let forwardedCorrelation;
 const upstream = http.createServer((req, res) => {
   req.on('error', () => {});
   res.on('error', () => {});
@@ -18,6 +19,7 @@ const upstream = http.createServer((req, res) => {
     res.end(Buffer.alloc(65536, 42));
     return;
   }
+  forwardedCorrelation = req.headers['x-correlation-id'];
   req.resume();
   req.on('end', () => res.end('upstream'));
 });
@@ -42,7 +44,7 @@ const request = (path, chunks = null) => new Promise((resolve, reject) => {
   const req = http.request({ host: '127.0.0.1', port, path, method: 'GET', headers: chunks ? { 'Transfer-Encoding': 'chunked' } : {} }, res => {
     const bytes = [];
     res.on('data', chunk => bytes.push(chunk));
-    res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], bytes: Buffer.concat(bytes) }));
+    res.on('end', () => resolve({ status: res.statusCode, type: res.headers['content-type'], correlation: res.headers['x-correlation-id'], bytes: Buffer.concat(bytes) }));
   });
   req.on('error', reject);
   if (chunks) for (const chunk of chunks) req.write(chunk);
@@ -69,6 +71,11 @@ try {
   const malformed = await rawStatus('invalid-size\r\n');
   if (!malformed.startsWith('HTTP/1.1 400 ') || !malformed.toLowerCase().includes('application/problem+json'))
     throw new Error(`Malformed framing expected JSON400, got ${malformed.slice(0, 200)}`);
+  if (!/^x-correlation-id: [0-9a-f-]{36}\r$/im.test(malformed))
+    throw new Error(`Malformed framing response has no correlation id: ${malformed.slice(0, 300)}`);
+  const correlated = await request('/api/v1/tracking/correlated');
+  if (correlated.status !== 200 || !/^[0-9a-f-]{36}$/.test(correlated.correlation ?? '') || forwardedCorrelation !== correlated.correlation)
+    throw new Error(`Correlation id expected on the response and upstream, got ${correlated.correlation} / ${forwardedCorrelation}`);
   const slow = await rawStatus('100\r\na');
   if (!slow.startsWith('HTTP/1.1 408 ') || !slow.toLowerCase().includes('application/problem+json'))
     throw new Error(`Slow body expected JSON408, got ${slow.slice(0, 200)}`);
