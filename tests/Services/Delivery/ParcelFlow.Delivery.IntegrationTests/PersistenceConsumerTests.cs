@@ -20,7 +20,7 @@ namespace ParcelFlow.Delivery.IntegrationTests;
 [Collection(InfrastructureCollection.Name)]
 public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructure)
 {
-    private DeliveryDbContext CreateContext() => new(new DbContextOptionsBuilder<DeliveryDbContext>().UseNpgsql(infrastructure.Postgres.GetConnectionString()).Options);
+    private DeliveryDbContext CreateContext() => new(new DbContextOptionsBuilder<DeliveryDbContext>().UseNpgsql(infrastructure.Postgres.GetConnectionString()).Options, TestProofKeys.Protector);
     private sealed class Actor : IDeliveryActor { public string Subject => "delivery-test-admin"; public bool IsAdmin => true; }
     private IHost CreateHost() => Host.CreateDefaultBuilder().ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
     {
@@ -28,7 +28,8 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
         ["ConnectionStrings:Redis"] = infrastructure.Redis.GetConnectionString(),
         ["RabbitMq:Host"] = infrastructure.RabbitMq.Hostname,
         ["RabbitMq:Port"] = infrastructure.RabbitMq.GetMappedPublicPort(5672).ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ["RabbitMq:Username"] = "rabbitmq", ["RabbitMq:Password"] = "rabbitmq"
+        ["RabbitMq:Username"] = "rabbitmq", ["RabbitMq:Password"] = "rabbitmq",
+        ["DeliveryProofs:EncryptionKey"] = TestProofKeys.EncryptionKey
     })).ConfigureServices((context, services) =>
     {
         services.AddDeliveryApplication().AddDeliveryInfrastructure(context.Configuration);

@@ -329,7 +329,8 @@ public sealed class DeliveryApiTests(InfrastructureFixture infrastructure)
                     ["RabbitMq:Username"] = "rabbitmq",
                     ["RabbitMq:Password"] = "rabbitmq",
                     ["Database:Initialize"] = "false",
-                    ["Database:SeedDemoData"] = "false"
+                    ["Database:SeedDemoData"] = "false",
+                    ["DeliveryProofs:EncryptionKey"] = TestProofKeys.EncryptionKey
                 }));
             builder.ConfigureServices(services => services.Configure<JwtBearerOptions>(
                 JwtBearerDefaults.AuthenticationScheme, options =>
