@@ -159,6 +159,28 @@ public sealed class ProofRetentionTests(InfrastructureFixture infrastructure)
     }
 
     [Fact]
+    public async Task Receipt_reads_no_image_bytes_and_image_reads_load_one_column()
+    {
+        await using (var setup = CreateContext()) await setup.Database.MigrateAsync();
+        var sql = new List<string>();
+        await using var database = new DeliveryDbContext(new DbContextOptionsBuilder<DeliveryDbContext>().UseNpgsql(infrastructure.Postgres.GetConnectionString())
+            .LogTo(message => { lock (sql) sql.Add(message); }, [Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.CommandExecuted]).Options, TestProofKeys.Protector);
+        var attempt = await AddAttemptAsync(database, DateTimeOffset.UtcNow);
+        var store = new DeliveryStore(database, Polly.ResiliencePipeline.Empty);
+        sql.Clear();
+
+        var receipt = await store.FindAttemptReceiptByStopAsync(attempt.RouteId, attempt.ShipmentId, default);
+
+        receipt.Should().BeEquivalentTo(new { attempt.OperationId, RecipientName = "Marie Dupont", HasSignature = true, HasPhoto = true, ProofsPurgedAtUtc = (DateTimeOffset?)null });
+        // The image columns only appear in NULL tests: their bytes are never transferred.
+        sql.Should().ContainSingle().Which.Should().NotMatchRegex(@"""(SignaturePng|Photo)""(?!\s+IS NOT NULL)");
+        sql.Clear();
+        (await store.FindProofImageAsync(attempt.RouteId, attempt.ShipmentId, ProofImageKind.Photo, default))!.Content.Should().Equal(PersistenceTests.Png());
+        sql.Should().ContainSingle().Which.Should().NotContain("\"SignaturePng\"");
+        (await store.FindProofImageAsync(Guid.NewGuid(), attempt.ShipmentId, ProofImageKind.Photo, default)).Should().BeNull();
+    }
+
+    [Fact]
     public async Task Maintenance_encrypts_proofs_written_before_encryption()
     {
         await using var database = CreateContext(); await database.Database.MigrateAsync();

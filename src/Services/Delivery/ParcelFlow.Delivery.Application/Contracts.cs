@@ -14,7 +14,10 @@ public interface IDeliveryStore
     Task<DeliveryParcel?> FindParcelAsync(Guid id, CancellationToken cancellationToken);
     Task<DeliveryDriver?> FindDriverAsync(string subject, CancellationToken cancellationToken);
     Task<DeliveryAttempt?> FindAttemptAsync(Guid operationId, CancellationToken cancellationToken);
-    Task<DeliveryAttempt?> FindAttemptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken cancellationToken);
+    // Projections: the receipt only needs to know whether images exist, and an image read loads one column.
+    Task<AttemptDto?> FindAttemptReceiptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken cancellationToken);
+    /// <summary>Null when the stop has no attempt; an empty image when the attempt has no such proof.</summary>
+    Task<ProofImageDto?> FindProofImageAsync(Guid routeId, Guid shipmentId, ProofImageKind kind, CancellationToken cancellationToken);
     Task<bool> HasOpenRoutesAsync(string subject, CancellationToken cancellationToken);
     void AddDriver(DeliveryDriver driver);
     void AddRoute(DeliveryRoute route);

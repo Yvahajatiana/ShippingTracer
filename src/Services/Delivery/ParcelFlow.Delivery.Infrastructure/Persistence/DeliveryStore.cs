@@ -23,7 +23,20 @@ public sealed class DeliveryStore(DeliveryDbContext database, ResiliencePipeline
     public Task<DeliveryParcel?> FindParcelAsync(Guid id, CancellationToken token) => Read(ct => Query<DeliveryParcel>().SingleOrDefaultAsync(x => x.ShipmentId == id, ct), token);
     public Task<DeliveryDriver?> FindDriverAsync(string subject, CancellationToken token) => Read(ct => Query<DeliveryDriver>().SingleOrDefaultAsync(x => x.Subject == subject, ct), token);
     public Task<DeliveryAttempt?> FindAttemptAsync(Guid operationId, CancellationToken token) => Read(ct => database.Attempts.AsNoTracking().SingleOrDefaultAsync(x => x.OperationId == operationId, ct), token);
-    public Task<DeliveryAttempt?> FindAttemptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken token) => Read(ct => database.Attempts.AsNoTracking().SingleOrDefaultAsync(x => x.RouteId == routeId && x.ShipmentId == shipmentId, ct), token);
+    // The image columns are only tested for NULL in SQL: up to ~7 MiB of proofs are never read for a receipt.
+    public Task<AttemptDto?> FindAttemptReceiptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken token) => Read(ct => database.Attempts.AsNoTracking()
+        .Where(x => x.RouteId == routeId && x.ShipmentId == shipmentId)
+        .Select(x => new AttemptDto(x.OperationId, x.RouteId, x.ShipmentId, x.Outcome, x.OccurredAtUtc, x.ActorSubject, x.RecipientName, x.FailureReason,
+            x.SignaturePng != null, x.Photo != null, x.ProofsPurgedAtUtc))
+        .SingleOrDefaultAsync(ct), token);
+    public Task<ProofImageDto?> FindProofImageAsync(Guid routeId, Guid shipmentId, ProofImageKind kind, CancellationToken token) => Read(async ct =>
+    {
+        var attempts = database.Attempts.AsNoTracking().Where(x => x.RouteId == routeId && x.ShipmentId == shipmentId);
+        var image = kind == ProofImageKind.Signature
+            ? await attempts.Select(x => new { Content = x.SignaturePng, ContentType = (string?)"image/png" }).SingleOrDefaultAsync(ct)
+            : await attempts.Select(x => new { Content = x.Photo, ContentType = x.PhotoContentType }).SingleOrDefaultAsync(ct);
+        return image is null ? null : image.Content is null ? new ProofImageDto([], string.Empty) : new ProofImageDto(image.Content, image.ContentType!);
+    }, token);
     public Task<bool> HasOpenRoutesAsync(string subject, CancellationToken token) => Read(ct => database.Routes.AsNoTracking().AnyAsync(x => x.DriverSubject == subject && x.Status != DeliveryRouteStatus.Completed, ct), token);
     public void AddDriver(DeliveryDriver driver) => database.Drivers.Add(driver);
     public void AddRoute(DeliveryRoute route) => database.Routes.Add(route);
