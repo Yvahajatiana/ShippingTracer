@@ -19,9 +19,19 @@ public sealed class InfrastructureFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Regression guard for #26: a host started before its database exists makes MassTransit's outbox
+        // delivery service poll it, and PostgreSQL logs each attempt (SQLSTATE 3D000). Creating a database
+        // with EF Core accounts for up to three of these lines (existence probes); more means polling.
+        var (stdout, stderr) = await Postgres.GetLogsAsync();
+        var polled = (stdout + stderr).Split('\n')
+            .Select(line => System.Text.RegularExpressions.Regex.Match(line, "FATAL:  database \"([^\"]+)\" does not exist"))
+            .Where(match => match.Success).GroupBy(match => match.Groups[1].Value).Where(group => group.Count() > 3)
+            .Select(group => $"{group.Key} ({group.Count()})").ToArray();
         await Redis.DisposeAsync();
         await RabbitMq.DisposeAsync();
         await Postgres.DisposeAsync();
+        if (polled.Length > 0)
+            throw new InvalidOperationException("Databases polled before they existed: " + string.Join(", ", polled));
     }
 }
 
