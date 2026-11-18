@@ -54,7 +54,7 @@ Contrats dans `ParcelFlow.BuildingBlocks.Contracts.Customer.V1` : `CustomerProfi
 
 Redis met en cache uniquement la liste des entreprises pendant 60 secondes. Les écritures invalident cette entrée après validation de la transaction. Une panne Redis laisse la lecture fonctionner via PostgreSQL. Un lecteur concurrent à l'invalidation peut observer l'ancienne liste jusqu'à expiration du cache. Les profils clients ne sont pas mis en cache.
 
-Polly protège les lectures PostgreSQL avec deux nouvelles tentatives transitoires et un circuit breaker. Les écritures ne sont pas rejouées automatiquement : un doublon ou une modification concurrente retourne 409. Serilog journalise les requêtes ; OpenTelemetry instrumente HTTP et expose les métriques Prometheus. L'export OTLP peut être raccordé à un récepteur configuré ; il n'est pas nécessaire au fonctionnement métier. Les health checks couvrent PostgreSQL, Redis et le bus MassTransit.
+Polly protège les lectures PostgreSQL avec deux nouvelles tentatives transitoires et un circuit breaker. Les écritures ne sont pas rejouées automatiquement : un doublon ou une modification concurrente retourne 409. Serilog journalise les requêtes ; OpenTelemetry instrumente HTTP, MassTransit et PostgreSQL (Npgsql) et expose les métriques Prometheus. L'export OTLP (`OpenTelemetry__Endpoint`, Jaeger en local) n'est pas nécessaire au fonctionnement métier : voir [Observabilité](../README.md#observabilité). Les health checks couvrent PostgreSQL, Redis et le bus MassTransit.
 
 ## Configuration et exécution hors Docker Compose
 

@@ -52,7 +52,7 @@ Les erreurs utilisent les ProblemDetails JSON communs, y compris avec Accept XML
 | Keycloak__Audience | reporting-api |
 | Database__Initialize | Migration au démarrage en Development seulement |
 | Database__SeedDemoData | Ajout explicite des données fictives |
-| OpenTelemetry__Endpoint | Export OTLP optionnel |
+| OpenTelemetry__Endpoint | Export OTLP des traces et métriques (vide : aucun export ; voir [Observabilité](../README.md#observabilité)) |
 
 Les secrets ne figurent pas dans les fichiers de configuration. La migration InitialReporting crée le modèle. Les endpoints /health/live, /health/ready et /metrics exposent la vivacité, PostgreSQL/Redis/bus et Prometheus. Serilog et OpenTelemetry instrumentent ASP.NET Core et MassTransit ; les corps métier ne sont pas journalisés.
 

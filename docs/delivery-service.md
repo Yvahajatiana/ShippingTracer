@@ -126,7 +126,7 @@ dotnet ef database update --project src/Services/Delivery/ParcelFlow.Delivery.In
 
 Le seed optionnel et idempotent fournit demo-driver-lyon/demo-driver-paris, une tournée Planned non affectée (`60000000-0000-0000-0000-000000000001`, date 2026-10-18) et deux colis pris en charge disponibles PF600000000000000000000001/002. Ces sujets devront correspondre à des utilisateurs Keycloak operator lors du provisionnement ultérieur ; il ne s’agit pas de comptes d’authentification créés par Delivery. Aucune preuve ni publication fictive n’est générée.
 
-Configurer Keycloak__Authority et Keycloak__Audience=delivery-api. Les métadonnées exigent HTTPS hors Development. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et MassTransit. Serilog écrit sur la console ; OpenTelemetry instrumente HTTP et MassTransit, `/metrics` expose Prometheus et OpenTelemetry__Endpoint active l’export OTLP.
+Configurer Keycloak__Authority et Keycloak__Audience=delivery-api. Les métadonnées exigent HTTPS hors Development. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et MassTransit. Serilog écrit sur la console ; OpenTelemetry instrumente HTTP, MassTransit et PostgreSQL (Npgsql), `/metrics` expose Prometheus et OpenTelemetry__Endpoint active l’export OTLP.
 
 ## Vérification et organisation
 

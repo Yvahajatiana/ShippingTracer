@@ -98,7 +98,7 @@ dotnet tool restore
 dotnet ef database update --project src/Services/Warehouse/ParcelFlow.Warehouse.Infrastructure
 ```
 
-Configurer `Keycloak__Authority` avec l’URL du realm et `Keycloak__Audience=warehouse-api`. HTTPS est requis pour les métadonnées hors Development. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et MassTransit. Redis est configuré pour le socle et la readiness, sans cache de stock. Serilog écrit sur la console ; OpenTelemetry instrumente HTTP et MassTransit, `/metrics` expose Prometheus et `OpenTelemetry__Endpoint` active l’export OTLP.
+Configurer `Keycloak__Authority` avec l’URL du realm et `Keycloak__Audience=warehouse-api`. HTTPS est requis pour les métadonnées hors Development. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et MassTransit. Redis est configuré pour le socle et la readiness, sans cache de stock. Serilog écrit sur la console ; OpenTelemetry instrumente HTTP, MassTransit et PostgreSQL (Npgsql), `/metrics` expose Prometheus et `OpenTelemetry__Endpoint` active l’export OTLP.
 
 ## Vérification et organisation
 

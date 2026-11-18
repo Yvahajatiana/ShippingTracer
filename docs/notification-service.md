@@ -56,7 +56,7 @@ Les secrets sont fournis par l’environnement ; ils ne figurent pas dans appset
 | ServiceAuthentication__ClientSecret | Secret du client confidentiel Keycloak |
 | Database__Initialize | Initialisation au démarrage en Development seulement |
 | Database__SeedDemoData | Ajout explicite des données fictives |
-| OpenTelemetry__Endpoint | Export OTLP optionnel |
+| OpenTelemetry__Endpoint | Export OTLP des traces et métriques (vide : aucun export ; voir [Observabilité](../README.md#observabilité)) |
 
 Le client Keycloak devra posséder le rôle operator et inclure shipment-api dans l’audience de ses access tokens. Ce client (`notification-service`) est déclaré dans le realm `deploy/keycloak/parcelflow-realm.json` (voir [Docker](docker.md)). Les identifiants sont exigés au premier appel de résolution ; les lectures et le seed ne nécessitent pas de contacter Keycloak.
 
