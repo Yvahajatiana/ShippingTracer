@@ -111,9 +111,9 @@ services:
       timeout: 10s
       retries: 30
 
-  # Daily logical backups (deploy/pg-backup): pg_dump of the eight service databases and Keycloak to
-  # the backups volume, kept BACKUP_RETENTION_DAYS days. BACKUP_TIME is UTC and must come before the
-  # nightly reset (03:00, server time) so that a snapshot holds the day's data.
+  # Logical backups (deploy/pg-backup): pg_dump of the eight service databases and Keycloak to the
+  # backups volume, kept BACKUP_RETENTION_DAYS days. Idle container: deploy/dokploy/backup-demo.sh,
+  # scheduled on the host before the nightly reset, brings the stack to rest and triggers the dumps.
   # Restore: deploy/dokploy/restore-demo.sh.
   backup:
     <<: *parcelflow-image
@@ -123,7 +123,6 @@ services:
       PGHOST: postgres
       PGUSER: parcelflow
       PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-      BACKUP_TIME: ${BACKUP_TIME:-01:30}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     volumes:
       - backups:/backups

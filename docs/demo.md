@@ -135,6 +135,12 @@ free -m && df -h / && docker system df
    ```
 
    `<appName>` est le nom d'application Dokploy, aussi nom du projet Compose (`docker compose ls`). Le script n'a besoin que de l'accès à Docker et n'écrit que son verrou dans `${TMPDIR:-/tmp}` : le journal doit donc aller dans un fichier que `ubuntu` peut écrire, et non dans `/var/log`. Il ne touche pas au conteneur `landing`, sans état.
+
+10. **Sauvegarde quotidienne.** Une seconde tâche planifiée, une demi-heure avant la réinitialisation (sinon le snapshot ne contient que la démo remise à zéro). Le script s'arrête au plus tard 15 minutes après son début, reprises comprises : voir [Sauvegardes](#sauvegardes).
+
+   ```cron
+   30 2 * * * sh /etc/dokploy/compose/<appName>/code/deploy/dokploy/backup-demo.sh <appName> >> /home/ubuntu/parcelflow-backup.log 2>&1
+   ```
 10. **Supervision externe.** Le monitoring Dokploy ne couvre pas les remote servers, et `/health/ready` n'est plus public (port de management). Créer deux moniteurs HTTP(S) UptimeRobot, toutes les 5 minutes :
     - `https://app.<DEMO_DOMAIN>/api/v1/tracking/PF400000000000000000000001` : colis seedé, suivi anonyme, mot-clé `trackingNumber`. Il traverse nginx du portail, la gateway, Tracking et PostgreSQL.
     - `https://auth.<DEMO_DOMAIN>/realms/parcelflow/.well-known/openid-configuration` : Keycloak et sa base.
@@ -251,22 +257,34 @@ Le script crée un shovel dynamique (plugin `rabbitmq_shovel`) qui déplace les 
 Testé en local : Shipment arrêté, un `PaymentCompleted` échoue après 3 reprises (`The shipment dependency is unavailable.`) et arrive en `_error`. Shipment redémarré, la relance le traite une fois (un reçu e-mail et un SMS), puis le même message renvoyé est ignoré.
 ### Sauvegardes
 
-Le conteneur `backup` (image `parcelflow-backup`, `deploy/pg-backup/`) fait chaque jour à `BACKUP_TIME` (UTC, 01:30 par défaut) un `pg_dump` au format custom des 8 bases de services et de la base `keycloak`. Celle-ci contient le realm, les utilisateurs et les clients. Les snapshots vont dans le volume `backups` du VPS, un dossier `<horodatage UTC>` par jour avec un manifeste `SHA256SUMS`, et sont gardés `BACKUP_RETENTION_DAYS` jours (7 par défaut). Un snapshot est écrit sous un nom `.partial` puis renommé : une sauvegarde interrompue ne passe jamais pour valide. La sauvegarde doit passer **avant** la réinitialisation nocturne (3 h, heure du serveur), sinon elle ne contient que la démo remise à zéro.
+`backup-demo.sh`, planifié sur l'hôte (étape 10 de la mise en place), sauvegarde chaque jour les 8 bases de services et la base `keycloak`, qui contient le realm, les utilisateurs et les clients. Il lance le conteneur `backup` (image `parcelflow-backup`, `deploy/pg-backup/`), qui fait un `pg_dump` au format custom de chaque base.
+- **Stockage** : un dossier `<horodatage UTC>` par jour dans le volume `backups` du VPS, avec un manifeste `SHA256SUMS`.
+- **Rétention** : `BACKUP_RETENTION_DAYS` jours, 7 par défaut.
+- **Écriture atomique** : le snapshot est écrit sous un nom `.partial` puis renommé, si bien qu'une sauvegarde interrompue ne passe jamais pour valide.
+
+**Un seul état pour les 9 bases.** Chaque `pg_dump` prend son propre instantané. Si des écritures continuaient pendant la boucle, un fait pourrait figurer dans une base et pas dans une autre, et la purge de RabbitMQ à la restauration l'effacerait du transit. Le script met donc la stack au repos avant les dumps :
+
+1. Arrêt de la gateway : plus aucune écriture venue d'un client.
+2. Attente, au plus `BACKUP_QUIESCE_TIMEOUT` secondes (120 par défaut), que toutes les files RabbitMQ (hors `_error`) et les Outbox des 8 bases soient vides. Plus aucun fait n'est alors en route d'une base à l'autre. Si l'attente échoue, le script sauvegarde quand même et l'écrit dans le journal.
+3. Les dumps, avec jusqu'à `BACKUP_ATTEMPTS` tentatives (3) espacées de `BACKUP_RETRY_DELAY` secondes (300) : une erreur passagère est reprise avant la réinitialisation de 3 h.
+4. Redémarrage de la gateway, quel que soit le résultat.
+
+L'interruption dure quelques secondes en pratique. Les messages différés de la saga (délai de paiement de 30 minutes) ne sont pas dans les files et restent hors du snapshot.
 
 | Objectif | Valeur pour la démo |
 | --- | --- |
 | RPO (perte de données maximale) | 24 heures : une sauvegarde par jour |
-| RTO (durée de restauration) | Environ 2 minutes, mesuré : 117 s pour les 9 bases, arrêt et redémarrage de la stack compris |
+| RTO (durée de restauration) | Environ 2 minutes, mesuré : 117 à 137 s pour les 9 bases, arrêt et redémarrage de la stack compris |
 
 Depuis le répertoire du dépôt cloné par Dokploy sur l'hôte :
 
 ```bash
 sh deploy/dokploy/restore-demo.sh <appName> list       # snapshots disponibles
-docker exec <appName>-backup-1 parcelflow-backup now   # sauvegarde immédiate (avant une opération risquée)
+sh deploy/dokploy/backup-demo.sh <appName>             # sauvegarde immédiate (avant une opération risquée)
 sh deploy/dokploy/restore-demo.sh <appName> latest     # ou un snapshot précis, par exemple 2026-11-18T013000Z
 ```
 
-La restauration arrête les portails, la gateway, les services et Keycloak. Elle vérifie ensuite les sommes de contrôle, recrée puis restaure les 9 bases, purge les files RabbitMQ et vide Redis. Enfin, elle redémarre Keycloak, réapplique `keycloak-demo-config`, puis relance les services et affiche la durée totale. Elle partage le verrou de `reset-demo.sh` : les deux ne peuvent pas tourner en même temps.
+La restauration arrête les portails, la gateway, les services et Keycloak. Elle vérifie ensuite les sommes de contrôle, recrée puis restaure les 9 bases, purge les files RabbitMQ et vide Redis. Enfin, elle redémarre Keycloak, réapplique `keycloak-demo-config`, puis relance les services et affiche la durée totale. Les trois scripts (réinitialisation, sauvegarde, restauration) partagent un verrou : un seul tourne à la fois. Une sauvegarde qui déborde sur 3 h fait donc échouer la réinitialisation de la nuit, d'où l'écart d'une demi-heure.
 
 **Cohérence entre services.** Toutes les bases reviennent du même snapshot. Les services se transmettent leurs faits par Outbox et Inbox, et la saga de réservation, les factures et le suivi se répondent. Restaurer une seule base la mettrait en retard sur les autres : par exemple, Billing ignorerait une facture que Notification a déjà annoncée, et les événements déjà livrés ne seraient pas republiés. Pour la même raison, la purge de RabbitMQ retire les messages plus récents que le snapshot, et Redis est vidé pour ne pas servir de lectures en cache. `parcelflow-restore <snapshot> <base>` permet de restaurer une base seule, mais à réserver à un diagnostic.
 
@@ -276,7 +294,7 @@ La restauration arrête les portails, la gateway, les services et Keycloak. Elle
 docker cp <appName>-backup-1:/backups/<snapshot> ./parcelflow-<snapshot>
 ```
 
-Exercice réalisé en local sur ce Compose (images publiées, projet isolé) : snapshot de 9 bases (420 Ko, 2 s), ajout d'un livreur après le snapshot, puis restauration `latest`. Le livreur ajouté a disparu, les livreurs et les 8 comptes Keycloak d'origine sont revenus, et tous les services sont repassés `healthy` en 117 s. La purge a supprimé un snapshot de plus de 7 jours et un dossier `.partial`.
+Exercice réalisé en local sur ce Compose (images publiées, projet isolé). `backup-demo.sh` : gateway coupée environ 11 s, stack au repos immédiatement, snapshot de 9 bases (420 Ko, 2 s). Une première tentative rendue impossible (volume en lecture seule) est reprise et réussit. Après l'ajout d'un livreur, la restauration `latest` le fait disparaître et rend les livreurs et les 8 comptes Keycloak d'origine ; tous les services repassent `healthy` en 117 à 137 s selon l'exécution. La purge supprime un snapshot de plus de 7 jours et un dossier `.partial`.
 
 ### Console d'administration Keycloak
 

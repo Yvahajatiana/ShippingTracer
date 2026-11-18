@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Logical backups of the ParcelFlow public demo: pg_dump of the eight service databases and of
-# Keycloak (realm, users, clients), on a schedule, to a volume of the host. The scripts are baked
+# Keycloak (realm, users, clients) to a volume of the host, triggered by deploy/dokploy/backup-demo.sh. The scripts are baked
 # into the image: Dokploy re-clones the repository on every deployment (see deploy/landing).
 # Build from this directory: docker build -t parcelflow/backup deploy/pg-backup
 # Same major version as the demo PostgreSQL, so pg_dump and pg_restore match the server.
@@ -23,4 +23,4 @@ COPY --chmod=0755 parcelflow-backup parcelflow-restore /usr/local/bin/
 USER postgres
 VOLUME ["/backups"]
 ENTRYPOINT ["/usr/local/bin/parcelflow-backup"]
-CMD ["schedule"]
+CMD ["idle"]

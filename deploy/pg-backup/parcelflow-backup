@@ -1,12 +1,14 @@
 #!/bin/sh
 # Logical backups of the ParcelFlow databases (custom format, restorable one database at a time).
 #
-# Usage: parcelflow-backup schedule   wait for BACKUP_TIME (UTC) every day, then back up
-#        parcelflow-backup now        back up once and exit
-#        parcelflow-backup list       list the snapshots
+# Usage: parcelflow-backup now     back up once and exit
+#        parcelflow-backup list    list the snapshots
+#        parcelflow-backup idle    keep the container running (default command)
 #
+# The schedule lives on the host: deploy/dokploy/backup-demo.sh stops the gateway and waits until the
+# queues and outboxes are empty before calling `now`, so that the nine dumps describe one state.
 # Settings (environment): PGHOST, PGPORT, PGUSER, PGPASSWORD (libpq), BACKUP_DATABASES (space
-# separated), BACKUP_TIME (HH:MM, UTC, default 01:30), BACKUP_RETENTION_DAYS (default 7).
+# separated), BACKUP_RETENTION_DAYS (default 7).
 # A snapshot is a directory /backups/<UTC timestamp> holding one <database>.dump per database and
 # a SHA256SUMS manifest. It is written under a .partial name and renamed once complete, so an
 # interrupted run never looks like a valid snapshot.
@@ -14,7 +16,6 @@ set -eu
 
 root=/backups
 databases=${BACKUP_DATABASES:-"parcelflow_customers parcelflow_shipments parcelflow_tracking parcelflow_warehouse parcelflow_delivery parcelflow_billing parcelflow_notification parcelflow_reporting keycloak"}
-at=${BACKUP_TIME:-01:30}
 retention=${BACKUP_RETENTION_DAYS:-7}
 
 log() { printf '%s parcelflow-backup: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
@@ -23,10 +24,6 @@ fail() {
   exit 1
 }
 
-case "$at" in
-  [0-2][0-9]:[0-5][0-9]) ;;
-  *) fail "BACKUP_TIME must be HH:MM (UTC), got '$at'." ;;
-esac
 case "$retention" in
   '' | *[!0-9]*) fail "BACKUP_RETENTION_DAYS must be a whole number of days, got '$retention'." ;;
 esac
@@ -52,24 +49,13 @@ backup() {
   done
 }
 
-# Seconds until the next BACKUP_TIME (UTC).
-until_next() {
-  now=$(date -u +%s)
-  next=$(date -u -d "$(date -u +%Y-%m-%d) $at:00" +%s 2>/dev/null) || next=$(date -u -D '%Y-%m-%d %H:%M:%S' -d "$(date -u +%Y-%m-%d) $at:00" +%s)
-  [ "$next" -gt "$now" ] || next=$((next + 86400))
-  echo $((next - now))
-}
-
-case "${1:-schedule}" in
+case "${1:-idle}" in
   now) backup ;;
   list) find "$root" -mindepth 1 -maxdepth 1 -type d -name '????-??-??T??????Z' -exec basename {} \; | sort ;;
-  schedule)
-    log "daily backup at $at UTC, $retention days kept, databases: $databases"
-    while true; do
-      sleep "$(until_next)"
-      # A failed run is logged and retried the next day; the container keeps running.
-      ( backup ) || log "ERROR: backup failed, next attempt tomorrow at $at UTC"
-    done
+  idle)
+    log "ready: backups are triggered by backup-demo.sh on the host; $retention days kept"
+    trap 'exit 0' TERM INT
+    while true; do sleep 3600 & wait $!; done
     ;;
-  *) echo "Usage: $0 schedule|now|list" >&2; exit 2 ;;
+  *) echo "Usage: $0 now|list|idle" >&2; exit 2 ;;
 esac

@@ -18,6 +18,8 @@ services="customer shipment tracking warehouse delivery billing notification rep
 frontends="gateway customer-portal operations-portal admin-portal"
 keycloak_timeout=${RESTORE_KEYCLOAK_TIMEOUT:-300}
 services_timeout=${RESTORE_SERVICES_TIMEOUT:-300}
+# Git Bash on Windows would rewrite the `/` vhost argument into a Windows path.
+export MSYS_NO_PATHCONV=1
 
 log() { printf '%s restore-demo: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 fail() {
@@ -70,7 +72,7 @@ for service in $services $frontends; do
 done
 
 lock_dir="${TMPDIR:-/tmp}/parcelflow-reset-$project.lock"
-mkdir "$lock_dir" 2>/dev/null || fail "a reset or a restore is running (remove $lock_dir if it is stale)."
+mkdir "$lock_dir" 2>/dev/null || fail "a reset, a restore or a backup is running (remove $lock_dir if it is stale)."
 
 stopped=false
 on_exit() {
