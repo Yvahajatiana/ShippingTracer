@@ -486,7 +486,8 @@ jobs:
         with:
           path: ${{ github.workspace }}/.cache/trivy
           key: cache-trivy-${{ steps.day.outputs.day }}
-      # Same commit and Trivy version as the ones trivy-action v0.36.0 installs.
+      # Same Trivy version as the one trivy-action v0.36.0 installs; setup-trivy v0.3.1 is the
+      # release trivy-action pins on its main branch (v0.36.0 still ships v0.2.6).
       - name: Install Trivy
         id: install
         if: steps.cache.outputs.cache-hit != 'true'
