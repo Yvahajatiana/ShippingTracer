@@ -149,7 +149,7 @@ public sealed class GetDeliveryProofHandler(IDeliveryStore store, IDeliveryActor
     public async Task<AttemptDto> Handle(GetDeliveryProof request, CancellationToken ct)
     {
         var route = await store.FindRouteAsync(request.RouteId, ct) ?? throw new DeliveryNotFoundException("Route not found."); HandlerRules.Authorize(route, actor);
-        return (await store.FindAttemptByStopAsync(request.RouteId, request.ShipmentId, ct) ?? throw new DeliveryNotFoundException("Delivery proof not found.")).ToDto();
+        return await store.FindAttemptReceiptByStopAsync(request.RouteId, request.ShipmentId, ct) ?? throw new DeliveryNotFoundException("Delivery proof not found.");
     }
 }
 public sealed class GetDeliveryProofImageHandler(IDeliveryStore store, IDeliveryActor actor) : IRequestHandler<GetDeliveryProofImage, ProofImageDto>
@@ -157,12 +157,7 @@ public sealed class GetDeliveryProofImageHandler(IDeliveryStore store, IDelivery
     public async Task<ProofImageDto> Handle(GetDeliveryProofImage request, CancellationToken ct)
     {
         var route = await store.FindRouteAsync(request.RouteId, ct) ?? throw new DeliveryNotFoundException("Route not found."); HandlerRules.Authorize(route, actor);
-        var attempt = await store.FindAttemptByStopAsync(request.RouteId, request.ShipmentId, ct) ?? throw new DeliveryNotFoundException("Delivery proof not found.");
-        return request.Kind switch
-        {
-            ProofImageKind.Signature when attempt.SignaturePng is not null => new(attempt.SignaturePng.ToArray(), "image/png"),
-            ProofImageKind.Photo when attempt.Photo is not null => new(attempt.Photo.ToArray(), attempt.PhotoContentType!),
-            _ => throw new DeliveryNotFoundException("Proof image not found.")
-        };
+        var image = await store.FindProofImageAsync(request.RouteId, request.ShipmentId, request.Kind, ct) ?? throw new DeliveryNotFoundException("Delivery proof not found.");
+        return image.Content.Length > 0 ? image : throw new DeliveryNotFoundException("Proof image not found.");
     }
 }

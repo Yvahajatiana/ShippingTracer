@@ -196,7 +196,14 @@ public sealed class DeliveryTests
         public Task<DeliveryParcel?> FindParcelAsync(Guid id, CancellationToken ct) => Task.FromResult(Parcels.SingleOrDefault(x => x.ShipmentId == id));
         public Task<DeliveryDriver?> FindDriverAsync(string subject, CancellationToken ct) => Task.FromResult(Drivers.SingleOrDefault(x => x.Subject == subject));
         public Task<DeliveryAttempt?> FindAttemptAsync(Guid id, CancellationToken ct) => Task.FromResult(Attempts.SingleOrDefault(x => x.OperationId == id));
-        public Task<DeliveryAttempt?> FindAttemptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken ct) => Task.FromResult(Attempts.SingleOrDefault(x => x.RouteId == routeId && x.ShipmentId == shipmentId));
+        public Task<AttemptDto?> FindAttemptReceiptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken ct) => Task.FromResult(Attempts.SingleOrDefault(x => x.RouteId == routeId && x.ShipmentId == shipmentId)?.ToDto());
+        public Task<ProofImageDto?> FindProofImageAsync(Guid routeId, Guid shipmentId, ProofImageKind kind, CancellationToken ct)
+        {
+            var attempt = Attempts.SingleOrDefault(x => x.RouteId == routeId && x.ShipmentId == shipmentId);
+            var content = kind == ProofImageKind.Signature ? attempt?.SignaturePng : attempt?.Photo;
+            return Task.FromResult(attempt is null ? null : content is null ? new ProofImageDto([], string.Empty)
+                : new ProofImageDto(content, kind == ProofImageKind.Signature ? "image/png" : attempt.PhotoContentType!));
+        }
         public Task<bool> HasOpenRoutesAsync(string subject, CancellationToken ct) => Task.FromResult(Routes.Any(x => x.DriverSubject == subject && x.Status != DeliveryRouteStatus.Completed));
         public void AddDriver(DeliveryDriver value) => Drivers.Add(value); public void AddRoute(DeliveryRoute value) => Routes.Add(value); public void AddParcel(DeliveryParcel value) => Parcels.Add(value); public void AddAttempt(DeliveryAttempt value) => Attempts.Add(value);
         public Task SaveChangesAsync(CancellationToken ct) { Saves++; return Task.CompletedTask; }
