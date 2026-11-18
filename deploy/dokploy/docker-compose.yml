@@ -353,17 +353,16 @@ services:
       - traefik.http.routers.pf-demo-admin.service=pf-demo-admin
       - traefik.http.services.pf-demo-admin.loadbalancer.server.port=8080
 
-  # Static landing page. No depends_on: it stays online during a redeployment or a reset.
-  # nginx renders the template (envsubst) and injects DEMO_DOMAIN into the HTML (sub_filter).
+  # Static landing page (deploy/landing, baked into its image: Dokploy re-clones the repository on
+  # each deployment, which emptied a bind-mounted site). No depends_on: it stays online during a
+  # redeployment or a reset. nginx renders the template (envsubst) and injects DEMO_DOMAIN into the
+  # HTML (sub_filter).
   landing:
     <<: *parcelflow-image
-    image: nginxinc/nginx-unprivileged:1.28-alpine
+    image: ${PARCELFLOW_REGISTRY:-ghcr.io/yvahajatiana}/parcelflow-landing:${PARCELFLOW_TAG:-latest}
     mem_limit: 32m
     environment:
       DEMO_DOMAIN: ${DEMO_DOMAIN:?set DEMO_DOMAIN}
-    volumes:
-      - ../landing/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
-      - ../landing/site:/usr/share/nginx/html:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
       interval: 30s
