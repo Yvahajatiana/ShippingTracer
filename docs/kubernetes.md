@@ -51,6 +51,8 @@ Les mots de passe ne figurent jamais dans les manifestes. Ils arrivent par `secr
 | `postgres-password` | Rôle PostgreSQL `database.username` |
 | `rabbitmq-password` | Utilisateur RabbitMQ `rabbitmq.username` |
 | `notification-client-secret` | Client confidentiel Keycloak `notification-service` |
+| `delivery-proof-key` | Clé AES-256-GCM des preuves de livraison (`DeliveryProofs__EncryptionKey`) : base64 de 32 octets aléatoires (`openssl rand -base64 32`). Obligatoire, Delivery refuse de démarrer sans elle |
+| `delivery-proof-previous-keys` | Optionnelle (`services.delivery.proofPreviousKeys`) : anciennes clés séparées par des virgules, acceptées en déchiffrement pendant une rotation |
 | `redis-password` | Optionnelle (`redis.passwordFromSecret`) |
 | `keycloak-admin-password`, `demo-user-password` | Keycloak de développement uniquement |
 
@@ -61,6 +63,16 @@ Sécurité des pods :
 - **Probes :** `startupProbe` et `livenessProbe` sur `/health/live`, `readinessProbe` sur `/health/ready`, `/healthz` pour les portails.
 - **Port de management :** les services et la gateway écoutent sur deux ports. L'API reste sur `http` (8080). `/health/*` et `/metrics` ne répondent que sur `management` (8081) et renvoient 404 sur 8080. Les images fixent `ASPNETCORE_HTTP_PORTS=8080;8081` et `Management__Port=8081`. Le chart ne les surcharge pas : `dotnetDefaults.managementPort` doit donc rester égal à la valeur des images. Il alimente le `containerPort` `management` et les probes. Les Services, l'Ingress et les HTTPRoute n'exposent que `http`.
 - **Secret rendu par le chart :** son empreinte est en annotation des services, si bien qu'une rotation redémarre les pods.
+
+### Preuves de livraison
+
+`services.delivery.proofEncryption` (activé par défaut) injecte `DeliveryProofs__EncryptionKey` depuis la clé `delivery-proof-key`, exigée par le Secret rendu comme par l'ExternalSecret. `services.delivery.proofRetentionDays` alimente `DeliveryProofs__RetentionDays` s'il est renseigné ; vide, le service garde sa valeur par défaut (90 jours). Un environnement déjà déployé doit recevoir `delivery-proof-key` dans son store (ou son `existingSecret`) avant la mise à jour : avec un `existingSecret`, le chart ne peut pas vérifier la clé et les pods Delivery restent en `CreateContainerConfigError`.
+
+Rotation de la clé :
+
+1. Stocker la clé actuelle sous `delivery-proof-previous-keys` (plusieurs clés séparées par des virgules), la mapper dans `externalSecrets.data` et passer `services.delivery.proofPreviousKeys` à `true`.
+2. Remplacer `delivery-proof-key` par une nouvelle clé, puis redéployer ou redémarrer Delivery (les variables ne sont lues qu'au démarrage).
+3. Une fois les preuves chiffrées par l'ancienne clé purgées par la rétention, retirer `delivery-proof-previous-keys` et repasser `proofPreviousKeys` à `false`. Une clé retirée trop tôt rend ses preuves illisibles.
 
 ### Notification vers Shipment
 

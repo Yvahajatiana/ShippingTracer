@@ -10,7 +10,7 @@ namespace ParcelFlow.Delivery.IntegrationTests;
 [Collection(InfrastructureCollection.Name)]
 public sealed class PersistenceTests(InfrastructureFixture infrastructure)
 {
-    private DeliveryDbContext CreateContext() => new(new DbContextOptionsBuilder<DeliveryDbContext>().UseNpgsql(infrastructure.Postgres.GetConnectionString()).Options);
+    private DeliveryDbContext CreateContext() => new(new DbContextOptionsBuilder<DeliveryDbContext>().UseNpgsql(infrastructure.Postgres.GetConnectionString()).Options, TestProofKeys.Protector);
     internal static string Number() => "PF" + Guid.NewGuid().ToString("N")[..24].ToUpperInvariant();
     internal static byte[] Png() => Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=");
 

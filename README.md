@@ -151,7 +151,7 @@ docker compose up --build -d
 docker compose ps             # PostgreSQL, Redis, RabbitMQ et Keycloak "healthy", les autres conteneurs "running"
 ```
 
-`.env` n'est pas versionné. Compose refuse de démarrer si `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `NOTIFICATION_CLIENT_SECRET` ou `DEMO_USER_PASSWORD` manque. `DEMO_USER_PASSWORD` doit respecter la politique du realm (12 caractères minimum, majuscule, minuscule, chiffre et caractère spécial), sinon Keycloak refuse l'import.
+`.env` n'est pas versionné. Compose refuse de démarrer si `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `NOTIFICATION_CLIENT_SECRET`, `DELIVERY_PROOF_KEY` ou `DEMO_USER_PASSWORD` manque. `DELIVERY_PROOF_KEY` chiffre les preuves de livraison : remplacer la clé de développement de l'exemple par `openssl rand -base64 32` (32 octets en base64, sinon Delivery refuse de démarrer). `DEMO_USER_PASSWORD` doit respecter la politique du realm (12 caractères minimum, majuscule, minuscule, chiffre et caractère spécial), sinon Keycloak refuse l'import.
 
 | URL | Usage |
 | --- | --- |

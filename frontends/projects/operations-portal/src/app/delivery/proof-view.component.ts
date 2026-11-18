@@ -100,7 +100,11 @@ import { ProofStore } from './proof.store';
             {{ 'routes.proof.imageError' | transloco }}
           </p>
         }
-        @if (attempt.outcome === 'Delivered' && !attempt.hasSignature && !attempt.hasPhoto) {
+        @if (attempt.proofsPurgedAtUtc) {
+          <p class="text-sm text-muted-foreground">
+            {{ 'routes.proof.purged' | transloco: { date: (attempt.proofsPurgedAtUtc | pfDate) } }}
+          </p>
+        } @else if (attempt.outcome === 'Delivered' && !attempt.hasSignature && !attempt.hasPhoto) {
           <p class="text-sm text-muted-foreground">{{ 'routes.proof.noImage' | transloco }}</p>
         }
       }

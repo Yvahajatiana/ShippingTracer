@@ -14,7 +14,7 @@ Le départ physique du dépôt reste de préférence un scan Exit Warehouse, eff
 
 ## Preuves et confidentialité
 
-La confirmation exige le nom du destinataire et au moins une preuve : signature PNG ou photo PNG/JPEG. Les deux peuvent être fournies ensemble. Les images sont des champs JSON base64, persistés en `bytea` dans PostgreSQL ; aucun service de stockage ni bibliothèque d’image supplémentaire n’est ajouté.
+La confirmation exige le nom du destinataire et au moins une preuve : signature PNG ou photo PNG/JPEG. Les deux peuvent être fournies ensemble. Les images sont des champs JSON base64, persistées chiffrées en `bytea` dans PostgreSQL (voir [Données personnelles (RGPD)](#données-personnelles-rgpd)) ; aucun service de stockage ni bibliothèque d’image supplémentaire n’est ajouté.
 
 - Signature : PNG, au plus 2 MiB.
 - Photo : PNG ou JPEG 8 bits usuel, au plus 5 MiB.
@@ -25,6 +25,25 @@ La confirmation exige le nom du destinataire et au moins une preuve : signature 
 Seuls le livreur affecté et les administrateurs peuvent démarrer la tournée, confirmer un arrêt, enregistrer son échec ou consulter ses preuves. Les autres opérateurs peuvent planifier et consulter les données opérationnelles, qui ne contiennent ni nom du destinataire ni image. L’acteur de la tentative est issu du claim JWT sub ; un champ acteur envoyé par le client ne le remplace pas. Les événements sortants ne transportent aucun destinataire, sujet d’opérateur ou document.
 
 OperationId est un UUID fourni par le client et unique globalement. Un rejeu avec le même arrêt, résultat, acteur et contenu renvoie le reçu initial sans mutation ni publication, même après une replanification. Une réutilisation contradictoire retourne 409. Un arrêt ne peut recevoir qu’une seule issue. Les motifs d’échec sont RecipientAbsent, AddressNotFound et RecipientRefused ; aucun texte libre contenant une adresse ou d’autres données personnelles n’est publié.
+
+## Données personnelles (RGPD)
+
+Le nom du destinataire, la signature et la photo sont les seules données personnelles de Delivery (avec le sujet Keycloak du livreur, conservé comme trace de l’opération).
+
+**Chiffrement au repos.** Ces trois champs sont chiffrés par le service avant l’écriture, en AES-256-GCM : PostgreSQL, ses sauvegardes et ses réplicas ne voient que du chiffré. Chaque valeur a son propre nonce ; le champ est lié au chiffré (données associées), si bien qu’une signature recopiée dans la colonne photo ne se déchiffre pas. Le format stocké est `00 'PFE' 01` | identifiant de clé (4 octets, dérivé de la clé) | nonce (12) | tag (16) | chiffré.
+
+| Réglage | Rôle |
+|---|---|
+| `DeliveryProofs:EncryptionKey` | Obligatoire. Base64 de 32 octets aléatoires (`openssl rand -base64 32`). Sans clé valide, le service ne démarre pas. |
+| `DeliveryProofs:PreviousEncryptionKeys` | Optionnel. Anciennes clés séparées par des virgules, encore acceptées pour déchiffrer. |
+| `DeliveryProofs:RetentionDays` | Durée de conservation des preuves, 90 jours par défaut (1 à 3650). |
+| `DeliveryProofs:PurgeInterval` | Période du job de maintenance, `01:00:00` par défaut. |
+
+**Conservation et purge.** Un job hébergé par le service tourne au démarrage puis à chaque période. Il efface le nom, la signature, la photo et le type de la photo des livraisons plus anciennes que la durée de conservation, et renseigne `ProofsPurgedAtUtc`. L’issue, sa date, l’arrêt et le livreur restent : le reçu `GET .../proof` renvoie alors `hasSignature`/`hasPhoto` à `false` et `proofsPurgedAtUtc`, et les images répondent 404. Un rejeu de la même opération après la purge reste reconnu comme la même livraison. Plusieurs réplicas peuvent exécuter le job en même temps.
+
+**Rotation de la clé.** Mettre la nouvelle clé dans `EncryptionKey` et l’ancienne dans `PreviousEncryptionKeys`, puis redéployer : les nouvelles preuves utilisent la nouvelle clé, les anciennes restent lisibles. Les preuves ne sont pas rechiffrées : garder l’ancienne clé au moins pendant la durée de conservation, après quoi toutes les preuves qu’elle protégeait ont été purgées. Une clé perdue rend illisibles les preuves qu’elle chiffrait.
+
+**Mise à jour depuis une version sans chiffrement.** La migration `ProtectDeliveryProofs` passe la colonne du nom en `bytea` sans le chiffrer (SQL ne connaît pas la clé). Le service lit encore ces valeurs en clair, et le job les chiffre lot par lot à son premier passage. La migration ne peut pas être annulée une fois des noms chiffrés.
 
 ## API v1
 

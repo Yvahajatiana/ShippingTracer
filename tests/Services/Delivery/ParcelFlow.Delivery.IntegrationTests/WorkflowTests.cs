@@ -138,7 +138,8 @@ public sealed class WorkflowTests(InfrastructureFixture infrastructure)
             ["ConnectionStrings:Redis"] = infrastructure.Redis.GetConnectionString(),
             ["RabbitMq:Host"] = infrastructure.RabbitMq.Hostname,
             ["RabbitMq:Port"] = infrastructure.RabbitMq.GetMappedPublicPort(5672).ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["RabbitMq:Username"] = "rabbitmq", ["RabbitMq:Password"] = "rabbitmq"
+            ["RabbitMq:Username"] = "rabbitmq", ["RabbitMq:Password"] = "rabbitmq",
+            ["DeliveryProofs:EncryptionKey"] = TestProofKeys.EncryptionKey
         })).ConfigureServices((context, services) =>
         {
             register(services, context.Configuration);
