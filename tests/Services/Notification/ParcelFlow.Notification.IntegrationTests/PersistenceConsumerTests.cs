@@ -30,6 +30,23 @@ internal sealed class FixedRecipientResolver : IShipmentRecipientResolver
         return Task.FromResult(new ShipmentRecipient(Owner, Tracking, "owner@example.test", "+33600000001"));
     }
 }
+// Records, at each lookup, the row locks held on the MassTransit inbox: a lookup made inside the
+// consumer transaction finds the inbox row locked FOR UPDATE by the outbox filter.
+internal sealed class TransactionProbeResolver(string connectionString) : IShipmentRecipientResolver
+{
+    public ConcurrentBag<long> InboxLocksSeen { get; } = [];
+    public async Task<ShipmentRecipient> ResolveAsync(Guid shipmentId, CancellationToken cancellationToken)
+    {
+        await using var connection = new Npgsql.NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new Npgsql.NpgsqlCommand("""
+            SELECT count(*) FROM pg_locks l JOIN pg_class c ON c.oid = l.relation
+            WHERE c.relname = 'InboxState' AND l.mode = 'RowShareLock' AND l.pid <> pg_backend_pid()
+            """, connection);
+        InboxLocksSeen.Add((long)(await command.ExecuteScalarAsync(cancellationToken))!);
+        return new ShipmentRecipient(FixedRecipientResolver.Owner, FixedRecipientResolver.Tracking, "owner@example.test", "+33600000001");
+    }
+}
 internal static class ConsumerTestHost
 {
     public static ServiceProvider Create(InfrastructureFixture infrastructure, IShipmentRecipientResolver resolver, Action<IServiceCollection>? configure = null)
@@ -81,7 +98,23 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
         finally { await bus.StopAsync(); }
     }
     [Fact]
-    public async Task Twenty_concurrent_redeliveries_create_two_receipts_and_two_outgoing_events_with_one_contact_lookup()
+    public async Task Recipient_is_resolved_before_the_consumer_transaction_locks_the_inbox()
+    {
+        var resolver = new TransactionProbeResolver(infrastructure.Postgres.GetConnectionString());
+        await using var provider = ConsumerTestHost.Create(infrastructure, resolver); await provider.InitializeNotificationDatabaseAsync();
+        var bus = provider.GetRequiredService<IBusControl>(); await bus.StartAsync();
+        try
+        {
+            var shipment = Guid.NewGuid(); var at = DateTimeOffset.UtcNow;
+            await bus.Publish(new ShipmentCreated(Guid.NewGuid(), shipment, at, shipment, FixedRecipientResolver.Tracking, FixedRecipientResolver.Owner, 12m, "EUR"));
+            await bus.Publish(new PaymentCompleted(Guid.NewGuid(), shipment, at, shipment, 12m, "EUR"));
+            await ConsumerTestHost.Until(async () => { using var scope = provider.CreateScope(); return await scope.ServiceProvider.GetRequiredService<NotificationDbContext>().Messages.CountAsync(x => x.ShipmentId == shipment) == 4; });
+            resolver.InboxLocksSeen.Should().HaveCount(2).And.OnlyContain(locks => locks == 0);
+        }
+        finally { await bus.StopAsync(); }
+    }
+    [Fact]
+    public async Task Twenty_concurrent_redeliveries_create_two_receipts_and_two_outgoing_events()
     {
         var resolver = new FixedRecipientResolver(); await using var provider = ConsumerTestHost.Create(infrastructure, resolver); await provider.InitializeNotificationDatabaseAsync();
         var output = new ConcurrentBag<NotificationRecorded>();
@@ -102,7 +135,11 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             await bus.Publish(item, context => context.MessageId = transportIds[20]);
             await ConsumerTestHost.Until(async () => { using var scope = provider.CreateScope(); return await scope.ServiceProvider.GetRequiredService<NotificationDbContext>().Set<InboxState>().CountAsync(x => transportIds.Contains(x.MessageId) && x.Consumed != null) == 21; });
             using var read = provider.CreateScope(); var db = read.ServiceProvider.GetRequiredService<NotificationDbContext>();
-            (await db.Messages.CountAsync(x => x.SourceEventId == eventId)).Should().Be(2); output.Count(x => x.SourceEventId == eventId).Should().Be(2); resolver.Calls.Should().Be(1);
+            (await db.Messages.CountAsync(x => x.SourceEventId == eventId)).Should().Be(2); output.Count(x => x.SourceEventId == eventId).Should().Be(2);
+            // Lookups run before the transaction (#19), so concurrent duplicates are no longer serialised
+            // behind the lock: each may resolve once (the Redis cache absorbs them in production), but the
+            // redelivery published after the first commit skips the lookup.
+            resolver.Calls.Should().BeInRange(1, 20);
         }
         finally { await bus.StopAsync(); await observer.StopAsync(); }
     }
@@ -124,6 +161,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
         var resolver = new FixedRecipientResolver(); await using var provider = ConsumerTestHost.Create(infrastructure, resolver); await provider.InitializeNotificationDatabaseAsync();
         var conflictFaults = new ConcurrentBag<Fault<ShipmentCreated>>();
         var statusFaults = new ConcurrentBag<Fault<TrackingStatusChanged>>();
+        var paymentFaults = new ConcurrentBag<Fault<PaymentCompleted>>();
         var observer = Bus.Factory.CreateUsingRabbitMq(rabbit =>
         {
             rabbit.Host(infrastructure.RabbitMq.Hostname, infrastructure.RabbitMq.GetMappedPublicPort(5672), "/", host => { host.Username("rabbitmq"); host.Password("rabbitmq"); });
@@ -132,6 +170,7 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
                 endpoint.AutoDelete = true;
                 endpoint.Handler<Fault<ShipmentCreated>>(context => { conflictFaults.Add(context.Message); return Task.CompletedTask; });
                 endpoint.Handler<Fault<TrackingStatusChanged>>(context => { statusFaults.Add(context.Message); return Task.CompletedTask; });
+                endpoint.Handler<Fault<PaymentCompleted>>(context => { paymentFaults.Add(context.Message); return Task.CompletedTask; });
             });
         });
         var bus = provider.GetRequiredService<IBusControl>(); await observer.StartAsync(); await bus.StartAsync();
@@ -145,7 +184,11 @@ public sealed class PersistenceConsumerTests(InfrastructureFixture infrastructur
             var invalidStatusId = Guid.NewGuid();
             await bus.Publish(new TrackingStatusChanged(invalidStatusId, original.ShipmentId, original.OccurredAtUtc, original.ShipmentId,
                 FixedRecipientResolver.Tracking, (TrackingStatus)999, null, Guid.NewGuid()));
-            await ConsumerTestHost.Until(() => Task.FromResult(conflictFaults.Any(x => x.Message.EventId == original.EventId) && statusFaults.Any(x => x.Message.EventId == invalidStatusId)));
+            // Invalid metadata: rejected by the validator, with no contact lookup on any of the retries.
+            var invalidPaymentId = Guid.NewGuid();
+            await bus.Publish(new PaymentCompleted(invalidPaymentId, original.ShipmentId, original.OccurredAtUtc, original.ShipmentId, 10m, "XXX"));
+            await ConsumerTestHost.Until(() => Task.FromResult(conflictFaults.Any(x => x.Message.EventId == original.EventId) && statusFaults.Any(x => x.Message.EventId == invalidStatusId)
+                && paymentFaults.Any(x => x.Message.EventId == invalidPaymentId)));
             using var read = provider.CreateScope(); var db = read.ServiceProvider.GetRequiredService<NotificationDbContext>();
             (await db.Messages.CountAsync(x => x.SourceEventId == original.EventId)).Should().Be(2);
             (await db.Events.AnyAsync(x => x.EventId == invalidStatusId)).Should().BeFalse(); resolver.Calls.Should().Be(1);

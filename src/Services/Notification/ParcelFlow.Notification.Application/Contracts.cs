@@ -6,6 +6,16 @@ namespace ParcelFlow.Notification.Application;
 public interface INotificationActor { string Subject { get; } bool IsAdmin { get; } }
 public interface INotificationCommand { }
 public sealed record ShipmentRecipient(string CustomerSubject, string TrackingNumber, string Email, string Phone);
+/// <summary>
+/// Recipients resolved for the message being consumed, before its transaction starts (consume
+/// filter placed ahead of the outbox). Scoped: one instance per message.
+/// </summary>
+public sealed class PrefetchedRecipients
+{
+    private readonly Dictionary<Guid, ShipmentRecipient> _items = [];
+    public void Add(Guid shipmentId, ShipmentRecipient recipient) => _items[shipmentId] = recipient;
+    public bool TryGet(Guid shipmentId, out ShipmentRecipient recipient) => _items.TryGetValue(shipmentId, out recipient!);
+}
 public interface IShipmentRecipientResolver
 {
     Task<ShipmentRecipient> ResolveAsync(Guid shipmentId, CancellationToken cancellationToken);

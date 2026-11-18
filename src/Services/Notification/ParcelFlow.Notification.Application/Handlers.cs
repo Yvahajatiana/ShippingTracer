@@ -9,7 +9,7 @@ using ParcelFlow.Notification.Domain;
 
 namespace ParcelFlow.Notification.Application;
 
-public sealed class RecordNotificationHandler(INotificationStore store, IShipmentRecipientResolver recipients,
+public sealed class RecordNotificationHandler(INotificationStore store, IShipmentRecipientResolver recipients, PrefetchedRecipients prefetched,
     IPublishEndpoint publisher, TimeProvider clock, ICorrelationContext correlation) : IRequestHandler<RecordNotification, bool>
 {
     public async Task<bool> Handle(RecordNotification request, CancellationToken ct)
@@ -25,7 +25,9 @@ public sealed class RecordNotificationHandler(INotificationStore store, IShipmen
                 throw new NotificationConflictException("The source event identifier already has different immutable details.");
             return false;
         }
-        var recipient = await recipients.ResolveAsync(request.ShipmentId, ct);
+        // Consumed messages arrive with their recipient prefetched outside the transaction; only a
+        // direct caller (no consume filter) still resolves it here, under the lock.
+        var recipient = prefetched.TryGet(request.ShipmentId, out var known) ? known : await recipients.ResolveAsync(request.ShipmentId, ct);
         if (request.CustomerSubject is not null && request.CustomerSubject != recipient.CustomerSubject ||
             request.TrackingNumber is not null && request.TrackingNumber != recipient.TrackingNumber)
             throw new NotificationConflictException("The event recipient conflicts with the original shipment.");

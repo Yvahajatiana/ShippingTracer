@@ -195,7 +195,7 @@ public sealed class NotificationTests
         var endpoint = DispatchProxy.Create<IPublishEndpoint, Publisher>(); var store = new Store(); var resolver = new Resolver();
         // The consumed event's correlation, made ambient by the consume filter in production.
         var flow = Guid.NewGuid();
-        return new F(store, resolver, (Publisher)endpoint, new RecordNotificationHandler(store, resolver, endpoint, new Clock(), CorrelationContext.From(flow)), flow);
+        return new F(store, resolver, (Publisher)endpoint, new RecordNotificationHandler(store, resolver, new PrefetchedRecipients(), endpoint, new Clock(), CorrelationContext.From(flow)), flow);
     }
     private sealed record F(Store Store, Resolver Resolver, Publisher Publisher, RecordNotificationHandler Handler, Guid Flow);
     private sealed record Actor(string Subject, bool IsAdmin = false) : INotificationActor;
