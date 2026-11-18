@@ -42,6 +42,7 @@ Aucun port n'est publié sur l'hôte. PostgreSQL, Redis, RabbitMQ (et sa console
 | `deploy/dokploy/init-keycloak-database.sh` | Création de la base `keycloak` au premier démarrage du volume PostgreSQL, après `deploy/postgres/init-databases.sh` |
 | `deploy/dokploy/keycloak-demo-config.sh` | Adaptation idempotente du realm importé à la démo (service one-shot `keycloak-demo-config`) |
 | `deploy/dokploy/reset-demo.sh` | Réinitialisation nocturne, exécutée sur l'hôte |
+| `deploy/landing/Dockerfile` | Image `parcelflow-landing` (nginx) publiée par la CI : la page et sa configuration y sont copiées, aucun fichier du dépôt n'est monté. Dokploy supprime et reclone le dépôt à chaque déploiement ; un montage du dossier vidait la page d'un conteneur non recréé. |
 | `deploy/landing/site/` | Page d'accueil statique (HTML, CSS, favicon), avec le marqueur `__DEMO_DOMAIN__` dans les liens |
 | `deploy/landing/nginx.conf.template` | Configuration nginx de la page : remplacement du marqueur, CSP stricte, `/healthz`, cache de 5 minutes |
 
