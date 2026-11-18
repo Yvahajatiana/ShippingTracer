@@ -11,8 +11,9 @@ public sealed record DeliveryProofMaintenanceResult(int Purged, int Encrypted);
 /// <summary>
 /// GDPR maintenance of the delivery proofs: erases the recipient name and the proof images once the
 /// retention period is over (the delivery outcome and its date stay), then encrypts the proofs still
-/// stored in plaintext by versions older than the encryption. Safe to run on several replicas at once:
-/// the purge re-checks its condition row by row and encrypting a value twice stays readable.
+/// stored in plaintext by versions older than the encryption. Safe to run on several replicas at once,
+/// even with different retention settings: both writes re-check that the row is not purged yet, and
+/// encrypting a value twice stays readable.
 /// </summary>
 public sealed class DeliveryProofMaintenance(DeliveryDbContext database, DeliveryProofSettings settings, TimeProvider clock)
 {
@@ -54,17 +55,19 @@ public sealed class DeliveryProofMaintenance(DeliveryDbContext database, Deliver
             if (batch.Count == 0) break;
             // A row selected twice was not encrypted by the previous batch: stop instead of looping.
             if (batch.Any(encrypted.Contains)) throw new InvalidOperationException("Delivery proofs encryption made no progress.");
-            var attempts = await database.Attempts.Where(x => batch.Contains(x.OperationId)).ToListAsync(cancellationToken);
+            var attempts = await database.Attempts.AsNoTracking().Where(x => batch.Contains(x.OperationId)).ToListAsync(cancellationToken);
             foreach (var attempt in attempts)
             {
                 // The converters returned the legacy plaintext unchanged: writing it back encrypts it.
-                var entry = database.Entry(attempt);
-                entry.Property(x => x.RecipientName).IsModified = attempt.RecipientName is not null;
-                entry.Property(x => x.SignaturePng).IsModified = attempt.SignaturePng is not null;
-                entry.Property(x => x.Photo).IsModified = attempt.Photo is not null;
+                // Conditional write: another replica may have purged the row since it was read, and
+                // the proofs must never come back on a purged row.
+                await database.Attempts
+                    .Where(x => x.OperationId == attempt.OperationId && x.ProofsPurgedAtUtc == null)
+                    .ExecuteUpdateAsync(update => update
+                        .SetProperty(x => x.RecipientName, attempt.RecipientName)
+                        .SetProperty(x => x.SignaturePng, attempt.SignaturePng)
+                        .SetProperty(x => x.Photo, attempt.Photo), cancellationToken);
             }
-            await database.SaveChangesAsync(cancellationToken);
-            database.ChangeTracker.Clear();
             encrypted.UnionWith(batch);
             if (batch.Count < BatchSize) break;
         }
