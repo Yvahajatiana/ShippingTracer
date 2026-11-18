@@ -73,7 +73,7 @@ Aucun port n'est publié sur l'hôte. PostgreSQL, Redis, RabbitMQ (et sa console
 
 ### Mémoire
 
-Limites `mem_limit` (plafonds cumulés d'environ 5,4 Go sur 12 Go, sans surallocation) :
+Limites `mem_limit` (plafonds cumulés d'environ 5,5 Go sur 12 Go, sans surallocation) :
 
 | Conteneur | Limite | Raison |
 | --- | --- | --- |
@@ -81,6 +81,7 @@ Limites `mem_limit` (plafonds cumulés d'environ 5,4 Go sur 12 Go, sans suralloc
 | gateway | 256 Mo | Proxy sans état |
 | 3 portails nginx | 64 Mo chacun | Fichiers statiques et proxy `/api/` |
 | landing | 32 Mo | nginx, trois fichiers statiques |
+| backup | 128 Mo | `pg_dump` quotidien, en veille le reste du temps |
 | PostgreSQL | 768 Mo | 9 bases, `shared_buffers` par défaut |
 | Redis | 128 Mo | `maxmemory 96mb` |
 | RabbitMQ | 512 Mo | Seuil mémoire de RabbitMQ à 60 % de la limite |
@@ -195,6 +196,7 @@ Vérifications propres à cette variante : `ss -tlnp` ne montre que Traefik (80,
 | Logs | Onglet Logs de Dokploy, ou `docker logs <appName>-<service>-1`. |
 | Console Keycloak | Voir ci-dessous. |
 | Console RabbitMQ | Même tunnel vers le port 15672 du conteneur `rabbitmq`. |
+| Sauvegarde et restauration | Voir [Sauvegardes](#sauvegardes). |
 | Rotation de la clé des preuves | Dans Environment, ajouter l'actuelle `DELIVERY_PROOF_KEY` à `DELIVERY_PROOF_PREVIOUS_KEYS`, mettre une nouvelle clé (`openssl rand -base64 32`) dans `DELIVERY_PROOF_KEY`, puis *Deploy*. Retirer l'ancienne clé une fois les preuves qu'elle chiffre purgées (rétention ou réinitialisation nocturne, qui recrée la base Delivery). Une clé retirée trop tôt rend ses preuves illisibles. |
 
 ### Réinitialisation
@@ -209,6 +211,35 @@ Vérifications propres à cette variante : `ss -tlnp` ne montre que Traefik (80,
 6. Démarrage des services, qui migrent et seedent, puis de la gateway et des portails. Attente de l'état `healthy` des conteneurs .NET.
 
 En cas d'échec, les conteneurs arrêtés sont redémarrés et `keycloak-demo-config` est relancé, pour que la démo ne reste pas hors ligne. Le code de sortie non nul apparaît dans les logs de la tâche. Les messages différés déjà planifiés (délai de paiement de 30 minutes) peuvent encore arriver après la purge. Ils ne correspondent à aucune saga existante et finissent en file d'erreur.
+
+### Sauvegardes
+
+Le conteneur `backup` (image `parcelflow-backup`, `deploy/pg-backup/`) fait chaque jour à `BACKUP_TIME` (UTC, 01:30 par défaut) un `pg_dump` au format custom des 8 bases de services et de la base `keycloak`. Celle-ci contient le realm, les utilisateurs et les clients. Les snapshots vont dans le volume `backups` du VPS, un dossier `<horodatage UTC>` par jour avec un manifeste `SHA256SUMS`, et sont gardés `BACKUP_RETENTION_DAYS` jours (7 par défaut). Un snapshot est écrit sous un nom `.partial` puis renommé : une sauvegarde interrompue ne passe jamais pour valide. La sauvegarde doit passer **avant** la réinitialisation nocturne (3 h, heure du serveur), sinon elle ne contient que la démo remise à zéro.
+
+| Objectif | Valeur pour la démo |
+| --- | --- |
+| RPO (perte de données maximale) | 24 heures : une sauvegarde par jour |
+| RTO (durée de restauration) | Environ 2 minutes, mesuré : 117 s pour les 9 bases, arrêt et redémarrage de la stack compris |
+
+Depuis le répertoire du dépôt cloné par Dokploy sur l'hôte :
+
+```bash
+sh deploy/dokploy/restore-demo.sh <appName> list       # snapshots disponibles
+docker exec <appName>-backup-1 parcelflow-backup now   # sauvegarde immédiate (avant une opération risquée)
+sh deploy/dokploy/restore-demo.sh <appName> latest     # ou un snapshot précis, par exemple 2026-11-18T013000Z
+```
+
+La restauration arrête les portails, la gateway, les services et Keycloak. Elle vérifie ensuite les sommes de contrôle, recrée puis restaure les 9 bases, purge les files RabbitMQ et vide Redis. Enfin, elle redémarre Keycloak, réapplique `keycloak-demo-config`, puis relance les services et affiche la durée totale. Elle partage le verrou de `reset-demo.sh` : les deux ne peuvent pas tourner en même temps.
+
+**Cohérence entre services.** Toutes les bases reviennent du même snapshot. Les services se transmettent leurs faits par Outbox et Inbox, et la saga de réservation, les factures et le suivi se répondent. Restaurer une seule base la mettrait en retard sur les autres : par exemple, Billing ignorerait une facture que Notification a déjà annoncée, et les événements déjà livrés ne seraient pas republiés. Pour la même raison, la purge de RabbitMQ retire les messages plus récents que le snapshot, et Redis est vidé pour ne pas servir de lectures en cache. `parcelflow-restore <snapshot> <base>` permet de restaurer une base seule, mais à réserver à un diagnostic.
+
+**Hors des sauvegardes.** Les variables d'environnement Dokploy (mots de passe, `DELIVERY_PROOF_KEY`) ne sont pas dans les dumps : en garder une copie hors du VPS, dans un gestionnaire de mots de passe. Sans `DELIVERY_PROOF_KEY`, les preuves de livraison restaurées restent illisibles. Les snapshots restent sur le VPS : la perte du serveur emporte aussi ses sauvegardes. Pour une copie ponctuelle :
+
+```bash
+docker cp <appName>-backup-1:/backups/<snapshot> ./parcelflow-<snapshot>
+```
+
+Exercice réalisé en local sur ce Compose (images publiées, projet isolé) : snapshot de 9 bases (420 Ko, 2 s), ajout d'un livreur après le snapshot, puis restauration `latest`. Le livreur ajouté a disparu, les livreurs et les 8 comptes Keycloak d'origine sont revenus, et tous les services sont repassés `healthy` en 117 s. La purge a supprimé un snapshot de plus de 7 jours et un dossier `.partial`.
 
 ### Console d'administration Keycloak
 
