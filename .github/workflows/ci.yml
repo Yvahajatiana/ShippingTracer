@@ -346,7 +346,7 @@ jobs:
       - name: Install
         run: npm ci
       - name: Vulnerable npm packages
-        run: npm audit --audit-level=high
+        run: npm run audit
       - name: Formatting
         run: npm run format:check
       - name: Lint
