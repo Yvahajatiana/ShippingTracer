@@ -55,8 +55,9 @@ case "$action" in
   replay)
     [ $# -eq 3 ] || usage
     queue=${3%_error}
+    # MassTransit queues are kebab-case, saga endpoints PascalCase (ShipmentBookingState).
     case "$queue" in
-      *[!a-z0-9._:-]* | '') fail "invalid queue name '$3'." ;;
+      *[!A-Za-z0-9._:-]* | '') fail "invalid queue name '$3'." ;;
     esac
     errors=$(depth "${queue}_error")
     [ -n "$errors" ] || fail "queue '${queue}_error' does not exist."
@@ -65,8 +66,8 @@ case "$action" in
 
     # The shovel connects with the broker's own credentials (direct connection, never exposed).
     user=$(docker exec "$rabbitmq" printenv RABBITMQ_DEFAULT_USER)
-    password=$(docker exec "$rabbitmq" printenv RABBITMQ_DEFAULT_PASS)
-    encoded=$(printf '%s' "$password" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g')
+    secret=$(docker exec "$rabbitmq" printenv RABBITMQ_DEFAULT_PASS)
+    encoded=$(printf '%s' "$secret" | od -An -tx1 | tr -d ' \n' | sed 's/../%&/g')
     shovel="replay-$queue"
     ctl list_parameters -p / --no-table-headers | awk '{ print $2 }' | grep -qx "$shovel" &&
       fail "a replay of '$queue' is already running (shovel '$shovel')."
