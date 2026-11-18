@@ -3,13 +3,11 @@ using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi.Models;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.BuildingBlocks.Api.Hosting;
 using ParcelFlow.BuildingBlocks.Api.Operations;
+using ParcelFlow.BuildingBlocks.Api.Observability;
 using ParcelFlow.Shipment.Api;
 using ParcelFlow.Shipment.Application;
 using ParcelFlow.Shipment.Infrastructure;
@@ -17,8 +15,7 @@ using ParcelFlow.Shipment.Infrastructure.Persistence;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog((context, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration).Enrich.FromLogContext().WriteTo.Console());
+builder.AddParcelFlowObservability("parcelflow-shipment");
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.AddShipmentApplication();
@@ -102,20 +99,6 @@ builder.Services.AddSwaggerGen(options =>
         [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = []
     });
 });
-var telemetryEndpoint = builder.Configuration["OpenTelemetry:Endpoint"];
-builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddService("parcelflow-shipment"))
-    .WithTracing(tracing =>
-    {
-        tracing.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation();
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint))
-            tracing.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddPrometheusExporter();
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint))
-            metrics.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    });
 
 var app = builder.Build();
 app.UseParcelFlowCorrelation();
