@@ -88,7 +88,7 @@ dotnet ef database update --project src/Services/Tracking/ParcelFlow.Tracking.In
 
 Configurer `Keycloak__Authority` avec l’URL du realm et `Keycloak__Audience=tracking-api`. Les jetons internes exigent une signature valide, une expiration valide, un sujet non vide et les rôles du realm. HTTPS est requis pour les métadonnées hors Development.
 
-Serilog écrit les journaux sur la console. OpenTelemetry instrumente HTTP et MassTransit ; `/metrics` expose Prometheus et `OpenTelemetry__Endpoint` active l’export OTLP. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et le bus MassTransit. Aucun secret ou détail d’infrastructure n’est retourné dans les health checks.
+Serilog écrit les journaux sur la console. OpenTelemetry instrumente HTTP, MassTransit et PostgreSQL (Npgsql) ; `/metrics` expose Prometheus et `OpenTelemetry__Endpoint` active l’export OTLP. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et le bus MassTransit. Aucun secret ou détail d’infrastructure n’est retourné dans les health checks.
 
 ## Vérifications
 

@@ -8,6 +8,7 @@ ParcelFlow est une plateforme d'expédition de colis construite en microservices
 - [Organisation du dépôt](#organisation-du-dépôt)
 - [Prérequis](#prérequis)
 - [Démarrage rapide avec Docker Compose](#démarrage-rapide-avec-docker-compose)
+- [Observabilité](#observabilité)
 - [Cluster Kubernetes local (minikube)](#cluster-kubernetes-local-minikube)
 - [Développement](#développement)
 - [Tests](#tests)
@@ -70,7 +71,7 @@ Principes structurants :
 - **Socle commun** `src/BuildingBlocks` : contrats d'intégration versionnés (`Contracts/<Service>/V1`), pipeline de validation, ProblemDetails communs, configuration de la messagerie.
 - **Événements asynchrones fiables** : Outbox EF Core et inbox MassTransit dans la base de chaque service, livraison au moins une fois avec déduplication.
 - **Sécurité** : la gateway exige une audience égale au service ciblé (`customer-api`, `shipment-api`, etc.) ; chaque service contrôle ensuite rôles (`customer`, `operator`, `admin`) et propriété.
-- **Observabilité** : Serilog, OpenTelemetry (export OTLP optionnel), métriques Prometheus sur `/metrics`, health checks `/health/live` et `/health/ready`.
+- **Observabilité** : Serilog, traces OpenTelemetry (Jaeger en local, voir [Observabilité](#observabilité)), métriques Prometheus sur `/metrics`, health checks `/health/live` et `/health/ready`.
 
 ### Principaux flux d'événements
 
@@ -186,6 +187,29 @@ Détails des clients Keycloak, audiences et réinitialisation du realm : [`deplo
 | `docker compose up -d --force-recreate keycloak` | Réimporter le realm après modification |
 | `docker compose down` | Arrêter en conservant les données |
 | `docker compose down -v` | Arrêter et supprimer les volumes PostgreSQL et RabbitMQ |
+
+## Observabilité
+
+La gateway et les huit services partagent la même configuration (`AddParcelFlowObservability` dans `ParcelFlow.BuildingBlocks.Api`) :
+
+- **Traces OpenTelemetry** : requêtes HTTP entrantes et sortantes, messages MassTransit (publication et consommation à travers RabbitMQ) et commandes PostgreSQL (source `Npgsql`). Le contexte W3C `traceparent` passe par la gateway (YARP) et par les en-têtes RabbitMQ : un appel client donne une seule trace, de la gateway jusqu'aux consommateurs.
+- **Export** : OTLP gRPC vers `OpenTelemetry__Endpoint` (repli sur `OTEL_EXPORTER_OTLP_ENDPOINT`). Sans valeur, rien n'est exporté. Le Compose local pointe vers Jaeger.
+- **Journaux** : chaque ligne porte `trace=`, `span=` et `correlation=`. Le `TraceId` mène à la trace ; le `CorrelationId` (en-tête `X-Correlation-Id`, repris dans les événements) suit le flux métier, y compris entre des traces distinctes (relance d'un message, saga de paiement).
+- **Métriques** : format Prometheus sur `/metrics` (HTTP, HttpClient, MassTransit).
+
+### Retrouver une trace en local
+
+1. `docker compose up -d` démarre aussi Jaeger ; son interface est sur http://localhost:16686.
+2. Relever un `TraceId` dans les journaux, par exemple `docker compose logs gateway | grep trace=`, ou forcer le sien avec un en-tête `traceparent` :
+
+   ```bash
+   curl -H "traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"      http://localhost:5100/api/v1/tracking/PF000000000000000000000000
+   ```
+
+3. Dans Jaeger, coller le `TraceId` (ici `4bf92f3577b34da6a3ce929d0e0e4736`) dans la recherche, ou choisir le service `parcelflow-gateway`. Une création d'envoi montre la gateway, Shipment, les publications RabbitMQ, les consommateurs (Billing, Tracking, Notification, Reporting) et leurs requêtes PostgreSQL.
+4. Une panne apparaît en erreur sur le span concerné : par exemple `docker compose stop postgres`, puis une requête qui lit la base.
+
+Jaeger garde les traces en mémoire : elles disparaissent à son redémarrage. Le tracing est un confort de diagnostic, pas une dépendance : un Jaeger arrêté ne bloque aucun service.
 
 ## Cluster Kubernetes local (minikube)
 

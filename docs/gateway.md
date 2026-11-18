@@ -56,7 +56,7 @@ Les requêtes publiques sont limitées par adresse de connexion, les requêtes p
 | `Gateway__IpPermitLimit` | 1000 par fenêtre et par adresse |
 | `Gateway__RateLimitWindowSeconds` | 60 par défaut |
 | `Gateway__CorsOrigins__0`, `__1`, etc. | Origines navigateur autorisées |
-| `OpenTelemetry__Endpoint` | Export OTLP optionnel |
+| `OpenTelemetry__Endpoint` | Export OTLP des traces et métriques (vide : aucun export ; voir [Observabilité](../README.md#observabilité)) |
 
 La configuration est validée au démarrage. Les destinations sont des paramètres d’exploitation, jamais des URL fournies par une requête cliente. Aucun secret n’est stocké dans la configuration du dépôt.
 

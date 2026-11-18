@@ -1,6 +1,7 @@
 # ParcelFlow local stack: infrastructure, Keycloak, the eight services, the gateway and the three portals.
 # Usage: copy .env.example to .env, set the secrets, then `docker compose up --build -d`.
 # Portals: customer http://localhost:4201, operations http://localhost:4202, admin http://localhost:4203.
+# Traces: Jaeger UI on http://localhost:16686.
 name: parcelflow
 
 x-dotnet-service: &dotnet-service
@@ -28,6 +29,8 @@ x-dotnet-environment: &dotnet-environment
   RabbitMq__VirtualHost: /
   RabbitMq__Username: parcelflow
   RabbitMq__Password: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+  # Traces and metrics to the local Jaeger (OTLP gRPC); a stopped Jaeger only drops them.
+  OpenTelemetry__Endpoint: http://jaeger:4317
 
 services:
   postgres:
@@ -73,6 +76,14 @@ services:
       interval: 10s
       timeout: 10s
       retries: 30
+
+  # Local trace backend (Jaeger v2, in-memory storage): UI on http://localhost:16686, OTLP on 4317/4318
+  # inside the network. No service depends on it: traces are exported asynchronously.
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16686:16686"
 
   keycloak:
     image: quay.io/keycloak/keycloak:${KEYCLOAK_TAG:-26.8.1}
@@ -208,6 +219,7 @@ services:
       Gateway__Destinations__Billing: http://billing:8080/
       Gateway__Destinations__Notification: http://notification:8080/
       Gateway__Destinations__Reporting: http://reporting:8080/
+      OpenTelemetry__Endpoint: http://jaeger:4317
     ports:
       - "127.0.0.1:5100:8080"
     depends_on:

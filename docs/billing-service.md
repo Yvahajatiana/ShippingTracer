@@ -111,7 +111,7 @@ dotnet ef database update --project src/Services/Billing/ParcelFlow.Billing.Infr
 
 Le seed optionnel et idempotent crée deux factures PendingPayment, sans paiement, avoir ni événement fictif : IDs 71000000-0000-0000-0000-000000000001/2, propriétaires 10000000-0000-0000-0000-000000000001/2, montants 12.90/18.50EUR, date 2026-10-18. Ces données sont indépendantes d’une saga réelle ; le workflow de test utilise des envois créés pour son propre parcours.
 
-Configurer Keycloak__Authority et Keycloak__Audience=billing-api. Les métadonnées exigent HTTPS hors Development. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et MassTransit. Serilog écrit sur la console ; OpenTelemetry instrumente HTTP et MassTransit, `/metrics` expose Prometheus et OpenTelemetry__Endpoint active l’export OTLP.
+Configurer Keycloak__Authority et Keycloak__Audience=billing-api. Les métadonnées exigent HTTPS hors Development. `/health/live` vérifie le processus ; `/health/ready` vérifie PostgreSQL, Redis et MassTransit. Serilog écrit sur la console ; OpenTelemetry instrumente HTTP, MassTransit et PostgreSQL (Npgsql), `/metrics` expose Prometheus et OpenTelemetry__Endpoint active l’export OTLP.
 
 ## Vérification et branches
 

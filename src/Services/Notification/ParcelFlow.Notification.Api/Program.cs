@@ -2,17 +2,13 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
-using MassTransit.Logging;
-using MassTransit.Monitoring;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi.Models;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.BuildingBlocks.Api.Hosting;
 using ParcelFlow.BuildingBlocks.Api.Operations;
+using ParcelFlow.BuildingBlocks.Api.Observability;
 using ParcelFlow.Notification.Api;
 using ParcelFlow.Notification.Application;
 using ParcelFlow.Notification.Domain;
@@ -25,8 +21,7 @@ const long maximumRequestBytes = 1024 * 1024;
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = maximumRequestBytes);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<INotificationActor, HttpNotificationActor>();
-builder.Host.UseSerilog((context, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration).Enrich.FromLogContext().WriteTo.Console());
+builder.AddParcelFlowObservability("parcelflow-notification");
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddNotificationApplication();
@@ -109,21 +104,6 @@ builder.Services.AddSwaggerGen(options =>
 });
 // Keep the shared JSON error writer first after versioning registers its writers.
 builder.Services.AddParcelFlowProblemDetails();
-var telemetryEndpoint = builder.Configuration["OpenTelemetry:Endpoint"];
-builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddService("parcelflow-notification"))
-    .WithTracing(tracing =>
-    {
-        tracing.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddSource(DiagnosticHeaders.DefaultListenerName);
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint))
-            tracing.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation()
-            .AddMeter(InstrumentationOptions.MeterName).AddPrometheusExporter();
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint))
-            metrics.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    });
 
 var app = builder.Build();
 app.UseParcelFlowCorrelation();

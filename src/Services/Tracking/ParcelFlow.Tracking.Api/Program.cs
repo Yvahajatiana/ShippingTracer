@@ -2,17 +2,13 @@ using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
-using MassTransit.Logging;
-using MassTransit.Monitoring;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi.Models;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.BuildingBlocks.Api.Hosting;
 using ParcelFlow.BuildingBlocks.Api.Operations;
+using ParcelFlow.BuildingBlocks.Api.Observability;
 using ParcelFlow.Tracking.Api;
 using ParcelFlow.Tracking.Application;
 using ParcelFlow.Tracking.Infrastructure;
@@ -20,8 +16,7 @@ using ParcelFlow.Tracking.Infrastructure.Persistence;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog((context, configuration) => configuration
-    .ReadFrom.Configuration(context.Configuration).Enrich.FromLogContext().WriteTo.Console());
+builder.AddParcelFlowObservability("parcelflow-tracking");
 builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddTrackingApplication();
 builder.Services.AddTrackingInfrastructure(builder.Configuration);
@@ -102,21 +97,6 @@ builder.Services.AddSwaggerGen(options =>
         [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }] = []
     });
 });
-var telemetryEndpoint = builder.Configuration["OpenTelemetry:Endpoint"];
-builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddService("parcelflow-tracking"))
-    .WithTracing(tracing =>
-    {
-        tracing.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddSource(DiagnosticHeaders.DefaultListenerName);
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint))
-            tracing.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation()
-            .AddMeter(InstrumentationOptions.MeterName).AddPrometheusExporter();
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint))
-            metrics.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    });
 
 var app = builder.Build();
 app.UseParcelFlowCorrelation();

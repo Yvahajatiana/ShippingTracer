@@ -3,12 +3,10 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Cors.Infrastructure;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.BuildingBlocks.Api.Operations;
+using ParcelFlow.BuildingBlocks.Api.Observability;
 using ParcelFlow.Gateway;
 using Serilog;
 using Yarp.ReverseProxy.Forwarder;
@@ -16,8 +14,7 @@ using Yarp.ReverseProxy.Forwarder;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel((context, options) => options.Limits.MaxRequestBodySize =
     context.Configuration.GetSection("Gateway").Get<GatewayOptions>()!.MaximumRequestBodyBytes);
-builder.Host.UseSerilog((context, logging) => logging.ReadFrom.Configuration(context.Configuration)
-    .Enrich.FromLogContext().WriteTo.Console());
+builder.AddParcelFlowObservability("parcelflow-gateway");
 builder.Services.AddSingleton(services =>
 {
     var options = services.GetRequiredService<IConfiguration>().GetSection("Gateway").Get<GatewayOptions>() ?? new GatewayOptions();
@@ -95,18 +92,6 @@ builder.Services.AddOptions<RateLimiterOptions>().Configure<GatewayOptions>((opt
         QueueLimit = 0, AutoReplenishment = true
     };
 });
-var telemetryEndpoint = builder.Configuration["OpenTelemetry:Endpoint"];
-builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddService("parcelflow-gateway"))
-    .WithTracing(tracing =>
-    {
-        tracing.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation();
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint)) tracing.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    })
-    .WithMetrics(metrics =>
-    {
-        metrics.AddAspNetCoreInstrumentation().AddHttpClientInstrumentation().AddPrometheusExporter();
-        if (!string.IsNullOrWhiteSpace(telemetryEndpoint)) metrics.AddOtlpExporter(options => options.Endpoint = new Uri(telemetryEndpoint));
-    });
 var app = builder.Build();
 var gateway = app.Services.GetRequiredService<GatewayOptions>();
 // First: the gateway generates the correlation of a call (or keeps a valid incoming one), forwards it to the
