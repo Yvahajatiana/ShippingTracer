@@ -14,6 +14,7 @@
     "build": "ng build customer-portal && ng build operations-portal && ng build admin-portal",
     "test": "ng test shared --watch=false && ng test customer-portal --watch=false && ng test operations-portal --watch=false && ng test admin-portal --watch=false",
     "lint": "ng lint",
+    "audit": "node scripts/audit.mjs",
     "format:check": "prettier --check \"projects/**/*.{ts,html,scss,json}\""
   },
   "dependencies": {
