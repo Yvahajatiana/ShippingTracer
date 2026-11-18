@@ -196,6 +196,7 @@ Vérifications propres à cette variante : `ss -tlnp` ne montre que Traefik (80,
 | Logs | Onglet Logs de Dokploy, ou `docker logs <appName>-<service>-1`. |
 | Console Keycloak | Voir ci-dessous. |
 | Console RabbitMQ | Même tunnel vers le port 15672 du conteneur `rabbitmq`. |
+| Messages en échec | Voir [Files d'erreur RabbitMQ](#files-derreur-rabbitmq). |
 | Sauvegarde et restauration | Voir [Sauvegardes](#sauvegardes). |
 | Rotation de la clé des preuves | Dans Environment, ajouter l'actuelle `DELIVERY_PROOF_KEY` à `DELIVERY_PROOF_PREVIOUS_KEYS`, mettre une nouvelle clé (`openssl rand -base64 32`) dans `DELIVERY_PROOF_KEY`, puis *Deploy*. Retirer l'ancienne clé une fois les preuves qu'elle chiffre purgées (rétention ou réinitialisation nocturne, qui recrée la base Delivery). Une clé retirée trop tôt rend ses preuves illisibles. |
 
@@ -212,6 +213,42 @@ Vérifications propres à cette variante : `ss -tlnp` ne montre que Traefik (80,
 
 En cas d'échec, les conteneurs arrêtés sont redémarrés et `keycloak-demo-config` est relancé, pour que la démo ne reste pas hors ligne. Le code de sortie non nul apparaît dans les logs de la tâche. Les messages différés déjà planifiés (délai de paiement de 30 minutes) peuvent encore arriver après la purge. Ils ne correspondent à aucune saga existante et finissent en file d'erreur.
 
+### Files d'erreur RabbitMQ
+
+Un message dont le traitement échoue encore après les reprises (3 tentatives à 200 ms d'intervalle, plus les reprises Polly d'un appel HTTP) part dans la file `<file>_error`, par exemple `notification-payment-completed_error`. Il y reste jusqu'à ce qu'on le relance : aucun message n'est perdu.
+
+**Repérer.** Depuis le répertoire du dépôt cloné par Dokploy sur l'hôte (`/etc/dokploy/compose/<appName>/code`) :
+
+```bash
+sh deploy/rabbitmq/replay-error-queue.sh <appName> list
+```
+
+La commande liste les files `_error` et leur nombre de messages. Les métriques Prometheus du broker (`rabbitmq_detailed_queue_messages_ready`, `rabbitmq_detailed_queue_messages_unacked`, consommateurs) sont aussi lisibles sans exposer de port :
+
+```bash
+docker exec <appName>-rabbitmq-1 wget -qO- "http://127.0.0.1:15692/metrics/detailed?family=queue_coarse_metrics" | grep _error
+```
+
+**Diagnostiquer.** Dans la console RabbitMQ (tunnel ci-dessus) : *Queues* → la file `_error` → *Get messages* avec *Ack mode : Nack message requeue true*, ce qui laisse le message dans la file. Les en-têtes MassTransit donnent la cause et la file d'origine :
+
+| En-tête | Contenu |
+| --- | --- |
+| `MT-Fault-ExceptionType`, `MT-Fault-Message`, `MT-Fault-StackTrace` | Exception de la dernière tentative |
+| `MT-Fault-Timestamp`, `MT-Fault-RetryCount` | Date de l'échec, nombre de reprises |
+| `MT-Fault-InputAddress` | File d'origine |
+| `message_id` | `EventId` du fait, à rechercher dans les logs (`grep <EventId>`) |
+
+**Relancer, une fois la cause corrigée** (service redémarré, dépendance revenue, correctif déployé) :
+
+```bash
+sh deploy/rabbitmq/replay-error-queue.sh <appName> replay notification-payment-completed
+```
+
+Le script crée un shovel dynamique (plugin `rabbitmq_shovel`) qui déplace les messages présents dans `<file>_error` vers `<file>`, puis se supprime. Il s'arrête après 2 minutes (`REPLAY_TIMEOUT`) en retirant le shovel. Un message qui échoue de nouveau revient en `_error`.
+
+**Pas de double traitement.** Le `MessageId` reste l'`EventId`. L'Inbox MassTransit de chaque service écarte un message déjà consommé, et chaque service déduplique aussi par `EventId`. Relancer un message déjà traité, ou relancer deux fois, n'applique donc le fait qu'une fois.
+
+Testé en local : Shipment arrêté, un `PaymentCompleted` échoue après 3 reprises (`The shipment dependency is unavailable.`) et arrive en `_error`. Shipment redémarré, la relance le traite une fois (un reçu e-mail et un SMS), puis le même message renvoyé est ignoré.
 ### Sauvegardes
 
 Le conteneur `backup` (image `parcelflow-backup`, `deploy/pg-backup/`) fait chaque jour à `BACKUP_TIME` (UTC, 01:30 par défaut) un `pg_dump` au format custom des 8 bases de services et de la base `keycloak`. Celle-ci contient le realm, les utilisateurs et les clients. Les snapshots vont dans le volume `backups` du VPS, un dossier `<horodatage UTC>` par jour avec un manifeste `SHA256SUMS`, et sont gardés `BACKUP_RETENTION_DAYS` jours (7 par défaut). Un snapshot est écrit sous un nom `.partial` puis renommé : une sauvegarde interrompue ne passe jamais pour valide. La sauvegarde doit passer **avant** la réinitialisation nocturne (3 h, heure du serveur), sinon elle ne contient que la démo remise à zéro.

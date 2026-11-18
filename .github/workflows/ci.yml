@@ -161,7 +161,8 @@ jobs:
       - name: Scan full git history with gitleaks
         run: >
           docker run --rm -v "$PWD:/repo" "$GITLEAKS_IMAGE"
-          git /repo --config /repo/.gitleaks.toml --redact --no-banner --exit-code 1
+          git /repo --config /repo/.gitleaks.toml --gitleaks-ignore-path /repo/.gitleaksignore
+          --redact --no-banner --exit-code 1
 
   build:
     name: Build, unit and contract tests
