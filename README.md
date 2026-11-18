@@ -186,6 +186,7 @@ Détails des clients Keycloak, audiences et réinitialisation du realm : [`deplo
 | `docker compose up -d --force-recreate keycloak` | Réimporter le realm après modification |
 | `docker compose down` | Arrêter en conservant les données |
 | `docker compose down -v` | Arrêter et supprimer les volumes PostgreSQL et RabbitMQ |
+| `sh deploy/rabbitmq/replay-error-queue.sh parcelflow list` | Files d'erreur MassTransit et leur nombre de messages ; `replay <file>` les relance (voir [docs/demo.md](docs/demo.md#files-derreur-rabbitmq)) |
 
 ## Cluster Kubernetes local (minikube)
 
