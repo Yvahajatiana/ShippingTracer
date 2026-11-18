@@ -86,6 +86,7 @@ jobs:
             admin-portal: *portals
             rabbitmq: [.github/workflows/ci.yml, 'deploy/rabbitmq/**']
             landing: [.github/workflows/ci.yml, 'deploy/landing/**']
+            backup: [.github/workflows/ci.yml, 'deploy/pg-backup/**']
             customer-migrations: [*migrations, 'src/Services/Customer/**']
             shipment-migrations: [*migrations, 'src/Services/Shipment/**']
             tracking-migrations: [*migrations, 'src/Services/Tracking/**']
@@ -117,6 +118,7 @@ jobs:
               { "name": "admin-portal", "context": "frontends", "dockerfile": "frontends/Dockerfile", "build-arg": "PORTAL=admin-portal" },
               { "name": "rabbitmq", "context": "deploy/rabbitmq", "dockerfile": "deploy/rabbitmq/Dockerfile", "build-arg": "" },
               { "name": "landing", "context": "deploy/landing", "dockerfile": "deploy/landing/Dockerfile", "build-arg": "" },
+              { "name": "backup", "context": "deploy/pg-backup", "dockerfile": "deploy/pg-backup/Dockerfile", "build-arg": "" },
               { "name": "customer-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Customer" },
               { "name": "shipment-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Shipment" },
               { "name": "tracking-migrations", "context": ".", "dockerfile": "deploy/migrations/Dockerfile", "build-arg": "SERVICE=Tracking" },
