@@ -80,6 +80,8 @@ public static class DependencyInjection
             bus.AddConfigureEndpointsCallback((context, _, endpoint) =>
             {
                 endpoint.UseMessageRetry(retry => retry.Interval(3, TimeSpan.FromMilliseconds(200)));
+                // Before the outbox: the Shipment/Keycloak calls must not run inside its transaction.
+                endpoint.UseConsumeFilter(typeof(RecipientPrefetchFilter<>), context);
                 endpoint.UseEntityFrameworkOutbox<NotificationDbContext>(context);
             });
             bus.UsingRabbitMq((context, rabbit) =>

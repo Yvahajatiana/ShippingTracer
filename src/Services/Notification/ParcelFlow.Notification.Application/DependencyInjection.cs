@@ -17,6 +17,7 @@ public static class DependencyInjection
             configuration.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
         services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<PrefetchedRecipients>();
         services.AddScoped<IValidator<RecordNotification>, RecordNotificationValidator>();
         services.AddScoped<IValidator<GetNotification>, GetNotificationValidator>();
         services.AddScoped<IValidator<ListNotifications>, ListNotificationsValidator>();
