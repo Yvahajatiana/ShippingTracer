@@ -31,8 +31,11 @@ public sealed class WorkflowTests(InfrastructureFixture infrastructure)
     public async Task Real_tracking_outbox_drives_kpis_despite_late_creation_pickup_and_post_delivery_facts()
     {
         var suffix = Guid.NewGuid().ToString("N");
-        await using var source = new TrackingFactory(infrastructure, Connection("reporting_tracking_" + suffix));
-        await source.Services.InitializeTrackingDatabaseAsync();
+        // Migrated before the Tracking host is built, whose outbox delivery service starts with it (#26).
+        var trackingConnection = Connection("reporting_tracking_" + suffix);
+        await using (var tracking = new TrackingDbContext(new DbContextOptionsBuilder<TrackingDbContext>().UseNpgsql(trackingConnection).Options))
+            await tracking.Database.MigrateAsync();
+        await using var source = new TrackingFactory(infrastructure, trackingConnection);
         using var target = Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(Settings(infrastructure, "ReportingDatabase", Connection("reporting_workflow_" + suffix))))
             .ConfigureServices((context, services) => services.AddReportingApplication().AddReportingInfrastructure(context.Configuration)).Build();

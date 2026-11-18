@@ -31,6 +31,10 @@ description = "Documented local-only placeholders and redacted history"
 regexes = [
   '''^local-password$''',
   '''^\*\*\*REMOVED\*\*\*$''',
+  # Public delivery proof keys: the local .env.example placeholder ("ParcelFlow-local-dev-key-REPLACE")
+  # and the integration tests key. Real keys come from `openssl rand -base64 32`.
+  '''^UGFyY2VsRmxvdy1sb2NhbC1kZXYta2V5LVJFUExBQ0U=$''',
+  '''^dGVzdC1vbmx5LWRlbGl2ZXJ5LXByb29mLWtleS0yMDI=$''',
   # Kubernetes dependent environment variable references ($(VAR)), resolved from a Secret at runtime.
   '''^\$\([A-Z][A-Z0-9_]*\)$''',
 ]

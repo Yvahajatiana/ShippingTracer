@@ -23,7 +23,9 @@ Seul `GET /api/v1/tracking/{trackingNumber}`, avec un unique segment après `tra
 
 Le même jeton est transmis au service, qui conserve le contrôle des rôles, du propriétaire et des permissions métier. Une audience supplémentaire `gateway-api` n’est pas imposée. Cette décision préserve les audiences existantes et évite une modification des services déjà validés.
 
-Les origines CORS sont explicites. Aucun joker ni cookie d’authentification interorigine n’est nécessaire : les clients transmettent le Bearer dans `Authorization`. `Location`, `Content-Disposition` et `Retry-After` sont exposés aux clients navigateur. CORS ne remplace pas la validation JWT.
+Les origines CORS sont explicites. Aucun joker ni cookie d’authentification interorigine n’est nécessaire : les clients transmettent le Bearer dans `Authorization`. `Location`, `Content-Disposition`, `Retry-After` et `X-Correlation-Id` sont exposés aux clients navigateur. CORS ne remplace pas la validation JWT.
+
+La gateway fixe la corrélation de chaque appel : elle garde un `X-Correlation-Id` entrant s'il contient un unique GUID non vide, sinon elle en génère un. Cette valeur est transmise au service appelé, renvoyée au client (erreurs 4xx/5xx et 429 comprises) et ajoutée au scope de journalisation. Un appel client garde ainsi une seule corrélation, de la gateway jusqu'aux événements publiés par les services.
 
 Les en-têtes de transfert fournis par le client ne définissent ni son identité ni son adresse de limitation. La gateway utilise la connexion reçue et produit elle-même les métadonnées de transfert. Aucun ingress de confiance n’est configuré, y compris dans le chart Kubernetes (voir [Kubernetes](kubernetes.md)) ; aucun proxy arbitraire n’est implicitement approuvé.
 

@@ -242,6 +242,8 @@ export interface DeliveryAttempt {
   failureReason: DeliveryFailureReason | null;
   hasSignature: boolean;
   hasPhoto: boolean;
+  /** Set once the retention job erased the recipient name and the proof images (GDPR). */
+  proofsPurgedAtUtc: string | null;
 }
 export interface ConfirmDeliveryBody {
   operationId: Guid;

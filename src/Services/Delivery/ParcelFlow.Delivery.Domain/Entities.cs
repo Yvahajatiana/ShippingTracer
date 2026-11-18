@@ -151,6 +151,9 @@ public sealed class DeliveryAttempt
     public byte[]? SignaturePng { get; private set; }
     public byte[]? Photo { get; private set; }
     public string? PhotoContentType { get; private set; }
-    public bool Matches(Guid routeId, Guid shipmentId, DeliveryOutcome outcome, string actor, string? recipient, DeliveryFailureReason? reason, byte[]? signature, byte[]? photo) => RouteId == routeId && ShipmentId == shipmentId && Outcome == outcome && ActorSubject == actor && RecipientName == recipient?.Trim() && FailureReason == reason && BytesEqual(SignaturePng, signature) && BytesEqual(Photo, photo);
+    /// <summary>When the retention job erased the recipient name and the proof images (GDPR); the outcome stays.</summary>
+    public DateTimeOffset? ProofsPurgedAtUtc { get; private set; }
+    // Once the proofs are purged only the non-personal facts can still be compared on a replay.
+    public bool Matches(Guid routeId, Guid shipmentId, DeliveryOutcome outcome, string actor, string? recipient, DeliveryFailureReason? reason, byte[]? signature, byte[]? photo) => RouteId == routeId && ShipmentId == shipmentId && Outcome == outcome && ActorSubject == actor && FailureReason == reason && (ProofsPurgedAtUtc is not null || (RecipientName == recipient?.Trim() && BytesEqual(SignaturePng, signature) && BytesEqual(Photo, photo)));
     private static bool BytesEqual(byte[]? a, byte[]? b) => a is null ? b is null : b is not null && a.AsSpan().SequenceEqual(b);
 }

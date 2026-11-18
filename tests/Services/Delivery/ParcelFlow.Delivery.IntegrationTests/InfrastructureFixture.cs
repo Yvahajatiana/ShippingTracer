@@ -1,3 +1,4 @@
+using ParcelFlow.Delivery.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
 using Testcontainers.RabbitMq;
 using Testcontainers.Redis;
@@ -23,6 +24,15 @@ public sealed class InfrastructureFixture : IAsyncLifetime
         await RabbitMq.DisposeAsync();
         await Postgres.DisposeAsync();
     }
+}
+
+/// <summary>Fixed test-only key: every context and host of the tests shares the same protector.</summary>
+public static class TestProofKeys
+{
+    public const string EncryptionKey = "dGVzdC1vbmx5LWRlbGl2ZXJ5LXByb29mLWtleS0yMDI=";
+    public static readonly DeliveryProofProtector Protector = new(Settings());
+    public static DeliveryProofSettings Settings(int retentionDays = DeliveryProofSettings.DefaultRetentionDays) =>
+        new(EncryptionKey, [], retentionDays, TimeSpan.FromHours(1));
 }
 
 [CollectionDefinition(Name)]

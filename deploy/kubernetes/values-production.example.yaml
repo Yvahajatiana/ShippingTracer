@@ -51,9 +51,16 @@ externalSecrets:
     postgres-password: { key: parcelflow-postgres-password }
     rabbitmq-password: { key: parcelflow-rabbitmq-password }
     notification-client-secret: { key: parcelflow-notification-client-secret }
+    # Base64 of 32 random bytes (openssl rand -base64 32). Rotation: store the former key in
+    # parcelflow-delivery-proof-previous-keys, map it as delivery-proof-previous-keys and set
+    # services.delivery.proofPreviousKeys: true, then replace this one.
+    delivery-proof-key: { key: parcelflow-delivery-proof-key }
     redis-password: { key: parcelflow-redis-password }
 
 services:
+  delivery:
+    # GDPR retention of the delivery proofs, in days (empty: service default, 90).
+    proofRetentionDays: 90
   notification:
     # Public Shipment API base URL used in notification links.
     shipmentBaseUrl: https://api.example.com/

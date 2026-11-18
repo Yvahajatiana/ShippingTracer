@@ -824,6 +824,7 @@ export function createHandlers(db: MockDb = createDb()) {
           failureReason: null,
           hasSignature: !!body.signaturePng,
           hasPhoto: !!body.photo,
+          proofsPurgedAtUtc: null,
         };
         db.attempts.push(attempt);
         return HttpResponse.json(attempt);
@@ -857,6 +858,7 @@ export function createHandlers(db: MockDb = createDb()) {
           failureReason: body.reason,
           hasSignature: false,
           hasPhoto: false,
+          proofsPurgedAtUtc: null,
         };
         db.attempts.push(attempt);
         return HttpResponse.json(attempt);

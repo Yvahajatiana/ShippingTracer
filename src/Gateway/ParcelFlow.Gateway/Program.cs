@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using ParcelFlow.BuildingBlocks.Api.Correlation;
 using ParcelFlow.BuildingBlocks.Api.Errors;
 using ParcelFlow.BuildingBlocks.Api.Operations;
 using ParcelFlow.Gateway;
@@ -65,7 +66,7 @@ builder.Services.AddOptions<CorsOptions>().Configure<GatewayOptions>((options, g
 {
     if (gateway.CorsOrigins.Length > 0)
         policy.WithOrigins(gateway.CorsOrigins).AllowAnyMethod().AllowAnyHeader()
-            .WithExposedHeaders("Location", "Content-Disposition", "Retry-After");
+            .WithExposedHeaders("Location", "Content-Disposition", "Retry-After", CorrelationExtensions.HeaderName);
 }));
 builder.Services.AddRateLimiter(_ => { });
 builder.Services.AddOptions<RateLimiterOptions>().Configure<GatewayOptions>((options, gateway) =>
@@ -108,6 +109,9 @@ builder.Services.AddOpenTelemetry().ConfigureResource(resource => resource.AddSe
     });
 var app = builder.Build();
 var gateway = app.Services.GetRequiredService<GatewayOptions>();
+// First: the gateway generates the correlation of a call (or keeps a valid incoming one), forwards it to the
+// service and returns it, error and rate limit responses included.
+app.UseParcelFlowCorrelation();
 app.UseParcelFlowProblemDetails();
 app.Use(async (context, next) =>
 {

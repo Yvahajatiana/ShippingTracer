@@ -379,6 +379,7 @@ jobs:
           RABBITMQ_PASSWORD: ci-dummy
           KEYCLOAK_ADMIN_PASSWORD: ci-dummy
           NOTIFICATION_CLIENT_SECRET: ci-dummy
+          DELIVERY_PROOF_KEY: ci-dummy
           DEMO_USER_PASSWORD: ci-dummy
         run: docker compose --file docker-compose.yml config --quiet
       - name: Validate deploy/dokploy/docker-compose.yml
@@ -388,6 +389,7 @@ jobs:
           RABBITMQ_PASSWORD: ci-dummy
           KEYCLOAK_ADMIN_PASSWORD: ci-dummy
           NOTIFICATION_CLIENT_SECRET: ci-dummy
+          DELIVERY_PROOF_KEY: ci-dummy
           DEMO_USER_PASSWORD: ci-dummy
         run: docker compose --file deploy/dokploy/docker-compose.yml config --quiet
 
@@ -424,6 +426,7 @@ jobs:
               postgres-password: ci-dummy
               rabbitmq-password: ci-dummy
               notification-client-secret: ci-dummy
+              delivery-proof-key: ci-dummy
               keycloak-admin-password: ci-dummy
               demo-user-password: ci-dummy
           YAML
@@ -486,12 +489,13 @@ jobs:
         with:
           path: ${{ github.workspace }}/.cache/trivy
           key: cache-trivy-${{ steps.day.outputs.day }}
-      # Same commit and Trivy version as the ones trivy-action v0.36.0 installs.
+      # Same Trivy version as the one trivy-action v0.36.0 installs; setup-trivy v0.3.1 is the
+      # release trivy-action pins on its main branch (v0.36.0 still ships v0.2.6).
       - name: Install Trivy
         id: install
         if: steps.cache.outputs.cache-hit != 'true'
         continue-on-error: true
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
           version: v0.70.0
           cache: true

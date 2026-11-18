@@ -19,6 +19,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddDeliveryInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        // Resolved by the maintenance service at startup: a missing or invalid key stops the service.
+        services.AddSingleton(provider => DeliveryProofSettings.Load(provider.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<DeliveryProofProtector>();
+        services.AddScoped<DeliveryProofMaintenance>();
+        services.AddHostedService<DeliveryProofMaintenanceService>();
         services.AddDbContext<DeliveryDbContext>((provider, options) => options.UseNpgsql(
             provider.GetRequiredService<IConfiguration>().GetConnectionString("DeliveryDatabase")
                 ?? throw new InvalidOperationException("ConnectionStrings:DeliveryDatabase is required.")));

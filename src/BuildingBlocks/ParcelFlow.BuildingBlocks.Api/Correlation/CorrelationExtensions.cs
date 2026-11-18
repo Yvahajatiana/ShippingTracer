@@ -13,7 +13,8 @@ public static class CorrelationExtensions
     /// <summary>
     /// Resolves the correlation of each request from a valid <c>X-Correlation-Id</c> GUID header, or generates one,
     /// makes it the ambient <see cref="ICorrelationContext"/> of the request scope, adds it to the logging scope
-    /// and echoes it in the response. Place it first so error responses carry it too.
+    /// and echoes it in the response. The request header is rewritten with the resolved value, so a proxy
+    /// (the gateway) forwards one identifier for the whole call. Place it first so error responses carry it too.
     /// </summary>
     public static IApplicationBuilder UseParcelFlowCorrelation(this IApplicationBuilder app)
     {
@@ -21,6 +22,7 @@ public static class CorrelationExtensions
         return app.Use(async (context, next) =>
         {
             var correlationId = Resolve(context.Request.Headers[HeaderName]);
+            context.Request.Headers[HeaderName] = correlationId.ToString("D");
             context.RequestServices.GetService<CorrelationContext>()?.Set(correlationId);
             // OnStarting survives the header reset performed before an exception is handled.
             context.Response.OnStarting(static state =>

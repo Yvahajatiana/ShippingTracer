@@ -46,7 +46,9 @@ Les ports sont publiés sur `127.0.0.1` uniquement. Les comptes de démonstratio
 
 ### Secrets
 
-`.env` n'est pas versionné. Compose refuse de démarrer si `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `NOTIFICATION_CLIENT_SECRET` ou `DEMO_USER_PASSWORD` manque. L'oubli du secret Notification laisserait sinon à Keycloak la chaîne littérale du placeholder comme secret. Le mot de passe de démonstration doit respecter la politique du realm, sinon Keycloak refuse l'import.
+`.env` n'est pas versionné. Compose refuse de démarrer si `POSTGRES_PASSWORD`, `RABBITMQ_PASSWORD`, `KEYCLOAK_ADMIN_PASSWORD`, `NOTIFICATION_CLIENT_SECRET`, `DELIVERY_PROOF_KEY` ou `DEMO_USER_PASSWORD` manque. L'oubli du secret Notification laisserait sinon à Keycloak la chaîne littérale du placeholder comme secret. Le mot de passe de démonstration doit respecter la politique du realm, sinon Keycloak refuse l'import.
+
+`DELIVERY_PROOF_KEY` est la clé AES-256-GCM qui chiffre au repos les preuves de livraison (nom du destinataire, signature, photo). Le service Delivery refuse de démarrer sans une base64 valide de 32 octets exactement. La valeur de `.env.example` est une clé de développement publique, à remplacer par `openssl rand -base64 32`. Changer la clé rend les preuves déjà stockées illisibles, sauf si l'ancienne est conservée dans `DeliveryProofs__PreviousEncryptionKeys` du service `delivery` le temps de la rotation.
 
 ### Choix de la plateforme locale
 

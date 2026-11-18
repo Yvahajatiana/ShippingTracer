@@ -14,7 +14,10 @@ public interface IDeliveryStore
     Task<DeliveryParcel?> FindParcelAsync(Guid id, CancellationToken cancellationToken);
     Task<DeliveryDriver?> FindDriverAsync(string subject, CancellationToken cancellationToken);
     Task<DeliveryAttempt?> FindAttemptAsync(Guid operationId, CancellationToken cancellationToken);
-    Task<DeliveryAttempt?> FindAttemptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken cancellationToken);
+    // Projections: the receipt only needs to know whether images exist, and an image read loads one column.
+    Task<AttemptDto?> FindAttemptReceiptByStopAsync(Guid routeId, Guid shipmentId, CancellationToken cancellationToken);
+    /// <summary>Null when the stop has no attempt; an empty image when the attempt has no such proof.</summary>
+    Task<ProofImageDto?> FindProofImageAsync(Guid routeId, Guid shipmentId, ProofImageKind kind, CancellationToken cancellationToken);
     Task<bool> HasOpenRoutesAsync(string subject, CancellationToken cancellationToken);
     void AddDriver(DeliveryDriver driver);
     void AddRoute(DeliveryRoute route);
@@ -50,7 +53,7 @@ public sealed record RouteDto(Guid Id, string Name, DateOnly ServiceDate, string
 public sealed record RoutePageDto(int Page, int PageSize, int Total, IReadOnlyList<RouteDto> Items);
 public sealed record AvailableParcelDto(Guid ShipmentId, string TrackingNumber);
 public sealed record AvailableParcelPageDto(int Page, int PageSize, int Total, IReadOnlyList<AvailableParcelDto> Items);
-public sealed record AttemptDto(Guid OperationId, Guid RouteId, Guid ShipmentId, DeliveryOutcome Outcome, DateTimeOffset OccurredAtUtc, string ActorSubject, string? RecipientName, DeliveryFailureReason? FailureReason, bool HasSignature, bool HasPhoto);
+public sealed record AttemptDto(Guid OperationId, Guid RouteId, Guid ShipmentId, DeliveryOutcome Outcome, DateTimeOffset OccurredAtUtc, string ActorSubject, string? RecipientName, DeliveryFailureReason? FailureReason, bool HasSignature, bool HasPhoto, DateTimeOffset? ProofsPurgedAtUtc);
 public sealed record ProofImageDto(byte[] Content, string ContentType);
 public sealed class DeliveryNotFoundException(string message) : Exception(message);
 public sealed class DeliveryConflictException(string message) : Exception(message);
@@ -59,5 +62,5 @@ public static class DeliveryMapping
 {
     public static DriverDto ToDto(this DeliveryDriver value) => new(value.Subject, value.DisplayName, value.IsActive);
     public static RouteDto ToDto(this DeliveryRoute value) => new(value.Id, value.Name, value.ServiceDate, value.DriverSubject, value.Status, value.StartedAtUtc, value.CompletedAtUtc, value.Stops.OrderBy(x => x.Sequence).Select(x => new StopDto(x.ShipmentId, x.Sequence, x.Status, x.FailureReason, x.CompletedAtUtc)).ToArray());
-    public static AttemptDto ToDto(this DeliveryAttempt value) => new(value.OperationId, value.RouteId, value.ShipmentId, value.Outcome, value.OccurredAtUtc, value.ActorSubject, value.RecipientName, value.FailureReason, value.SignaturePng is not null, value.Photo is not null);
+    public static AttemptDto ToDto(this DeliveryAttempt value) => new(value.OperationId, value.RouteId, value.ShipmentId, value.Outcome, value.OccurredAtUtc, value.ActorSubject, value.RecipientName, value.FailureReason, value.SignaturePng is not null, value.Photo is not null, value.ProofsPurgedAtUtc);
 }

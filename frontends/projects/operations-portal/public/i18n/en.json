@@ -237,7 +237,8 @@
       "signatureAlt": "Recipient signature",
       "photoAlt": "Delivery photo",
       "imageError": "A proof image could not be loaded.",
-      "noImage": "No image recorded for this delivery."
+      "noImage": "No image recorded for this delivery.",
+      "purged": "Recipient name and images deleted on {{date}}, at the end of the retention period."
     }
   },
   "drivers": {

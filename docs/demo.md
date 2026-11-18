@@ -118,6 +118,8 @@ free -m && df -h / && docker system df
    - Compose Path : `./deploy/dokploy/docker-compose.yml`.
    - Ne rien déclarer dans Domains, ne pas activer *Isolated Deployments*, n'ajouter aucun File Mount, laisser les Watch Paths vides.
 6. **Variables.** Dans l'onglet Environment, saisir toutes les variables de `deploy/dokploy/.env.example` avec de vraies valeurs. `DEMO_USER_PASSWORD` est public, mais doit respecter la politique du realm et ne contenir ni `"` ni `\` : Keycloak le substitue tel quel dans le JSON du realm. Les autres secrets doivent être longs et aléatoires.
+   - `DELIVERY_PROOF_KEY` est la clé AES-256-GCM qui chiffre les preuves de livraison (nom du destinataire, signature, photo) : la base64 de 32 octets aléatoires exactement, générée par `openssl rand -base64 32`. Elle est obligatoire : Compose s'arrête si elle manque et le service Delivery refuse de démarrer avec une valeur invalide, comme le placeholder de l'exemple. **Une démo déjà en ligne doit recevoir cette variable dans Environment avant le déploiement de la version qui chiffre les preuves**, sinon le webhook de `main` déploie un Delivery qui ne démarre pas.
+   - `DELIVERY_PROOF_PREVIOUS_KEYS` (optionnelle) liste, séparées par des virgules, les anciennes clés encore acceptées en déchiffrement. `DELIVERY_PROOF_RETENTION_DAYS` (optionnelle, 90 par défaut) fixe la durée de conservation des preuves avant purge.
 7. **Premier déploiement.** Lancer *Deploy* puis suivre les logs. Keycloak importe le realm, `keycloak-demo-config` se termine en `Exited (0)`, et les services migrent puis seedent leurs bases. Cloudflare peut répondre **526** pendant quelques minutes : tant que Let's Encrypt n'a pas émis les certificats, Traefik sert son certificat auto-signé par défaut, refusé en Full (strict). Si l'erreur persiste, lire les logs du conteneur Traefik (échecs ACME).
 8. **Webhook.** Activer *Auto Deploy* (sans lui, le webhook est refusé). Copier l'URL du webhook depuis l'onglet Deployments et l'enregistrer comme secret de dépôt GitHub `DOKPLOY_DEMO_WEBHOOK_URL`. Sans ce secret, le job `demo` réussit avec une notice.
 9. **Réinitialisation nocturne.** Créer dans Dokploy une tâche planifiée de type *Server* sur le VPS. Elle s'exécute en `ubuntu`, dont le groupe `docker` suffit, sans `sudo`. On peut aussi utiliser la crontab de `ubuntu` (`crontab -e`, pas `sudo crontab -e`). Exemple, chaque nuit à 3 h (heure du serveur). La page d'accueil annonce « vers 3 h, heure de Paris » : vérifier le fuseau du serveur (`timedatectl`) et décaler l'heure de la tâche s'il est en UTC, ou ajuster la page.
@@ -192,6 +194,7 @@ Vérifications propres à cette variante : `ss -tlnp` ne montre que Traefik (80,
 | Logs | Onglet Logs de Dokploy, ou `docker logs <appName>-<service>-1`. |
 | Console Keycloak | Voir ci-dessous. |
 | Console RabbitMQ | Même tunnel vers le port 15672 du conteneur `rabbitmq`. |
+| Rotation de la clé des preuves | Dans Environment, ajouter l'actuelle `DELIVERY_PROOF_KEY` à `DELIVERY_PROOF_PREVIOUS_KEYS`, mettre une nouvelle clé (`openssl rand -base64 32`) dans `DELIVERY_PROOF_KEY`, puis *Deploy*. Retirer l'ancienne clé une fois les preuves qu'elle chiffre purgées (rétention ou réinitialisation nocturne, qui recrée la base Delivery). Une clé retirée trop tôt rend ses preuves illisibles. |
 
 ### Réinitialisation
 

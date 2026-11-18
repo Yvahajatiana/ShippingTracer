@@ -197,8 +197,7 @@ public sealed class ReportingApiTests(InfrastructureFixture infrastructure)
     [Fact]
     public async Task Health_metrics_versioning_and_read_only_date_and_string_enum_openapi_are_available()
     {
-        await using var factory = new JwtApiFactory(infrastructure, "Development");
-        await factory.Services.InitializeReportingDatabaseAsync();
+        await using var factory = await CreateFactoryAsync("Development");
         using var client = Client(factory, "admin");
         (await client.GetAsync("/health/live")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await client.GetAsync("/health/ready")).StatusCode.Should().Be(HttpStatusCode.OK);
@@ -230,10 +229,14 @@ public sealed class ReportingApiTests(InfrastructureFixture infrastructure)
         if (role is not null) client.DefaultRequestHeaders.Authorization = new("Bearer", CreateToken(role, subject: subject));
         return client;
     }
-    private async Task<JwtApiFactory> CreateFactoryAsync()
+    private async Task<JwtApiFactory> CreateFactoryAsync(string environment = "Testing")
     {
-        var factory = new JwtApiFactory(infrastructure);
-        await factory.Services.InitializeReportingDatabaseAsync();
+        var factory = new JwtApiFactory(infrastructure, environment);
+        // Migrate before the factory host exists: with minimal hosting its Program runs on to app.Run() and
+        // starts MassTransit's outbox delivery service, which would poll a missing database (3D000, #26).
+        // This provider never starts its hosted services.
+        await using (var migrations = ConsumerTestHost.Create(infrastructure, factory.Database))
+            await migrations.InitializeReportingDatabaseAsync();
         return factory;
     }
     private static async Task AssertProblemAsync(HttpResponseMessage response, HttpStatusCode expected)
@@ -288,6 +291,7 @@ public sealed class ReportingApiTests(InfrastructureFixture infrastructure)
     private sealed class JwtApiFactory(InfrastructureFixture dependencies, string environment = "Testing") : WebApplicationFactory<Program>
     {
         private readonly string _database = "reporting_api_" + Guid.NewGuid().ToString("N");
+        public string Database => _database;
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment(environment);

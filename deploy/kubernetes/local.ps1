@@ -77,6 +77,7 @@ $SecretVariables = [ordered]@{
     'rabbitmq-password'          = 'RABBITMQ_PASSWORD'
     'keycloak-admin-password'    = 'KEYCLOAK_ADMIN_PASSWORD'
     'notification-client-secret' = 'NOTIFICATION_CLIENT_SECRET'
+    'delivery-proof-key'         = 'DELIVERY_PROOF_KEY'
     'demo-user-password'         = 'DEMO_USER_PASSWORD'
 }
 
